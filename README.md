@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="docs/zimam-mark.svg" width="72" height="72" alt="Zimam mark: a Sadu diamond between two chevrons">
+  <img src="docs/enan-mark.svg" width="72" height="72" alt="Enan mark: a Sadu diamond between two chevrons">
 </p>
 
-<h1 align="center">Zimam · زمام</h1>
+<h1 align="center">Enan · عِنان</h1>
 
 <p align="center">
   <strong>A self-hosted executive office.</strong><br>
@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-  <a href="https://zimam.ing"><strong>zimam.ing</strong></a>
+  <a href="https://enan.ing"><strong>enan.ing</strong></a>
   &nbsp;·&nbsp;
   <a href="#quick-start"><strong>Quick start</strong></a>
   &nbsp;·&nbsp;
@@ -28,14 +28,14 @@
 <br>
 
 <p align="center">
-  <img src="docs/screenshots/home-en-desktop.webp" alt="Zimam Home: tasks due today, overdue actions, the week ahead, who you are waiting on and the KPIs that need attention">
+  <img src="docs/screenshots/home-en-desktop.webp" alt="Enan Home: tasks due today, overdue actions, the week ahead, who you are waiting on and the KPIs that need attention">
 </p>
 
 <p align="center"><sub>The company, people and numbers in the screenshots are invented.</sub></p>
 
 ## What it is
 
-Zimam is for an executive and the small office around them. It holds the work that usually ends up spread across email, spreadsheets and someone's notebook: what is due, who owes what, what the board agreed, and which KPIs are slipping.
+Enan is for an executive and the small office around them. It holds the work that usually ends up spread across email, spreadsheets and someone's notebook: what is due, who owes what, what the board agreed, and which KPIs are slipping.
 
 It runs as one Docker container with its data in one SQLite file. There is no database server, no separate worker and no subscription. It is bilingual, English and Arabic, with right-to-left support. AI is optional, off by default, and [never changes anything on its own](#ai-that-proposes-you-decide).
 
@@ -110,11 +110,11 @@ It is a responsive web app. Phones use it in the browser, and there is nothing t
 
 ## AI that proposes, you decide
 
-AI in Zimam does three small, useful things, and none of them writes anything until you say so. It is off until an administrator adds a key. Automatic actions taken by AI without your confirmation are written into the spec as a permanent non-goal.
+AI in Enan does three small, useful things, and none of them writes anything until you say so. It is off until an administrator adds a key. Automatic actions taken by AI without your confirmation are written into the spec as a permanent non-goal.
 
 ### Refine a note
 
-You type the note the way notes get typed in a meeting. Zimam turns it into a clean, structured note and pulls out the action items it found.
+You type the note the way notes get typed in a meeting. Enan turns it into a clean, structured note and pulls out the action items it found.
 
 ```text
 exco sun. revenue fine. dso still 74, need under 70 by q4.
@@ -163,7 +163,7 @@ flowchart LR
 ### What you can rely on
 
 - **Nothing is written until you apply.** Generated content never replaces your data on its own.
-- **Stale proposals cannot be applied.** If the note changed after the proposal was made, Zimam says so and offers to regenerate.
+- **Stale proposals cannot be applied.** If the note changed after the proposal was made, Enan says so and offers to regenerate.
 - **You can cancel** while it is thinking.
 - **Your content is treated as data.** Instructions hidden inside a note are ignored, and there are tests that try.
 - **Email addresses are never sent.** The admin page lists exactly what is: the task or note content, the existing tags, and the names of people who can be assigned work.
@@ -188,7 +188,7 @@ Not built yet: meeting briefs drafted from board papers (PDF or DOCX), with an e
 You need Docker with Compose.
 
 ```bash
-git clone https://github.com/tsubaie/zimam.git && cd zimam
+git clone https://github.com/tsubaie/enan.git && cd enan
 cp .env.example .env
 ```
 
@@ -300,17 +300,17 @@ This is a development preview. It has no version number yet and no supported rel
 
 What exists and what is still planned is tracked in [`docs/STATUS.md`](docs/STATUS.md) and [`docs/11-roadmap.md`](docs/11-roadmap.md).
 
-## Why “Zimam”
+## Why “Enan”
 
-A *zimam* (زمام) is the rein, the rope a rider holds to steer a camel. In Arabic, to “take the zimam of things” (أخذ بزمام الأمور) means to take charge. That is the job of this app: to keep the reins of your office in your hands.
+An *enan* (عِنان) is a horse’s rein, the strap a rider holds to steer. In Arabic, to hold the enan of a matter (بيده عِنانُ الأمر) is to be the one directing it. That is the job of this app: to keep the reins of your office in your hands.
 
 ## بالعربية
 
 <div dir="rtl">
 
-**زمام** مكتب تنفيذي مفتوح المصدر تستضيفه على خادمك. يجمع المهام والأشخاص واللجان وملاحظات الاجتماعات ومؤشرات الأداء في مكان واحد. يعمل بالعربية والإنجليزية، ويدعم الكتابة من اليمين إلى اليسار. تُحفظ بياناته في ملف SQLite واحد داخل حاوية Docker واحدة. والذكاء الاصطناعي اختياري، ويبقى مطفأً حتى تضيف مفتاحك، ولا يُطبَّق شيء مما يقترحه حتى توافق عليه.
+**عِنان** مكتب تنفيذي مفتوح المصدر تستضيفه على خادمك. يجمع المهام والأشخاص واللجان وملاحظات الاجتماعات ومؤشرات الأداء في مكان واحد. يعمل بالعربية والإنجليزية، ويدعم الكتابة من اليمين إلى اليسار. تُحفظ بياناته في ملف SQLite واحد داخل حاوية Docker واحدة. والذكاء الاصطناعي اختياري، ويبقى مطفأً حتى تضيف مفتاحك، ولا يُطبَّق شيء مما يقترحه حتى توافق عليه.
 
-**لماذا «زمام»؟** الزمام حبلٌ يقود به الراكب ناقته، ومنه قولهم: أخذ بزمام الأمور. وهذا ما صُنع له زمام: أن تبقى أمور مكتبك في يدك.
+**لماذا «عِنان»؟** العِنان سيرٌ يمسك به الفارس فرسه ويوجّهه، ومنه قولهم: بيده عِنانُ الأمر، أي تدبيره. وهذا ما صُنع له عِنان: أن يبقى عنانُ مكتبك في يدك.
 
 هذه نسخة تطوير أولية، صُنعت في السعودية. خطوات التشغيل في قسم [Quick start](#quick-start) أعلاه: انسخ المستودع، ثم اضبط ملف ‎`.env`‎، ثم شغّل ‎`docker compose up -d --build`‎.
 
@@ -327,8 +327,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT
 ---
 
 <p align="center">
-  <img src="docs/zimam-mark.svg" width="28" height="28" alt=""><br>
+  <img src="docs/enan-mark.svg" width="28" height="28" alt=""><br>
   Made in Saudi Arabia by <a href="https://ta.sa"><b>Talal A. Alsubaie</b></a>.<br>
-  I built Zimam for my own office, then opened it up. It is a personal project.<br>
+  I built Enan for my own office, then opened it up. It is a personal project.<br>
   <sub><a href="https://ta.sa">ta.sa</a> · Also by Talal: <a href="https://rustxt.ing">RusTXT</a> and <a href="https://numpad.ing">NumPad</a></sub>
 </p>
