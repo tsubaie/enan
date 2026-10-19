@@ -21451,20 +21451,28 @@
             "name": "view",
             "required": false,
             "schema": {
-              "default": "all",
-              "enum": [
-                "all",
-                "today",
-                "overdue",
-                "upcoming",
-                "next",
-                "waiting",
-                "inbox",
-                "someday",
-                "completed",
-                "trash"
+              "anyOf": [
+                {
+                  "enum": [
+                    "all",
+                    "today",
+                    "overdue",
+                    "upcoming",
+                    "next",
+                    "waiting",
+                    "inbox",
+                    "someday",
+                    "completed",
+                    "trash"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "const": "default",
+                  "type": "string"
+                }
               ],
-              "type": "string"
+              "default": "all"
             }
           },
           {

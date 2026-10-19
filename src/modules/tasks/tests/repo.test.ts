@@ -352,3 +352,16 @@ it('TASKS-B04 TASKS-B07 the list and the detail golden paths stay inside the six
   expect(detail.queries).toBeLessThanOrEqual(6);
   expect(detail.result.subtasks).toHaveLength(1);
 });
+it('TASKS-B18 view=default answers with the default view in one request, at the same statement budget', async () => {
+  await seed();
+  const today = await harness.run((ctx) =>
+    service.listTasks(ctx, TaskListQuery.parse({ view: 'today' })),
+  );
+  const resolved = await countQueries(() =>
+    harness.run((ctx) => service.listTasks(ctx, TaskListQuery.parse({ view: 'default' }))),
+  );
+  expect(resolved.queries).toBe(3);
+  expect(resolved.result.meta.defaultView).toBe('today');
+  expect(resolved.result.data.map((row) => row.id)).toEqual(today.data.map((row) => row.id));
+  expect(resolved.result.meta.counts).toEqual(today.meta.counts);
+});

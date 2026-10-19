@@ -86,7 +86,9 @@ export const TaskDetail = Task.extend({
 });
 export type TaskDetail = z.infer<typeof TaskDetail>;
 export const TaskListQuery = z.strictObject({
-  view: View.default('all'),
+  // TASKS-B18: `default` asks for the module's default view (`meta.defaultView`), resolved by the
+  // server in the same request, so a list opened without a view needs no second round trip.
+  view: z.union([View, z.literal('default')]).default('all'),
   q: z.string().max(500).default(''),
   ownerId: z.union([z.uuid(), z.literal('')]).default(''),
   priority: z.union([Priority, z.literal('')]).default(''),

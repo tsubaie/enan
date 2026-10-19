@@ -50,21 +50,26 @@ export async function listTasks(ctx: Context, query: TaskListQuery) {
   const today = dayAt(timezone);
   const week = addDays(today, 7);
   const dates = [today, week, addDays(today, -90)];
-  const { cursor, withTotal, limit, ...filters } = query;
+  // The counts do not depend on the view, so they come first: `view=default` (TASKS-B18) resolves
+  // to the default view they decide, and the rows are that view's.
+  const counts = z
+    .record(View, z.number())
+    .parse(await repo.countTasks(ctx.db, { ...query, view: 'all' }, View.options, dates));
+  const defaultView = z.enum(['today', 'next']).parse(counts.today > 0 ? 'today' : 'next');
+  const view = query.view === 'default' ? defaultView : query.view;
+  const resolved = { ...query, view };
+  const { cursor, withTotal, limit, ...filters } = resolved;
   const hash = filtersHash(z.json().parse({ ...filters, today, timezone }));
   const spec = repo.sortSpec(query.sort, today, week);
   const rows = await repo.selectTasks(
     ctx.db,
-    query,
+    resolved,
     dates,
     spec,
     limit + 1,
     decodeCursor(cursor, spec, hash),
     personNameSql,
   );
-  const counts = z
-    .record(View, z.number())
-    .parse(await repo.countTasks(ctx.db, query, View.options, dates));
   const page = rows.slice(0, limit);
   const last = page.at(-1);
   return {
@@ -72,10 +77,10 @@ export async function listTasks(ctx: Context, query: TaskListQuery) {
     meta: {
       counts,
       // TASKS-B16: meta.total is opt-in (04-api-conventions.md); the view counts always ship.
-      ...(withTotal === 'true' ? { total: counts[query.view] } : {}),
+      ...(withTotal === 'true' ? { total: counts[view] } : {}),
       today,
       timezone,
-      defaultView: z.enum(['today', 'next']).parse(counts.today > 0 ? 'today' : 'next'),
+      defaultView,
       nextCursor: rows.length > limit && last ? encodeCursor(spec, hash, last) : null,
     },
   };

@@ -88,3 +88,22 @@ it('ACCT-B09 API requests are the ones that slide the session', async () => {
   expect((await route(request())).status).toBe(200);
   expect(session.currentUser).toHaveBeenCalledWith({ slide: true });
 });
+it('ADMIN-B49 every API response says how long the origin spent on it, success and error alike', async () => {
+  const ok = defineHandler({
+    guard: 'public',
+    input: z.strictObject({}),
+    response: z.object({}),
+    handler: async () => ({}),
+  });
+  const timing = (await ok(request())).headers.get('Server-Timing') ?? '';
+  expect(timing).toMatch(/^auth;dur=\d+\.\d, db;dur=\d+\.\d, total;dur=\d+\.\d$/u);
+  const refused = defineHandler({
+    guard: 'session',
+    input: z.strictObject({}),
+    response: z.object({}),
+    handler: async () => ({}),
+  });
+  const response = await refused(request());
+  expect(response.status).toBe(401);
+  expect(response.headers.get('Server-Timing')).toMatch(/^auth;dur=\d+\.\d, total;dur=\d+\.\d$/u);
+});

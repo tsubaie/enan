@@ -1,7 +1,9 @@
 'use client';
 import {
+  infiniteQueryOptions,
   keepPreviousData,
   useInfiniteQuery,
+  usePrefetchInfiniteQuery,
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
@@ -18,7 +20,7 @@ import {
 import type { Filters } from '@/ui/entity/types';
 import { listResult } from '@/ui/entity/queries';
 export function usePeople(filters: Filters) {
-  const result = useInfiniteQuery({
+  const options = infiniteQueryOptions({
     queryKey: ['people', 'list', filters],
     initialPageParam: '',
     queryFn: ({ pageParam }) =>
@@ -35,6 +37,10 @@ export function usePeople(filters: Filters) {
     getNextPageParam: (last) => last.meta.nextCursor ?? undefined,
     placeholderData: keepPreviousData,
   });
+  // Started while the page renders, not when it mounts: a page change runs its view transition
+  // (ADR 0019) before effects, and a fetch begun in an effect waits for it (ExecutiveOS#79).
+  usePrefetchInfiniteQuery(options);
+  const result = useInfiniteQuery(options);
   return listResult(result);
 }
 export function usePerson(id: string | null, trash: boolean) {

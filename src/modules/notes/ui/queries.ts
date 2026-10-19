@@ -1,7 +1,9 @@
 'use client';
 import {
+  infiniteQueryOptions,
   keepPreviousData,
   useInfiniteQuery,
+  usePrefetchInfiniteQuery,
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
@@ -25,7 +27,7 @@ type Json = z.infer<ReturnType<typeof z.json>>;
 const query = (filters: Record<string, string>) =>
   new URLSearchParams(Object.entries(filters).filter(([, value]) => value !== ''));
 export function useNotes(filters: Filters) {
-  const list = useInfiniteQuery({
+  const options = infiniteQueryOptions({
     queryKey: ['notes', 'list', filters],
     initialPageParam: '',
     queryFn: ({ pageParam }) =>
@@ -33,6 +35,10 @@ export function useNotes(filters: Filters) {
     getNextPageParam: (last) => last.meta.nextCursor ?? undefined,
     placeholderData: keepPreviousData,
   });
+  // Started while the page renders, not when it mounts: a page change runs its view transition
+  // (ADR 0019) before effects, and a fetch begun in an effect waits for it (ExecutiveOS#79).
+  usePrefetchInfiniteQuery(options);
+  const list = useInfiniteQuery(options);
   return listResult(list);
 }
 export function useNote(id: string | null, trash: boolean) {

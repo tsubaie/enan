@@ -1,7 +1,7 @@
 'use client';
 import { Fragment, type ReactNode } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import Link from 'next/link';
+import { IntentLink } from '@/ui/layout/IntentLink';
 import { CirclePlus } from 'lucide-react';
 import { Button } from '@/ui/primitives/button';
 import { useLongDate, useToday } from '@/ui/format';
@@ -35,7 +35,7 @@ export function Greeting({ live }: { live: Section[] }) {
       </div>
       {/* HOME-B16: one quick capture, the list page's own create sheet. */}
       {live.some((section) => section.key === 'today') && (
-        <Button nativeButton={false} render={<Link href={routes.tasks({ new: '1' })} />}>
+        <Button nativeButton={false} render={<IntentLink href={routes.tasks({ new: '1' })} />}>
           <CirclePlus className="size-4" aria-hidden />
           {t('addTask')}
         </Button>
@@ -82,11 +82,11 @@ function Part({ section, label }: { section: Section; label: PartKey }) {
   });
   if (!section.href) return <span>{text}</span>;
   return (
-    <Link
+    <IntentLink
       href={section.href}
       className="underline-offset-4 transition-colors duration-150 hover:underline"
     >
       {text}
-    </Link>
+    </IntentLink>
   );
 }

@@ -1,7 +1,9 @@
 'use client';
 import {
+  infiniteQueryOptions,
   keepPreviousData,
   useInfiniteQuery,
+  usePrefetchInfiniteQuery,
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
@@ -30,7 +32,7 @@ const opId = z.object({ opId: z.uuid() });
 // the counts and Home. Every write invalidates all four rather than guessing which one moved.
 const touched = ['kpis', 'objectives', 'home'];
 export function useKpis(filters: Filters) {
-  const query = useInfiniteQuery({
+  const options = infiniteQueryOptions({
     queryKey: ['kpis', 'list', filters],
     initialPageParam: '',
     queryFn: ({ pageParam }) =>
@@ -46,6 +48,10 @@ export function useKpis(filters: Filters) {
     // page reloading. The first load has nothing to hold and still shows the placeholder.
     placeholderData: keepPreviousData,
   });
+  // Started while the page renders, not when it mounts: a page change runs its view transition
+  // (ADR 0019) before effects, and a fetch begun in an effect waits for it (ExecutiveOS#79).
+  usePrefetchInfiniteQuery(options);
+  const query = useInfiniteQuery(options);
   return { ...listResult(query), defaultView: 'all' };
 }
 // The detail endpoint answers with the whole record, so the framework's row object and the panel's

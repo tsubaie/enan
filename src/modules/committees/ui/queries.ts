@@ -1,15 +1,19 @@
 'use client';
-import { keepPreviousData, useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
+import { infiniteQueryOptions, keepPreviousData, useInfiniteQuery, usePrefetchInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import { request } from '@/core/http/client';
 import type { Filters } from '@/ui/entity/types';
 import { Committee, CommitteeList, CommitteeChoices, Activity, type CommitteeCreate, type CommitteePatch, Reorder } from '../schema/validation';
 const response = z.object({ data: Committee });
 export function useCommittees(filters: Filters) {
-  const query = useInfiniteQuery({ queryKey: ['committees', 'list', filters], initialPageParam: '',
+  const options = infiniteQueryOptions({ queryKey: ['committees', 'list', filters], initialPageParam: '',
     queryFn: ({ pageParam }) => request(`/committees?${new URLSearchParams(Object.entries({ ...filters, cursor: pageParam }).filter(([, value]) => value !== ''))}`, CommitteeList),
     getNextPageParam: (last) => last.meta.nextCursor ?? undefined, refetchInterval: 30000,
     placeholderData: keepPreviousData });
+  // Started while the page renders, not when it mounts: a page change runs its view transition
+  // (ADR 0019) before effects, and a fetch begun in an effect waits for it (ExecutiveOS#79).
+  usePrefetchInfiniteQuery(options);
+  const query = useInfiniteQuery(options);
   return { items: query.data?.pages.flatMap((page) => page.data) ?? [], counts: query.data?.pages[0]?.meta.counts ?? {},
     summaryCounts: query.data?.pages[0]?.meta.taskStats, defaultView: 'active', pending: query.isPending, error: query.error,
     more: query.hasNextPage, fetchMore: async () => { await query.fetchNextPage(); }, refetch: () => { void query.refetch(); } };
@@ -20,7 +24,9 @@ export function useCommittee(id: string | null, trash: boolean) {
   return { data: query.data?.data, pending: query.isLoading, error: query.error, refetch: async () => (await query.refetch()).data?.data };
 }
 export function useCommitteeChoices(current?: string | null) {
-  return useQuery({ queryKey: ['committees', 'choices', current],
+  // Committee choices change only when committees do, and every committee mutation invalidates
+  // ['committees']; a page visit reads them from the cache (ExecutiveOS#79).
+  return useQuery({ queryKey: ['committees', 'choices', current], staleTime: 300000,
     queryFn: () => request(`/committees/choices${current ? `?current=${current}` : ''}`, CommitteeChoices) });
 }
 export function useCommitteeActivity(id: string) {
