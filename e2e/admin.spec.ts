@@ -91,6 +91,9 @@ test('ADMIN-B39 ADMIN-B40 the overview links every administration page, in the r
   expect(hrefs).toEqual(pages.map((name) => `/admin/${name}`));
   for (const name of ['settings', 'audit'] as const) {
     await page.goto('/admin');
+    // During the page transition the outgoing page can still hold its own overview; wait until
+    // only the new one is there.
+    await expect(index).toHaveCount(3);
     await index.locator(`a[href="/admin/${name}"]`).click();
     await expect(page).toHaveURL(new RegExp(`/admin/${name}$`, 'u'));
     await expect(page.getByRole('heading', { level: 1, name: en.admin[name] })).toBeVisible();
