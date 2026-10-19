@@ -1,6 +1,6 @@
 'use client';
 import { useTranslations } from 'next-intl';
-import Link from 'next/link';
+import { IntentLink } from '@/ui/layout/IntentLink';
 import { ChevronRight } from 'lucide-react';
 import { cn } from '@/ui/cn';
 import { useDayOfMonth, useWeekday } from '@/ui/format';
@@ -43,13 +43,13 @@ export function Week({
           {overdue && overdue.count > 0 && <OverdueCapsule section={overdue} />}
           {/* The one link on the page with a chevron: it changes what the reader is looking at. */}
           {today.href && (
-            <Link
+            <IntentLink
               className="home-hit inline-flex shrink-0 items-center gap-1 text-xs font-light text-accent hover:underline"
               href={today.href}
             >
               {t('openWeek')}
               <ChevronRight className="size-3 rtl:-scale-x-100" aria-hidden />
-            </Link>
+            </IntentLink>
           )}
         </div>
       </div>
@@ -75,9 +75,9 @@ function OverdueCapsule({ section }: { section: Section }) {
   const capsule =
     'home-hit inline-flex shrink-0 items-center rounded-full bg-danger-soft px-2.5 py-0.5 text-xs tabular-nums text-danger';
   return section.href ? (
-    <Link href={section.href} className={cn(capsule, 'hover:underline')}>
+    <IntentLink href={section.href} className={cn(capsule, 'hover:underline')}>
       {body}
-    </Link>
+    </IntentLink>
   ) : (
     <span className={capsule}>{body}</span>
   );
@@ -92,7 +92,7 @@ function DayCell({ day, today }: { day: Day; today: boolean }) {
   const dayOfMonth = useDayOfMonth();
   return (
     <li aria-current={today ? 'date' : undefined} className="min-w-0">
-      <Link
+      <IntentLink
         href={day.href}
         className={cn(
           'flex h-full min-h-11 min-w-0 flex-col items-center gap-0.5 rounded-2xl px-1 py-2.5 text-center transition-colors duration-150',
@@ -121,7 +121,7 @@ function DayCell({ day, today }: { day: Day; today: boolean }) {
         >
           {t('due', { count: day.count })}
         </span>
-      </Link>
+      </IntentLink>
     </li>
   );
 }

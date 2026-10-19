@@ -1,5 +1,5 @@
 'use client';
-import Link from 'next/link';
+import { IntentLink } from '@/ui/layout/IntentLink';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { navigation } from '@/core/modules/client';
@@ -19,7 +19,7 @@ export function ShellLinks({ role, scope = 'all' }: { role: string; scope?: Scop
       const key = item.key;
       const current = path.startsWith(item.href.split('/').slice(0, 2).join('/'));
       return (
-        <Link
+        <IntentLink
           key={item.href}
           href={item.href}
           aria-current={current ? 'page' : undefined}
@@ -36,7 +36,7 @@ export function ShellLinks({ role, scope = 'all' }: { role: string; scope?: Scop
               would stretch instead of sitting beside the icon; only the rail needs it to grow. */}
           <span className={cn('min-w-0 truncate', scope !== 'all' && 'flex-1')}>{t(key)}</span>
           {Badge && scope !== 'all' && <Badge />}
-        </Link>
+        </IntentLink>
       );
     });
   return <>{links}</>;

@@ -1,7 +1,7 @@
 'use client';
 import type { ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
-import Link from 'next/link';
+import { IntentLink } from '@/ui/layout/IntentLink';
 import { cn } from '@/ui/cn';
 // HOME-B15: every block on the page is one widget of the same frosted glass the list pages draw
 // their cards in (`.entity-glass`), with one radius, one inset and one header. The tile itself is
@@ -52,12 +52,12 @@ export function TileHead({
         {children}
       </div>
       {href && (
-        <Link
+        <IntentLink
           className="home-hit shrink-0 text-xs font-light text-text-muted transition-colors duration-150 hover:text-accent focus-visible:text-accent"
           href={href}
         >
           {t('viewAll')}
-        </Link>
+        </IntentLink>
       )}
     </div>
   );

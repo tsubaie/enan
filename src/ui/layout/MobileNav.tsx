@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import Link from 'next/link';
+import { IntentLink } from '@/ui/layout/IntentLink';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Ellipsis } from 'lucide-react';
@@ -78,7 +78,7 @@ function BarLink({ entry, path }: { entry: NavEntry; path: string }) {
   const t = useTranslations('common');
   const Icon = entry.icon;
   return (
-    <Link
+    <IntentLink
       href={entry.href}
       aria-current={isCurrent(path, entry.href) ? 'page' : undefined}
       className="group/nav flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-3xl px-3 text-text-muted transition-colors duration-150 hover:bg-[var(--nav-hover)] hover:text-text aria-[current=page]:bg-[var(--nav-selected)] aria-[current=page]:text-text"
@@ -88,7 +88,7 @@ function BarLink({ entry, path }: { entry: NavEntry; path: string }) {
         aria-hidden={true}
       />
       <span className="min-w-0 truncate">{t(entry.key)}</span>
-    </Link>
+    </IntentLink>
   );
 }
 // Behind the door there is width for a row, so the entry reads as the rail's does: icon, name, and
@@ -98,7 +98,7 @@ function SheetLink({ entry, path, close }: { entry: NavEntry; path: string; clos
   const Icon = entry.icon;
   const Badge = entry.badge;
   return (
-    <Link
+    <IntentLink
       href={entry.href}
       onClick={close}
       aria-current={isCurrent(path, entry.href) ? 'page' : undefined}
@@ -107,6 +107,6 @@ function SheetLink({ entry, path, close }: { entry: NavEntry; path: string; clos
       <Icon className="size-5 shrink-0" aria-hidden={true} />
       <span className="min-w-0 flex-1 truncate">{t(entry.key)}</span>
       {Badge && <Badge />}
-    </Link>
+    </IntentLink>
   );
 }

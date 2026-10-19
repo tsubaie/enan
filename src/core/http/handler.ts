@@ -76,13 +76,31 @@ async function inputFor(request: Request, source?: 'body' | 'query' | 'form') {
     throw new AppError('validation_failed');
   }
 }
+// ExecutiveOS#79: every API response says how long the origin spent on it (`Server-Timing`), split into the
+// session check and the transaction that ran the handler, so a slow response can be placed at the
+// edge or at the origin from the browser's own network panel.
+function serverTiming(started: number, marks: { auth?: number; db?: number }) {
+  const total = performance.now() - started;
+  const parts = [
+    ...(marks.auth === undefined ? [] : [`auth;dur=${marks.auth.toFixed(1)}`]),
+    ...(marks.db === undefined ? [] : [`db;dur=${marks.db.toFixed(1)}`]),
+    `total;dur=${total.toFixed(1)}`,
+  ];
+  return { 'Server-Timing': parts.join(', ') };
+}
 export function defineHandler<I extends z.ZodType, O extends z.ZodType>(options: Options<I, O>) {
   const handler = async (request: Request, route?: { params: Promise<Record<string, string>> }) => {
     const requestId = id();
+    const started = performance.now();
+    const marks: { auth?: number; db?: number } = {};
     try {
       if (await inMaintenance())
-        return Response.json({ error: { code: 'maintenance', requestId } }, { status: 503 });
+        return Response.json(
+          { error: { code: 'maintenance', requestId } },
+          { status: 503, headers: serverTiming(started, marks) },
+        );
       const user = await currentUser({ slide: true });
+      marks.auth = performance.now() - started;
       if (options.guard !== 'public' && !user) throw new AppError('unauthenticated');
       if (options.guard === 'admin' && user?.role !== 'admin')
         throw new AppError('forbidden', { reason: 'role' });
@@ -93,21 +111,30 @@ export function defineHandler<I extends z.ZodType, O extends z.ZodType>(options:
           : await inputFor(request, options.source);
       const input = options.input.parse(raw);
       const params = route ? await route.params : {};
+      const executing = performance.now();
       const result = await execute(options, input, { user, db: db(), requestId }, params, request);
+      marks.db = performance.now() - executing;
       if (options.status === 204)
         return new Response(null, {
           status: 204,
           headers: {
             'X-Op-Id': z.object({ opId: z.string() }).parse(result).opId,
             'X-Request-Id': requestId,
+            ...serverTiming(started, marks),
           },
         });
       return Response.json(result, {
         status: options.status ?? 200,
-        headers: { 'X-Request-Id': requestId, 'Cache-Control': 'no-store' },
+        headers: {
+          'X-Request-Id': requestId,
+          'Cache-Control': 'no-store',
+          ...serverTiming(started, marks),
+        },
       });
     } catch (error) {
-      return errorResponse(error, requestId);
+      const response = await errorResponse(error, requestId);
+      response.headers.set('Server-Timing', serverTiming(started, marks)['Server-Timing']);
+      return response;
     }
   };
   return Object.assign(handler, { meta: metaOf(options) });

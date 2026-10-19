@@ -1,5 +1,12 @@
 'use client';
-import { keepPreviousData, useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  infiniteQueryOptions,
+  keepPreviousData,
+  useInfiniteQuery,
+  usePrefetchInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { z } from 'zod';
 import { request } from '@/core/http/client';
 import {
@@ -14,18 +21,37 @@ import type { Filters } from '@/ui/entity/types';
 import { listResult } from '@/ui/entity/queries';
 const response = z.object({ data: TaskDetail });
 export function useTasks(filters: Filters) {
-  const query = useInfiniteQuery({
+  const client = useQueryClient();
+  const options = infiniteQueryOptions({
     queryKey: ['tasks', 'list', filters],
     initialPageParam: '',
-    queryFn: ({ pageParam }) =>
-      request(
-        `/tasks?${new URLSearchParams(Object.fromEntries(Object.entries({ ...filters, ...(pageParam ? { cursor: pageParam } : {}) }).filter(([, value]) => value !== '')))}`,
+    queryFn: async ({ pageParam }) => {
+      // TASKS-B18: a list opened without a view asks for the default one in the same request, and
+      // the answer is also kept under the view it resolved to, which the page then writes into the
+      // URL (EP-B30), so the list on screen is not fetched a second time.
+      const view = filters.view === '' ? 'default' : filters.view;
+      const page = await request(
+        `/tasks?${new URLSearchParams(Object.fromEntries(Object.entries({ ...filters, view, ...(pageParam ? { cursor: pageParam } : {}) }).filter(([, value]) => value !== '')))}`,
         TaskList,
-      ),
+      );
+      if (view === 'default' && !pageParam) {
+        const resolved = ['tasks', 'list', { ...filters, view: page.meta.defaultView }];
+        if (!client.getQueryData(resolved))
+          client.setQueryData(resolved, { pages: [page], pageParams: [''] });
+      }
+      return page;
+    },
     getNextPageParam: (last) => last.meta.nextCursor ?? undefined,
     placeholderData: keepPreviousData,
     refetchInterval: 30000,
+    // Fresh for as long as the poll interval: the list kept under the resolved view (above) is
+    // read, not fetched again, when the page moves to it.
+    staleTime: 30000,
   });
+  // Started while the page renders rather than when it mounts: a page change runs its view
+  // transition (ADR 0019) before effects, and a fetch begun in an effect waits for it (ExecutiveOS#79).
+  usePrefetchInfiniteQuery(options);
+  const query = useInfiniteQuery(options);
   return { ...listResult(query), defaultView: query.data?.pages[0]?.meta.defaultView };
 }
 // TASKS-B17: the shell badge needs the view counts, not the rows, so it asks for one row and
@@ -55,6 +81,9 @@ export function useOwners() {
   return useQuery({
     queryKey: ['people', 'assignable'],
     queryFn: () => request('/people?view=assignable&limit=200', PersonList),
+    // The owner choices change only when the directory does, and every people mutation
+    // invalidates ['people']; a page visit reads them from the cache (ExecutiveOS#79).
+    staleTime: 300000,
   });
 }
 export function useTaskMutations() {

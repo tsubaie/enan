@@ -1,7 +1,7 @@
 'use client';
 import { Fragment, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
-import Link from 'next/link';
+import { IntentLink } from '@/ui/layout/IntentLink';
 import { UserX } from 'lucide-react';
 import { Avatar } from '@/ui/layout/Avatar';
 import { TaskCheck } from '@/modules/tasks/ui';
@@ -182,7 +182,7 @@ export function Row({ item, sectionKey }: { item: Item; sectionKey: SectionKey }
   return (
     <div className="-mx-2 my-0.5 flex items-start gap-3 rounded-lg px-2 py-2.5 transition-colors duration-150 hover:bg-[var(--nav-hover)]">
       <RowLead item={item} sectionKey={sectionKey} />
-      <Link href={item.href} title={title} className="min-w-0 flex-1">
+      <IntentLink href={item.href} title={title} className="min-w-0 flex-1">
         {sectionKey === 'kpis' && <KpiReason item={item} />}
         {/* The clamp sits on a block of the page's own direction, so a title aligns to the reading
             start of the interface (the right in Arabic) whatever script it is typed in; the bdi
@@ -193,7 +193,7 @@ export function Row({ item, sectionKey }: { item: Item; sectionKey: SectionKey }
           <bdi>{title}</bdi>
         </span>
         <RowFacts item={item} sectionKey={sectionKey} />
-      </Link>
+      </IntentLink>
     </div>
   );
 }
