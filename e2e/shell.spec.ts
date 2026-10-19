@@ -126,16 +126,20 @@ test('ADMIN-B19 the floating bottom bar never covers the last item of a list @mo
   await page.goto('/admin');
   const last = page.locator('section[aria-labelledby^="admin-index-"] a').last();
   await expect(last).toHaveAttribute('href', '/admin/audit');
-  // Scroll every scrolling ancestor, and the window, to its end.
-  await last.evaluate((element) => {
-    for (let node = element.parentElement; node; node = node.parentElement)
-      if (node.scrollHeight > node.clientHeight) node.scrollTop = node.scrollHeight;
-    window.scrollTo(0, document.documentElement.scrollHeight);
-  });
-  const bar = await page.locator('.mobile-navigation').boundingBox();
-  const item = await last.boundingBox();
-  expect(bar && item).toBeTruthy();
-  expect(item!.y + item!.height).toBeLessThanOrEqual(bar!.y + 1);
+  // Scroll every scrolling ancestor, and the window, to its end, and measure. The page can still
+  // be growing when the first scroll lands (late sections, fonts), which leaves the end further
+  // down; scrolling again until the measure holds reads the settled page.
+  await expect(async () => {
+    await last.evaluate((element) => {
+      for (let node = element.parentElement; node; node = node.parentElement)
+        if (node.scrollHeight > node.clientHeight) node.scrollTop = node.scrollHeight;
+      window.scrollTo(0, document.documentElement.scrollHeight);
+    });
+    const bar = await page.locator('.mobile-navigation').boundingBox();
+    const item = await last.boundingBox();
+    expect(bar && item).toBeTruthy();
+    expect(item!.y + item!.height).toBeLessThanOrEqual(bar!.y + 1);
+  }).toPass();
   // Playwright refuses a click whose point lands on another element, such as the bar.
   await last.click({ trial: true });
   await last.click();
