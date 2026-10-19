@@ -38,6 +38,8 @@ vi.mock('@/ui/format', () => ({
   },
 }));
 vi.mock('../../ui/queries', () => ({ useHome: () => query.current }));
+// Home's links prefetch on intent through the router (IntentLink); rendering needs only its shape.
+vi.mock('next/navigation', () => ({ useRouter: () => ({ prefetch: () => undefined }) }));
 import { HomePage } from '../../ui/HomePage';
 type Item = {
   id: string;

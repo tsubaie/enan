@@ -26,7 +26,11 @@ const modules: ClientManifest[] = [
     nav: { href: '/admin/users', key: 'admin', icon: Settings, admin: true, order: 90 },
   },
 ];
-vi.mock('next/navigation', () => ({ usePathname: () => '/tasks' }));
+// The links prefetch on intent through the router (IntentLink); rendering needs only its shape.
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/tasks',
+  useRouter: () => ({ prefetch: () => undefined }),
+}));
 vi.mock('@/core/modules/client', async (original) => {
   const actual = await original<typeof import('../client')>();
   return { ...actual, navigation: (role: string) => actual.navigationFor(modules, role) };
