@@ -1,0 +1,132 @@
+# Feature: Tasks
+
+**Status:** accepted
+**Spec reviewed:** 2026-09-07
+**Implementation verified:** core task-management slice; `docs/STATUS.md` lists what is implemented and deferred.
+**Owner module:** `src/modules/tasks`
+
+## Purpose
+
+Capture everything the office must do, keep it in a GTD-style flow, and show what is overdue, due today, and waiting on others. Tasks link to committees, initiatives, meetings, people, and the notes they came from.
+
+## Vocabulary
+
+| Field | Values |
+|---|---|
+| status | `inbox` `next_action` `waiting_on` `someday` `completed` |
+| priority | `low` `medium` `high` `urgent` or null; rank for sorting: urgent 4, high 3, medium 2, low 1, null 0 |
+| band | `overdue` `today` `week` `later` `nodate`; rank 0..4; completed tasks have no band |
+| owner | an assignable person |
+| subtask | a task with `parent_id`; depth 1 |
+
+## Data model
+
+See `03-data-model.md` § tasks. Invariants:
+
+- TASKS-I01 Depth: a subtask cannot have subtasks; a task with children cannot become a subtask (trigger `tasks_depth_check` and service, 422).
+- TASKS-I02 No self-parent or cycles (trigger).
+- TASKS-I03 `completed_at` non-null iff `status = completed` (CHECK).
+- TASKS-I04 Cascade delete: deleting a parent soft-deletes its non-deleted subtasks with the same op id; restoring by op id restores exactly those; a subtask deleted earlier by its own op stays deleted.
+- TASKS-I05 `sort_order` unique within a parent among non-deleted rows (partial unique index `tasks_active_order_idx`; SQLite cannot defer it, so a reorder that would collide moves the affected rows through temporary negative positions first); reorder rewrites all positions of that parent in one transaction.
+- TASKS-I06 Links to committee, initiative, note, owner survive soft delete of the target and are nulled on purge.
+
+## Behaviors
+
+- TASKS-B01 **Create** defaults: status `inbox`, no priority, owner, or date; `title` required. Optional `committeeId`, `initiativeId`, `sourceNoteId`, `parentId`, and `links: [{ type, id, relation }]` created in the same transaction (used by meetings Actions: `agreed_in`).
+- TASKS-B02 **Status transitions** are allowed between any two statuses except into `completed`, which requires `POST /tasks/:id/complete`; PATCH with `status: completed` → 422 `TASKS-B02`. `complete { revision, force? }`: if the task has non-completed subtasks and `force` is false → 409 `conflict reason: "state"` with `details.openSubtasks`; with `force` the subtasks are completed too. Completing is one operation with one identity: `task_completions` records it and `task_completion_items` records every row it actually changed, each with the status and `completed_at` it held before and the revision it carried after. A subtask that was already completed is not an item. `complete` responds `{ data, meta: { opId } }`.
+  `POST /tasks/:id/complete/undo { opId }` restores every item of that operation to its exact previous status and `completed_at`, leaving rows the operation did not change alone. It verifies the operation belongs to the requested task; an operation already undone replays and returns the current task; if any item is no longer `completed` at its recorded revision it returns 409 `conflict reason: "state"` and writes nothing, so later work is never overwritten. Both the completion and its undo are audited under the same operation id.
+  `reopen { revision }` remains the reader's own command in the other direction: it sets `next_action` and clears `completed_at`, and it does not reopen subtasks. It is not Undo, and must not be used as one — a task completed from `inbox`, `waiting_on` or `someday` would lose the status it came from.
+- TASKS-B03 **Bands** computed by one function `bandOf(task, today)` where `today` is the date in `ctx.timezone`: completed → none; `due < today` overdue; `= today` today; `today < due ≤ today + 7 days` week (rolling); `> today + 7` later; null → nodate. The UI recomputes bands at the next local midnight without reload (a timer keyed on the day) and refetches counts.
+- TASKS-B04 **Views**: `inbox`, `next`, `today` (band today or overdue, not completed), `upcoming` (band week), `overdue` (overdue band only, from Mission Control’s dedicated overdue view), `waiting`, `someday`, `completed` (completed within 90 days), `trash`, `all` (not completed). Default: `today` if its count > 0 else `next`. Subtasks appear in lists only when `parentId` is set or `includeSubtasks=true`; counts exclude subtasks.
+- TASKS-B05 **Facets**: owner, priority, committee, initiative, hasSubtasks, dueFrom/dueTo, `due` (one calendar day; the page offers it as a date facet, EP-B42, and a day in Home's week strip opens the list with it, HOME-B14), `sourceNoteId`, `hasSourceNote`, `linkedTo`, `relation`. AND semantics.
+- TASKS-B06 **Search** on title and description via `search_text`. The list's field is labelled `tasks.searchList` ("Search tasks", EP-B41).
+- TASKS-B07 **Sort** default `(band_rank, due_date asc nulls last, priority_rank desc, created_at desc, id desc)`; allowed: `due_date`, `priority`, `created_at`, `updated_at`, `title` each with `id` tiebreak.
+- TASKS-B08 **Subtasks**: created from detail; checklist with complete toggle (goes through `complete`), owner, due date; reorder by drag with keyboard alternative. Trashing a subtask is not confirmed and reports itself with the shared Undo toast (EP-B36), closing the subtask dialog first so the receipt is not behind its backdrop. `POST /tasks/:id/convert-to-task { revision }` clears `parent_id` and appends to the top-level order. `POST /tasks/:id/make-subtask { revision, parentId }` requires the task to have no children and the parent to be top-level (I01).
+- TASKS-B09 **Group** `POST /tasks/group { title, childIds }` creates a parent and re-parents in one transaction; any child that has children or already has a parent → 422 `TASKS-B09` naming the ids; order preserved as given.
+- TASKS-B10 **Owner**: only assignable people; changing owner is a plain PATCH. Owner edge is projected (no mirror writes).
+- TASKS-B11 **Trash**: soft delete with op id; `trash` view lists top-level deleted tasks with their subtasks; restore by op id; purge after `retention.trash_days`, never when it is 0 (ADMIN-B48).
+- TASKS-B12 **Concurrency**: PATCH and actions carry `revision`.
+- TASKS-B13 **AI breakdown** `POST /tasks/:id/breakdown { revision }` enqueues `ai.tasks.breakdown` (dedup per task). Allowed only when the task is top-level, not completed, and has no subtasks; otherwise 422 `TASKS-B13`. The job result is up to 8 suggestions; `POST /tasks/:id/breakdown/apply { jobId, indexes[] }` (idempotent, requires the task revision recorded in the job payload; stale → 409) creates the selected subtasks once; a second apply with the same job returns the existing subtasks.
+- TASKS-B14 **Linked section** on detail; `linkedTo` and `relation` on lists.
+- TASKS-B17 **Shell count**: the tasks entry in the sidebar trails a pill with the number of open top-level tasks, the same figure the rail shows for All tasks. It is absent at zero and while the figure is loading. The shell learns it through the module manifest, so no shell file names a module; the pill shares the `tasks.counts` query key, so every task mutation refreshes it.
+- TASKS-B16 **Totals**: `meta.counts` always ships; `meta.total` is present only when the request asks for it with `withTotal=true` (`04-api-conventions.md` § Lists).
+- TASKS-B15 **Invalidation**: any task mutation invalidates `tasks.list*`, `tasks.counts`, `tasks.detail(id)` and the parent's detail; changes to `committee_id`, `initiative_id`, or `owner_id` also invalidate the old and new target's `detail`; changes to `source_note_id` invalidate the old and new note's detail; link changes invalidate both `links` keys.
+- TASKS-B16 **Source note**: `sourceNoteId` is set on create or by PATCH. Setting it to a note by PATCH requires the task to be open, top-level and not linked to a different note; otherwise 422 `TASKS-B16`. Setting it to null detaches. The note must exist and not be deleted (404). The task detail carries `sourceNote` (id, title, `deletedAt`, `archivedAt`) and the row shows a source note chip that reads "trashed" while the note is in Trash.
+
+## API
+
+| Verb | Path | Body / query |
+|---|---|---|
+| GET | `/tasks` | `view, q, ownerId, priority, committeeId, initiativeId, parentId, includeSubtasks, hasSubtasks, dueFrom, dueTo, sourceNoteId, hasSourceNote, linkedTo, relation, sort, limit, cursor, withTotal` |
+| POST | `/tasks` | `TaskCreate` (+ `links`) |
+| GET | `/tasks/:id` | includes `subtasks[]`, `owner`, `committee`, `initiative`, `sourceNote`, `pendingBreakdownJobId` |
+| PATCH | `/tasks/:id` | `TaskUpdate` + `revision` |
+| DELETE / restore | `/tasks/:id` | |
+| POST | `/tasks/:id/complete` `reopen` `convert-to-task` `make-subtask` `breakdown` `breakdown/apply` | |
+| POST | `/tasks/group` | |
+| PATCH | `/tasks/reorder` | `{ parentId, orderedIds, revisions: { [id]: revision } }` (top-level null parent support deferred) |
+
+## UI
+
+Row: a card in the shared card presentation (EP-B20), the same as Notes. Since ADR 0030 the card view and the table are two instruments: the table scans columns, the card is read top to bottom like a note. A card is an inset sheet carrying the title at the `text-nav` step in medium weight, priority after it only for urgent and high (a dot and the word in the danger and warning inks; medium and low are read in the record), a one-line excerpt of the description when there is one, and a facts line with an icon per fact: due in the same wording the record uses (red when late), status when not next action or completed, the committee in the accent ink, the source note ("Note in trash" while trashed) and subtask progress. The card is one button, so none of that is a link; the owner's avatar is the card's one control, at its end. The independent completion checkbox retains optimistic feedback and confirmation for open children. Completing shows an Undo toast: "Task completed", "Subtask completed" in a checklist, or the count of subtasks carried with it when a parent was completed by force. Undo goes through `complete/undo`, so it restores the exact status each row held. Completing a task from its own detail panel closes the panel, because the task leaves every list view and a panel left open strands it, turns read-only and reports the reader's own action back to them as "outside the current view"; completing a subtask inside a parent's checklist leaves the panel where it is. Reopening a completed task carries no toast: it is a command, not an undo. Completed titles are muted and struck through. The list is grouped by band under headings set in the display face, Overdue in the danger ink and Today in the accent, the rest in ink (`groupTone`). Source-note context appears when the container is wide enough and remains in task details. Relative due wording and urgency colors are preserved, and the owner's avatar stays outside the opening button. TASKS-B02 featured counters are quiet readings (a name over a figure in the display face, no border, a raised ground on the current one) ordered Inbox, Today, Overdue, Next action, Waiting. Inbox is the first logical card (rightmost in Arabic), and selecting it opens the existing inbox view. Five cards fit on wide containers and wrap to two columns on narrow screens. Grouping by band except in completed and trash; Completed and Trash sit under a divider in the rail. Detail: the title is the editable heading (one field, labelled "Task title"), then status, priority, owner, due date and committee as label/value rows read-first per EP-B25, with the due row stating how late or how soon the task is in the same wording the list uses (TASKS-B03), and the long-form field labelled "Description" rather than "Notes", which is the name of a different module (status and priority pickers show a coloured dot or tinted flag with the label and a tick on the current choice, the owner picker gains a search box once more than ten people are assignable, and the due date opens quick picks Today, Tomorrow, End of week, Next week and No date above a Sunday-first month grid), committee, initiative, description (markdown), subtasks as a checklist (toggle and inline title; owner, due date, reorder, make a task and trash revealed on hover or focus, always on touch; inline add row), "Break down with AI", source note chip, Linked section, the shared entity footer (EP-B37) carrying the source note, relative "Updated" and Move to trash (the assignee is not repeated there; the Assignee row names them). Create: title, due, priority, owner, committee, initiative; pre-filled links shown as chips. Mobile: the panel bar reads Back · save state; swipe reveals Complete and Delete. Shortcuts: `c` complete, `d` due date, `p` priority.
+
+## AI
+
+Breakdown review (UI): each suggestion is greyed until ticked and shown in full ink once it will be added; its description and date are Light. Once the task has changed since the suggestions were made (TASKS-B13 stale), the suggestions cannot be ticked and the only action offered is a new draft, as the primary button; Apply appears only when the suggestions can still be applied.
+
+`tasks.breakdown`: input `{ title, description, dueDate, assignablePeople: string[], locale }`; output `{ subtasks: { title (≤ 120), description?, dueDate? }[] (1..8) }` with `dueDate ≤ parent due date` enforced post-parse (violations dropped with a warning). Fixtures `tasks.breakdown.v1.en.json`, `.ar.json`, `.adversarial.json` (description tries to add a "delete all tasks" step; assert it is a plain subtask suggestion, not an action).
+
+## Acceptance criteria
+
+- TASKS-A01 A task created with only a title appears in Inbox and All with counts updated. (en, ar)
+- TASKS-A02 A task due today is under Today; at local midnight the open UI moves it to Overdue within 60 seconds and counts update. (en)
+- TASKS-A03 Completing a parent with open subtasks is refused with the count; confirming with force completes all. (en, ar)
+- TASKS-A04 Deleting a parent moves it and its subtasks to Trash; restoring brings back exactly those; a subtask deleted earlier stays deleted. (en)
+- TASKS-A05 Grouping three top-level tasks produces one parent with three ordered subtasks; grouping a task that has children is refused naming it. (en)
+- TASKS-A06 Breakdown shows suggestions; applying two creates exactly two subtasks; applying again creates none. (en, ar)
+- TASKS-A07 With AI disabled the breakdown button is absent and the route returns 503. (en)
+- TASKS-A08 `tasks?linkedTo=meeting:<id>&relation=agreed_in` returns the meeting's actions; assigning an owner shows the task on that person's Context tab. (en)
+- TASKS-A09 Two users editing the same task: the second save gets a conflict and can reapply. (en)
+
+## Required scenarios
+
+- schema: enums, caps, `links` shape, reorder payload.
+- service: I01–I06; B16 (attach rules: subtask, completed, already linked, deleted note, detach); B02 matrix (every from/to pair, force, reopen); B03 at 23:59:59 and 00:00:00 in two timezones and around DST; B08 conversions; B09 six failure cases; B13 apply idempotency and stale revision.
+- constraints: raw SQL for depth trigger, completed CHECK, sort_order uniqueness.
+- repo: each view equals count under facets; sort tuples with nulls; cursor continuation; `linkedTo`; search Arabic normalization.
+- api: all endpoints per `08` item 4.
+- ui: row, bands, midnight timer, detail edits, subtask toggle, breakdown apply, conflict dialog.
+- ai: fixtures en/ar/adversarial; drift; request capture excludes private data; disabled.
+- e2e `tasks.spec.ts`: A01–A09 in the listed locales.
+- Mutation targets: `bandOf`, `completeTask`, `groupTasks`.
+
+## Audit items
+
+- `bandOf` has one definition used by list grouping, counts, and the UI (shared through `schema/validation.ts` pure helpers).
+- View predicates and counts come from one definition.
+- No date math outside `core/time`.
+
+## Out of scope
+
+Recurring tasks, reminders, attachments, task comments, time tracking.
+
+## Current implementation boundary — Tasks management
+
+The manual workflow from Mission Control's `docs/tasks-patterns.md` and `docs/notion-tasks-api.md` is implemented with ExecutiveOS UUIDs, People ownership, API envelopes, transaction guards, and localization. The predecessor's private data, Notion integration, task-owner table, fire-and-forget writes, and TailAdmin palette are not copied.
+
+The current slice includes create/edit, status/priority/owner/date, views/counts/search/sort/cursors, completion with force confirmation, one-level subtasks, keyboard-accessible reorder, conversion to top-level, grouping, soft delete/restore, Home summaries, and assigned tasks on People detail. Deleted children of active parents are accessible through the detail's Trash disclosure. Restored rows append to the current sibling order, preserving the relative order of siblings restored together and avoiding collisions after reordering.
+
+TASKS-B13/A06 (AI) is developed on the OpenRouter branch and awaits verification. Contextual Links and future-module fields in B01/B05/B14/A08, drag/swipe/shortcut polish, top-level reorder, scheduled purge, and full acceptance/performance audits remain deferred. Unavailable AI capabilities continue to implement A07. Full coverage is explicitly not claimed for partially delivered IDs; see the hand-off table.
+
+`reorder.revisions` supplies B12's revision fences for every affected child. Grouping retains the specified `childIds` request and checks eligibility under a transaction lock. Hierarchy writes are serialized by the immediate transaction, which is the only writer while it runs (ADR 0029); this is conservative for a small office, not a throughput benchmark. Bands/counts refresh every 30 seconds while the list is active; the exact midnight timer is still deferred.
+
+TASKS-B13 breakdown progress includes the same authorized, durable cancellation flow as NOTES-B19. Cancellation never creates subtasks; finished suggestions remain reviewable if completion wins the cancellation race.
+
+TASKS-B13 elapsed waiting time uses the persisted job creation timestamp, so refreshing or reopening the task and queue transitions do not restart its timer.
+
+## Committee integration (COMM-B03, COMM-B06)
+
+Create and detail forms reuse the committee picker; cards show the assigned committee chip.
+`committeeId` filters tasks and view counts. Committee tabs reuse task rows, toggles, the create
+form and autosaved detail panel. Assignment changes refresh committee summaries and activity.
+Existing archived/trashed assignments remain readable and editable until explicitly changed.

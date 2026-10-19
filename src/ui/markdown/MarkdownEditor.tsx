@@ -1,0 +1,221 @@
+'use client';
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type ClipboardEvent,
+  type KeyboardEvent,
+} from 'react';
+import { Textarea } from '@/ui/primitives/textarea';
+import { MentionMenu } from './MentionMenu';
+import { editForKey, pasteLink } from './keys';
+import { applyEdit } from './apply';
+import { EditorToolbar } from './EditorToolbar';
+import {
+  activeMention,
+  insertMention,
+  matchMentions,
+  type MentionItem,
+  type MentionState,
+  type Mentions,
+} from './mentions';
+type EditorProps = {
+  id: string;
+  name?: string | undefined;
+  draft: string;
+  maxLength: number;
+  mentions?: Mentions | undefined;
+  // Where the caret lands on mount: the source position of the click that opened the editor, or
+  // null for the end of the text.
+  caret?: number | null | undefined;
+  // NOTES-B28: the expanded view adds the formatting toolbar above the text.
+  toolbar?: boolean | undefined;
+  onChange: (draft: string) => void;
+  onLeave: () => void;
+};
+// The textarea half of MarkdownField, loaded when the field is entered.
+export default function MarkdownEditor({
+  id,
+  name,
+  draft,
+  maxLength,
+  mentions,
+  caret,
+  toolbar = false,
+  onChange,
+  onLeave,
+}: EditorProps) {
+  const box = useRef<HTMLTextAreaElement>(null);
+  // sync: place the caret once, after the textarea has mounted with the draft.
+  useEffect(() => {
+    const element = box.current;
+    if (!element || !element.value.trim()) return;
+    const at = Math.min(element.value.length, caret ?? element.value.length);
+    element.focus();
+    element.setSelectionRange(at, at);
+  }, [caret]);
+  const menu = useMentionMenu(mentions, box, onChange);
+  return (
+    <div className="relative grid gap-2">
+      {toolbar && <EditorToolbar box={box} onChange={onChange} />}
+      <Textarea
+        ref={box}
+        id={id}
+        name={name}
+        autoFocus={Boolean(draft.trim())}
+        value={draft}
+        maxLength={maxLength}
+        // An empty field should look writable, not reserve the room its content would need.
+        className={draft.trim() ? 'min-h-40' : 'min-h-20'}
+        role={menu.open ? 'combobox' : undefined}
+        aria-expanded={menu.open ? true : undefined}
+        aria-controls={menu.open ? menu.id(id) : undefined}
+        aria-activedescendant={menu.open ? menu.activeId(id) : undefined}
+        onChange={(event: ChangeEvent<HTMLTextAreaElement>) => {
+          onChange(event.target.value);
+          menu.track(event.target);
+        }}
+        onKeyDown={(event) => {
+          menu.keyDown(event);
+          if (!event.defaultPrevented) editorKey(event, onChange);
+        }}
+        onPaste={(event) => editorPaste(event, onChange)}
+        onKeyUp={(event) => menu.track(event.currentTarget)}
+        onClick={(event) => menu.track(event.currentTarget)}
+        onBlur={() => {
+          menu.close();
+          onLeave();
+        }}
+      />
+      {menu.open && <MentionMenu id={menu.id(id)} field={box} {...menu.view} />}
+    </div>
+  );
+}
+// NOTES-B23: Enter continues a list, Tab and Shift+Tab nest and unnest a list line, Ctrl or
+// Command with B, I and K format the selection, and with Enter leave the field, which commits.
+function editorKey(event: KeyboardEvent<HTMLTextAreaElement>, onChange: (draft: string) => void) {
+  if (event.altKey) return;
+  const element = event.currentTarget;
+  const mod = event.metaKey || event.ctrlKey;
+  if (mod && event.key === 'Enter') {
+    event.preventDefault();
+    element.blur();
+    return;
+  }
+  const edit = editForKey(element.value, element.selectionStart, element.selectionEnd, {
+    key: event.key,
+    mod,
+    shift: event.shiftKey,
+  });
+  if (applyEdit(element, edit, onChange)) event.preventDefault();
+}
+// NOTES-B23: an address pasted over a selection links the selection instead of replacing it.
+function editorPaste(
+  event: ClipboardEvent<HTMLTextAreaElement>,
+  onChange: (draft: string) => void,
+) {
+  const element = event.currentTarget;
+  const pasted = event.clipboardData.getData('text/plain');
+  const edit = pasteLink(element.value, element.selectionStart, element.selectionEnd, pasted);
+  if (applyEdit(element, edit, onChange)) event.preventDefault();
+}
+// Where the caret goes once an inserted name is on screen. It is placed in the same commit that
+// renders the new text, never on a later frame: a frame can arrive after the next keystroke when
+// the page is busy drawing glass, and the caret would then jump back behind what was just typed.
+function useCaretLanding(box: React.RefObject<HTMLTextAreaElement | null>) {
+  const landing = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const element = box.current;
+    const at = landing.current;
+    if (!element || at === null) return;
+    landing.current = null;
+    element.focus();
+    element.setSelectionRange(at, at);
+  });
+  return (at: number) => {
+    landing.current = at;
+  };
+}
+// Tracks the "@" token at the caret, filters people and inserts the chosen name in place.
+function useMentionMenu(
+  mentions: Mentions | undefined,
+  box: React.RefObject<HTMLTextAreaElement | null>,
+  onChange: (draft: string) => void,
+) {
+  const [token, setToken] = useState<MentionState | null>(null);
+  const [active, setActive] = useState(0);
+  // The token start that was picked or dismissed: the menu stays closed for it until the caret
+  // leaves it, because a picked name keeps looking like a token being typed (mentions.ts).
+  const [dismissed, setDismissed] = useState<number | null>(null);
+  const items =
+    token && mentions ? matchMentions(mentions.items, token.query, mentions.allowCreate) : [];
+  const id = (fieldId: string) => `${fieldId}-mentions`;
+  const close = (start: number | null) => {
+    setToken(null);
+    setDismissed(start);
+  };
+  const track = (element: HTMLTextAreaElement) => {
+    if (!mentions) return;
+    const next = activeMention(
+      element.value,
+      element.selectionStart,
+      mentions.items,
+      dismissed,
+      mentions.allowCreate,
+    );
+    if (!next) return close(null);
+    if (next === 'dismissed') return setToken(null);
+    if (token?.start !== next.start || token.query !== next.query) setActive(0);
+    setToken(next);
+  };
+  const landAt = useCaretLanding(box);
+  const pick = (item: MentionItem) => {
+    const element = box.current;
+    if (!element || !token || !mentions) return;
+    const next = insertMention(element.value, token, element.selectionStart, item.name);
+    landAt(next.caret);
+    onChange(next.text);
+    close(token.start);
+    mentions.onPick(item);
+  };
+  const keyDown = (event: KeyboardEvent<HTMLTextAreaElement>) =>
+    token && menuKey(event, { items, active, setActive, pick, dismiss: () => close(token.start) });
+  return {
+    open: Boolean(token),
+    view: { items, active, onPick: pick, start: token?.start ?? 0 },
+    items,
+    active,
+    id,
+    activeId: (fieldId: string) => (items[active] ? `${id(fieldId)}-${active}` : undefined),
+    track,
+    close: () => setToken(null),
+    pick,
+    keyDown,
+  };
+}
+// Keyboard handling while the menu is open: arrows move and wrap, Enter or Tab pick, Escape closes.
+function menuKey(
+  event: KeyboardEvent<HTMLTextAreaElement>,
+  menu: {
+    items: MentionItem[];
+    active: number;
+    setActive: (update: (index: number) => number) => void;
+    pick: (item: MentionItem) => void;
+    dismiss: () => void;
+  },
+) {
+  const { items, active } = menu;
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    event.preventDefault();
+    const step = event.key === 'ArrowDown' ? 1 : -1;
+    menu.setActive((index) => (items.length ? (index + step + items.length) % items.length : 0));
+  } else if ((event.key === 'Enter' || event.key === 'Tab') && items[active]) {
+    event.preventDefault();
+    menu.pick(items[active]);
+  } else if (event.key === 'Escape') {
+    event.stopPropagation();
+    menu.dismiss();
+  }
+}

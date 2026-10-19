@@ -1,0 +1,76 @@
+import 'server-only';
+import { and, eq, isNull } from 'drizzle-orm';
+import { z } from 'zod';
+import { settings } from './system-schema';
+import { db, type Database } from './client';
+import { settingsRegistry, type SettingKey, type SettingValue } from '@/core/config/settings';
+export async function readSettings(database: Database = db()) {
+  return database.select().from(settings);
+}
+async function selectValue(database: Database, key: string, userId: string | null) {
+  const [row] = await database
+    .select()
+    .from(settings)
+    .where(
+      and(eq(settings.key, key), userId ? eq(settings.userId, userId) : isNull(settings.userId)),
+    );
+  return row?.value;
+}
+// Typed read: the registry schema and default are applied once, here.
+export async function getSetting<K extends SettingKey>(
+  database: Database,
+  key: K,
+  userId: string | null = null,
+): Promise<SettingValue<K>> {
+  const item = settingsRegistry[key];
+  const stored = await selectValue(database, key, userId);
+  const parsed = item.schema.safeParse(stored ?? item.default);
+  return z
+    .custom<SettingValue<K>>()
+    .parse(parsed.success ? parsed.data : item.schema.parse(item.default));
+}
+// Whether a user-scoped row exists, so callers can fall back to the workspace value.
+export async function hasSetting(database: Database, key: SettingKey, userId: string) {
+  return (await selectValue(database, key, userId)) !== undefined;
+}
+export async function writeSetting<K extends SettingKey>(
+  database: Database,
+  key: K,
+  value: SettingValue<K>,
+  actorId: string,
+  userId: string | null = null,
+) {
+  const stored = z.json().parse(settingsRegistry[key].schema.parse(value));
+  const predicate = and(
+    eq(settings.key, key),
+    userId ? eq(settings.userId, userId) : isNull(settings.userId),
+  );
+  // A row cannot hold null (settings.value is NOT NULL). Every setting that takes null has null as
+  // its default, so clearing one removes its row and the read falls back to that default: "no
+  // monthly limit", "no workspace owner", "no default note type".
+  if (stored === null && settingsRegistry[key].default === null) {
+    await database.delete(settings).where(predicate);
+    return;
+  }
+  const rows = await database
+    .update(settings)
+    .set({ value: stored, updatedBy: actorId, updatedAt: new Date() })
+    .where(predicate)
+    .returning();
+  if (!rows.length)
+    await database.insert(settings).values({
+      key,
+      value: stored,
+      scope: userId ? 'user' : 'workspace',
+      userId,
+      updatedBy: actorId,
+    });
+}
+// ACCT-I03: clearing a user's row is not the same as writing the workspace's current value into
+// it. A cleared preference falls back through the registry, so a later change to the workspace
+// default still reaches the reader; a copied one would silently pin them to today's answer.
+export async function clearSetting(database: Database, key: SettingKey, userId: string) {
+  await database
+    .delete(settings)
+    .where(and(eq(settings.key, key), eq(settings.userId, userId)));
+}

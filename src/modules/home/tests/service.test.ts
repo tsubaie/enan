@@ -1,0 +1,200 @@
+import { beforeAll, beforeEach, afterAll, it, expect } from 'vitest';
+import { closeDatabase, db, withTransaction, type Database } from '@/core/db/client';
+import { migrateDatabase } from '@/core/db/migrate';
+import { clearDatabase } from '@/core/db/reset';
+import { insertUser } from '@/core/db/auth-repo';
+import { User } from '@/core/http/user-schema';
+import { id } from '@/core/db/ids';
+import { createTask } from '@/modules/tasks/service';
+import { TaskCreate } from '@/modules/tasks/schema/validation';
+import { createPerson } from '@/modules/people';
+import { createCommittee, patchCommittee, removeCommittee } from '@/modules/committees/service';
+import { CommitteeCreate } from '@/modules/committees/schema/validation';
+import { PersonCreate } from '@/modules/people/schema/validation';
+import { homeSummary } from '../service';
+import { addDays, dayAt } from '@/core/time/tasks';
+import { defaults } from '@/core/config/defaults';
+let user: User;
+const run = <T>(action: (ctx: { db: Database; user: User; requestId: string }) => Promise<T>) =>
+  withTransaction(db(), (database) => action({ db: database, user, requestId: id() }));
+beforeAll(async () => {
+  await migrateDatabase();
+});
+beforeEach(async () => {
+  await clearDatabase();
+  user = User.parse(
+    await insertUser(db(), {
+      id: id(),
+      name: 'Home Tester',
+      email: 'h@example.test',
+      passwordHash: 'x',
+      role: 'admin',
+    }),
+  );
+});
+afterAll(() => closeDatabase());
+it('HOME-B02 HOME-B03 aggregates installed task sections, counts people, and collapses absent modules', async () => {
+  await run((ctx) =>
+    createTask(ctx, TaskCreate.parse({ title: 'Overdue report', dueDate: '2000-01-01' })),
+  );
+  await run((ctx) => createTask(ctx, TaskCreate.parse({ title: 'Someday', status: 'someday' })));
+  await run((ctx) =>
+    createPerson(
+      ctx,
+      PersonCreate.parse({
+        fullName: 'Directory Person',
+        kind: 'external',
+        isAssignable: false,
+        tags: [],
+        email: null,
+        phone: null,
+        notes: null,
+        displayName: null,
+        honorific: null,
+        organization: null,
+        roleTitle: null,
+        userId: null,
+      }),
+    ),
+  );
+  const home = await run((ctx) => homeSummary(ctx));
+  expect(home.name).toBe('Home Tester');
+  expect(home.principal).toBeNull();
+  expect(home.peopleCount).toBe(1);
+  const section = (key: string) => home.sections.find((item) => item.key === key);
+  expect(section('overdue')).toMatchObject({ enabled: true, count: 1 });
+  expect(section('overdue')?.items.map((item) => item.title)).toEqual(['Overdue report']);
+  expect(section('today')).toMatchObject({ enabled: true, count: 0, items: [] });
+  expect(section('nextMeetings')).toMatchObject({ enabled: false, count: 0, items: [] });
+  // The scorecard is installed and answers with nothing to chase, which is itself an answer.
+  expect(section('kpis')).toMatchObject({ enabled: true, count: 0, items: [] });
+});
+
+it('COMM-B06 HOME-B01 lists active committees carrying open work, busiest first', async () => {
+  const busy = await run((ctx) =>
+    createCommittee(ctx, CommitteeCreate.parse({ name: 'Consumer protection' })),
+  );
+  const quiet = await run((ctx) =>
+    createCommittee(ctx, CommitteeCreate.parse({ name: 'Digital transactions' })),
+  );
+  const idle = await run((ctx) =>
+    createCommittee(ctx, CommitteeCreate.parse({ name: 'No open work' })),
+  );
+  const archived = await run((ctx) =>
+    createCommittee(ctx, CommitteeCreate.parse({ name: 'Archived committee' })),
+  );
+  const open = (title: string, committeeId: string) =>
+    run((ctx) => createTask(ctx, TaskCreate.parse({ title, committeeId })));
+  await open('First', busy.id);
+  await open('Second', busy.id);
+  await open('Third', quiet.id);
+  await open('Archived work', archived.id);
+  await run((ctx) =>
+    patchCommittee(ctx, archived.id, { status: 'archived', revision: archived.revision }),
+  );
+  const home = await run((ctx) => homeSummary(ctx));
+  const committees = home.sections.find((item) => item.key === 'committees');
+  expect(committees).toMatchObject({ enabled: true, count: 2 });
+  expect(committees?.items.map((item) => item.title)).toEqual([
+    'Consumer protection',
+    'Digital transactions',
+  ]);
+  expect(committees?.items.some((item) => item.title === 'No open work')).toBe(false);
+  expect(idle.id).toBeTruthy();
+});
+it('COMM-B06 drops a committee from the section once it is trashed', async () => {
+  const committee = await run((ctx) =>
+    createCommittee(ctx, CommitteeCreate.parse({ name: 'Temporary' })),
+  );
+  await run((ctx) =>
+    createTask(ctx, TaskCreate.parse({ title: 'Open item', committeeId: committee.id })),
+  );
+  const before = await run((ctx) => homeSummary(ctx));
+  expect(before.sections.find((item) => item.key === 'committees')).toMatchObject({ count: 1 });
+  await run((ctx) => removeCommittee(ctx, committee.id, committee.revision));
+  const after = await run((ctx) => homeSummary(ctx));
+  expect(after.sections.find((item) => item.key === 'committees')).toMatchObject({
+    count: 0,
+    items: [],
+  });
+});
+
+it('HOME-B14 the due-today section carries the week ahead: seven days from today with their due counts', async () => {
+  const today = dayAt(defaults.timezone);
+  const plus = (days: number) => addDays(today, days);
+  await run((ctx) => createTask(ctx, TaskCreate.parse({ title: 'Now', dueDate: today })));
+  await run((ctx) => createTask(ctx, TaskCreate.parse({ title: 'Soon', dueDate: plus(2) })));
+  await run((ctx) => createTask(ctx, TaskCreate.parse({ title: 'Also soon', dueDate: plus(2) })));
+  await run((ctx) => createTask(ctx, TaskCreate.parse({ title: 'Later', dueDate: plus(9) })));
+  await run((ctx) => createTask(ctx, TaskCreate.parse({ title: 'Late', dueDate: '2000-01-01' })));
+  const home = await run((ctx) => homeSummary(ctx));
+  const section = (key: string) => home.sections.find((item) => item.key === key);
+  const days = section('today')?.days ?? [];
+  // A day with nothing due is still a day, and the eighth day is not part of the week.
+  expect(days).toHaveLength(7);
+  expect(days[0]).toEqual({ date: today, count: 1, href: `/tasks?view=all&due=${today}` });
+  expect(days[2]).toEqual({ date: plus(2), count: 2, href: `/tasks?view=all&due=${plus(2)}` });
+  expect(days.map((day) => day.count)).toEqual([1, 0, 2, 0, 0, 0, 0]);
+  // Only the section whose module owns dated work carries the shape; the overdue section does not.
+  expect(section('overdue')?.days).toBeNull();
+});
+it('HOME-B10 a waiting row is dated by the earliest thing its holder has due', async () => {
+  const created = await run((ctx) =>
+    createPerson(
+      ctx,
+      PersonCreate.parse({
+        fullName: 'Holder Person',
+        kind: 'internal',
+        isAssignable: true,
+        tags: [],
+        email: null,
+        phone: null,
+        notes: null,
+        displayName: null,
+        honorific: null,
+        organization: null,
+        roleTitle: null,
+        userId: null,
+      }),
+    ),
+  );
+  // Creation answers with possible duplicates instead of a row when a name is close to an
+  // existing one; an empty directory has none, so the row is there.
+  const holderId = created.data?.id;
+  if (!holderId) throw new Error('holder not created');
+  const waiting = (title: string, dueDate: string | null) =>
+    run((ctx) =>
+      createTask(
+        ctx,
+        TaskCreate.parse({ title, status: 'waiting_on', ownerId: holderId, dueDate }),
+      ),
+    );
+  await waiting('Undated', null);
+  await waiting('Next month', '2099-02-01');
+  await waiting('Next week', '2099-01-10');
+  await waiting('Already late', '2000-01-01');
+  const home = await run((ctx) => homeSummary(ctx));
+  const row = home.sections.find((item) => item.key === 'waiting')?.items[0];
+  // The earliest due date is the late one, and the late share says so.
+  expect(row).toMatchObject({ title: 'Holder Person', count: 4, date: '2000-01-01', overdue: 1 });
+});
+it('HOME-B10 waiting work that nobody holds is counted and reported as one last unassigned row', async () => {
+  const unowned = (title: string, dueDate: string | null) =>
+    run((ctx) => createTask(ctx, TaskCreate.parse({ title, status: 'waiting_on', dueDate })));
+  await unowned('Ministry presentation', '2099-03-01');
+  await unowned('Grey output problem', '2000-02-15');
+  const home = await run((ctx) => homeSummary(ctx));
+  const section = home.sections.find((item) => item.key === 'waiting');
+  expect(section?.count).toBe(2);
+  expect(section?.items).toEqual([
+    expect.objectContaining({
+      id: 'unassigned',
+      title: '',
+      owner: null,
+      count: 2,
+      date: '2000-02-15',
+      overdue: 1,
+    }),
+  ]);
+  expect(section?.items[0]?.href).toBe('/tasks?view=waiting');
+});

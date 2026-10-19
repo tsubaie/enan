@@ -1,0 +1,355 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+concurrency:
+  group: ci-${{ github.ref }}
+  # A newer push cancels checks on other branches, never a run on main: cancelling a production
+  # deploy midway could leave the app stopped. On main the next run waits for this one.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+# `pnpm audit:all` is `audit:static && audit:data && audit:browser`, so the jobs below cover
+# exactly what a developer runs locally, split by what each group actually needs: nothing, the
+# unit and integration suites, or a browser and a production build (one job per Playwright
+# project). They run in parallel, so the wall clock is the slowest group rather than the sum. The database is a SQLite
+# file under tmp/ (ADR 0029), so no job needs a service container.
+#
+# Every job runs on GitHub's hosted runners (`ubuntu-latest`, x86-64). The browser jobs restore
+# Next's build cache and the image job Docker's layer cache from GitHub's cache service, so a run
+# rebuilds only what changed. To run elsewhere, set the repository variable CI_RUNS_ON (JSON,
+# quotes included), for example ["self-hosted", "linux", "x64"]. Never point a public
+# repository's pull requests at a self-hosted runner you also use for anything else: a pull
+# request from a fork runs its own code there. See docs/08-testing-strategy.md § CI.
+env:
+  DATABASE_URL: file:${{ github.workspace }}/tmp/executiveos_test.db
+  DATABASE_URL_TEST: file:${{ github.workspace }}/tmp/executiveos_test.db
+  SESSION_SECRET: ci-only-session-secret-0123456789abcdefghij
+  # ADMIN-B22: the recovery suite needs a configured token, and it must clear the entropy floor.
+  RECOVERY_TOKEN: ci-only-recovery-token-0123456789abcdefghij
+  APP_URL: http://localhost:3000
+  FILES_DIR: ${{ github.workspace }}/tmp/files
+  BACKUP_DIR: ${{ github.workspace }}/tmp/backups
+  NEXT_TELEMETRY_DISABLED: '1'
+  # Next builds use this many workers instead of one per core (next.config.ts); a hosted runner
+  # has four cores.
+  NEXT_BUILD_CPUS: '4'
+
+jobs:
+  # Which kinds of files changed. The container image is rebuilt on a pull request only when the
+  # files that shape it changed; a push to main always builds it (the gate below knows the rule).
+  changes:
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-latest"') }}
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      image: ${{ steps.filter.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            image:
+              - 'Dockerfile'
+              - '.dockerignore'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'docker-compose*.yml'
+              - 'next.config.ts'
+              - '.github/workflows/ci.yml'
+
+  static:
+    name: Static checks
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-latest"') }}
+    timeout-minutes: 15
+    steps:
+      # audit:docs reads ADR history, audit:secrets scans every commit, and audit:dupes diffs
+      # against main, so this job is the one that needs the full history.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup
+      # The build for the runner's architecture.
+      - name: Install gitleaks
+        run: |
+          case "$RUNNER_ARCH" in ARM64) arch=arm64 ;; *) arch=x64 ;; esac
+          mkdir -p "$RUNNER_TEMP/gitleaks"
+          curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_$arch.tar.gz" \
+            | tar -xz -C "$RUNNER_TEMP/gitleaks" gitleaks
+          echo "$RUNNER_TEMP/gitleaks" >> "$GITHUB_PATH"
+      - run: pnpm audit:static
+
+  test:
+    name: Unit and integration
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-latest"') }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: pnpm audit:data
+
+  # The suite is split across runners, each in its own container: the desktop and mobile projects
+  # in five Playwright shards each. Each job builds once (from the restored Next
+  # cache) and runs its shard on two lanes (e2e/lanes.ts). The audits that follow the suite
+  # (bundle, OpenAPI, accessibility, performance) run once, in the first desktop shard.
+  browser:
+    name: Browser (${{ matrix.project }} ${{ matrix.shard }}/${{ matrix.of }})
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-latest"') }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { project: desktop, shard: 1, of: 5, audits: true }
+          - { project: desktop, shard: 2, of: 5, audits: false }
+          - { project: desktop, shard: 3, of: 5, audits: false }
+          - { project: desktop, shard: 4, of: 5, audits: false }
+          - { project: desktop, shard: 5, of: 5, audits: false }
+          - { project: mobile, shard: 1, of: 5, audits: false }
+          - { project: mobile, shard: 2, of: 5, audits: false }
+          - { project: mobile, shard: 3, of: 5, audits: false }
+          - { project: mobile, shard: 4, of: 5, audits: false }
+          - { project: mobile, shard: 5, of: 5, audits: false }
+    # Chromium and its system packages are preinstalled in the image. The tag must equal the
+    # lockfile's @playwright/test version (checked below).
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
+      options: --init --ipc=host
+    steps:
+      - uses: actions/checkout@v4
+      # Inside a container job `${{ github.workspace }}` (used by the workflow-level env above) is
+      # the host's path; the checkout is mounted at $GITHUB_WORKSPACE. Point the data paths there.
+      - name: Use the container's workspace for the data paths
+        run: |
+          {
+            echo "DATABASE_URL=file:$GITHUB_WORKSPACE/tmp/executiveos_test.db"
+            echo "DATABASE_URL_TEST=file:$GITHUB_WORKSPACE/tmp/executiveos_test.db"
+            echo "FILES_DIR=$GITHUB_WORKSPACE/tmp/files"
+            echo "BACKUP_DIR=$GITHUB_WORKSPACE/tmp/backups"
+          } >> "$GITHUB_ENV"
+      - uses: ./.github/actions/setup
+      - name: Check the Playwright image matches the lockfile
+        run: |
+          installed=$(node -p "require('@playwright/test/package.json').version")
+          test "$installed" = "1.63.0" || { echo "::error::@playwright/test is $installed but the container image is v1.63.0 — update both in .github/workflows/ci.yml"; exit 1; }
+      # A hosted runner starts empty: restore Next's incremental build cache.
+      - name: Cache Next.js build
+        uses: actions/cache@v4
+        with:
+          path: .next/cache
+          key: next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('src/**', 'next.config.ts', 'tsconfig.json') }}
+          restore-keys: |
+            next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+      # `pnpm audit:browser` is these six, in this order, stopping at the first failure; run as
+      # separate steps so the job's timeline shows where the time goes (the browser suite is
+      # most of it).
+      - name: Build
+        run: pnpm build
+      - name: Bundle audit
+        if: matrix.audits
+        run: pnpm audit:bundle
+      - name: Browser tests (${{ matrix.project }} ${{ matrix.shard }}/${{ matrix.of }})
+        run: pnpm test:e2e --project ${{ matrix.project }} --shard ${{ matrix.shard }}/${{ matrix.of }}
+      - name: OpenAPI audit
+        if: matrix.audits
+        run: pnpm audit:openapi
+      - name: Accessibility audit
+        if: matrix.audits
+        run: pnpm audit:a11y
+      - name: Performance audit
+        if: matrix.audits
+        run: pnpm audit:perf
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report-${{ matrix.project }}-${{ matrix.shard }}
+          path: playwright-report
+          retention-days: 7
+
+  # The container image, one job for both purposes. On a pull request it proves the Dockerfile
+  # still builds (kept local, never published). On a push to main it builds the production image
+  # (linux/amd64), publishes it to GHCR tagged with the commit, and smoke-tests it (a fresh SQLite
+  # volume, migrations on start, a healthy /api/v1/health) before the deploy may use it
+  # (ADR 0039). Both reuse Docker's layer cache from GitHub's cache service; only main writes it.
+  docker:
+    name: Container image
+    needs: changes
+    if: github.event_name == 'push' || needs.changes.outputs.image == 'true'
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-latest"') }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build the image (pull request)
+        if: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: runtime
+          build-args: |
+            NEXT_BUILD_CPUS=${{ env.NEXT_BUILD_CPUS }}
+          cache-from: type=gha,scope=runtime
+          push: false
+      - if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: runtime
+          platforms: linux/amd64
+          build-args: |
+            NEXT_BUILD_CPUS=${{ env.NEXT_BUILD_CPUS }}
+          tags: |
+            ghcr.io/${{ github.repository }}:${{ github.sha }}
+            ghcr.io/${{ github.repository }}:latest
+          # Links the package to this repository, so the deploy job's GITHUB_TOKEN can pull it.
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha,scope=runtime
+          cache-to: type=gha,scope=runtime,mode=max
+          push: true
+          # No attestation manifests: they show up as untagged package versions.
+          provenance: false
+      - name: Smoke-test the production image
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }}
+        run: |
+          set -eu
+          name=ci-exos-smoke-run${{ github.run_number }}-${{ github.run_attempt }}
+          volume=$name-data
+          cleanup() { docker rm -f "$name" >/dev/null 2>&1 || true; docker volume rm -f "$volume" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          docker volume create "$volume" >/dev/null
+          docker run -d --name "$name" --platform linux/amd64 -p 127.0.0.1::3000 \
+            -v "$volume:/var/lib/executiveos/data" \
+            -e DATABASE_URL=file:/var/lib/executiveos/data/executiveos.db \
+            -e SESSION_SECRET=ci-smoke-only-session-secret-0123456789abcdef \
+            -e APP_URL=http://localhost:3000 -e JOBS_ENABLED=false "$IMAGE"
+          port=$(docker port "$name" 3000/tcp | head -n 1 | sed 's/.*://')
+          for attempt in $(seq 1 60); do
+            body=$(curl -sf "http://127.0.0.1:$port/api/v1/health" || true)
+            case "$body" in *'"db":true'*) echo "healthy: $body"; exit 0;; esac
+            sleep 3
+          done
+          docker logs "$name" | tail -50
+          echo "::error::the production image did not become healthy"
+          exit 1
+
+  # One status to require on the branch: it fails if any group above failed or was skipped. The
+  # image may be skipped only on a pull request whose changes do not shape it.
+  gate:
+    name: Gate
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-latest"') }}
+    needs: [changes, static, test, browser, docker]
+    if: always()
+    steps:
+      - name: Check the groups
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          IMAGE_CHANGED: ${{ needs.changes.outputs.image }}
+          STATIC_RESULT: ${{ needs.static.result }}
+          TEST_RESULT: ${{ needs.test.result }}
+          BROWSER_RESULT: ${{ needs.browser.result }}
+          DOCKER_RESULT: ${{ needs.docker.result }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          echo "changes=$CHANGES_RESULT image-changed=$IMAGE_CHANGED static=$STATIC_RESULT test=$TEST_RESULT"
+          echo "browser=$BROWSER_RESULT docker=$DOCKER_RESULT event=$EVENT"
+          test "$CHANGES_RESULT" = success
+          test "$STATIC_RESULT" = success
+          test "$TEST_RESULT" = success
+          test "$BROWSER_RESULT" = success
+          if [ "$EVENT" = push ] || [ "$IMAGE_CHANGED" = true ]; then
+            test "$DOCKER_RESULT" = success
+          else
+            test "$DOCKER_RESULT" = skipped
+          fi
+
+  # Deploys main to the maintainer's server once the gate has passed (every check, and the image
+  # built, published and smoke-tested above). It runs only when the repository variable
+  # DEPLOY_ENABLED is "true", so forks and fresh clones never try to deploy. The server, user and
+  # paths come from the `production` environment's secrets, not from this file, and are masked
+  # in the public logs: DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY, DEPLOY_DIR (a checkout of this
+  # repository) and DEPLOY_OVERLAY (an untracked compose overlay in it that names the image). The environment
+  # admits only `main`, so no other branch or workflow can read them. On the server: take the app's own verified
+  # backup, pull the image, point the overlay at it and restart; migrations run on start. If the
+  # new container is not healthy within three minutes the overlay goes back to the previous image,
+  # the app is restarted on it, and the job fails (ADR 0039).
+  deploy:
+    name: Deploy
+    needs: [gate]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-latest"') }}
+    timeout-minutes: 20
+    environment: production
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          protocol: tcp4
+          timeout: 30s
+          command_timeout: 15m
+          envs: IMAGE,SHA,REPOSITORY,GHCR_USER,GHCR_TOKEN,DEPLOY_DIR,DEPLOY_OVERLAY
+          script: |
+            set -eu
+            cd "$DEPLOY_DIR"
+            # One deploy at a time on this host.
+            exec 9>"$DEPLOY_DIR/.deploy.lock"
+            flock -n 9 || { echo "::error::another deploy is running on the server"; exit 1; }
+            overlay=$DEPLOY_OVERLAY
+            compose="docker compose -f docker-compose.yml -f $overlay"
+            previous=$(sed -n 's/^ *image: *//p' "$overlay" | head -n 1)
+            echo "previous image: $previous, new image: $IMAGE"
+            # The compose files follow the deployed commit; the overlays are untracked and stay.
+            git fetch -q "https://x-access-token:${GHCR_TOKEN}@github.com/${REPOSITORY}.git" main
+            git reset -q --hard "$SHA"
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+            docker pull -q "$IMAGE"
+            docker logout ghcr.io
+            app=$($compose ps -q app)
+            # The way back: a verified backup from the running version, before migrations touch it.
+            docker exec -w /app "$app" node --conditions=react-server --import tsx scripts/backup/create.ts
+            sed -i "s#^\( *image: *\).*#\1$IMAGE#" "$overlay"
+            $compose up -d
+            app=$($compose ps -q app)
+            for attempt in $(seq 1 60); do
+              state=$(docker inspect -f '{{.State.Health.Status}}' "$app" 2>/dev/null || echo missing)
+              [ "$state" = healthy ] && break
+              sleep 3
+            done
+            if [ "$state" != healthy ]; then
+              docker logs --tail 80 "$app" || true
+              echo "::error::the new image is $state; rolling back to $previous"
+              sed -i "s#^\( *image: *\).*#\1$previous#" "$overlay"
+              $compose up -d
+              exit 1
+            fi
+            echo "deployed $IMAGE"
+            # Keep the deployed image and the one before it (the rollback); older ones re-pull.
+            docker images "ghcr.io/${REPOSITORY}" --format '{{.Repository}}:{{.Tag}}' \
+              | grep -v -x -e "$IMAGE" -e "$previous" | xargs -r docker rmi || true
+            docker image prune -f >/dev/null
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }}
+          SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
+          GHCR_USER: ${{ github.repository_owner }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEPLOY_DIR: ${{ secrets.DEPLOY_DIR }}
+          DEPLOY_OVERLAY: ${{ secrets.DEPLOY_OVERLAY }}

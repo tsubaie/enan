@@ -1,0 +1,2 @@
+ALTER TABLE `wallpapers` ADD `thumbnail_file_id` text REFERENCES `files`(`id`) ON UPDATE no action ON DELETE restrict;--> statement-breakpoint
+CREATE UNIQUE INDEX `wallpapers_thumbnail_file_unique` ON `wallpapers` (`thumbnail_file_id`);

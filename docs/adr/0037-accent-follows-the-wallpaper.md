@@ -1,0 +1,36 @@
+# ADR 0037 — Uploaded wallpapers, and the accent follows the wallpaper
+
+**Status:** accepted (2026-10-18). Supersedes the fixed sage accent of ADR 0036 (sage stays as the fallback) and the drawn indigo wallpaper of ADR 0031; the rest of both stands.
+
+## Context
+
+Wallpapers were a fixed set of photographs and one drawn wallpaper (ADMIN-B42). The owner asked for "a way in the admin so I can upload my own images as backgrounds and delete them as well", then that "the accent will change from the primary color of the background image selected", that a new install start on the green Jade, and that the drawn Indigo and the two white photographs (Fan, Mist) be removed, leaving uploads as the way to add more. Storing images people upload, and deleting them, is new: until now the app stored no binaries, and ADR 0034 says meeting files are never deleted.
+
+## Decision
+
+- **Uploaded images are decoded and re-encoded with sharp.** `sharp` (0.35.5, a direct dependency; libvips is linked into the module and runs in process, so ADR 0029's no-subprocess rule holds) decodes every upload after its first bytes are recognised (JPEG, PNG, WebP) with `limitInputPixels` 48 MP and `failOn: 'error'`. A header claiming more pixels, more than one frame, or a long edge under 1280 pixels is refused before decoding. The image is rotated by its EXIF orientation, fitted inside 3840 × 2160 without enlarging, and encoded as WebP (quality 80, smart subsampling), with a 480-pixel thumbnail beside it. Only those two are stored, never the uploaded bytes, so no metadata (EXIF, GPS, ICC beyond sRGB) and nothing a polyglot or payload file carried survives: only pixels. At most 20 images are kept.
+- **Storage.** The image and the thumbnail are `files` rows, stored under `FILES_DIR` as `wallpaper-<random file id>` (written to a temporary name and renamed into place; the uploaded name is a display label only), and a `wallpapers` row names both with the name, tone and accent. `FILES_DIR` is already archived whole by every backup and replaced whole by a restore, so wallpapers are backed up and restored with the database rows that name them.
+- **Deletion.** Unlike a meeting file (ADR 0034), a wallpaper's binary is deleted with it, because the owner asked for delete and a wallpaper is not a record anyone else refers to. Deleting the chosen wallpaper resets `workspace.wallpaper` to the default in the same transaction. The binary is removed inside that transaction, before commit; a commit that then fails leaves a row whose image answers 404 and whose page falls back to the default, which is preferred to an orphaned binary nothing names.
+- **Serving.** `GET /api/v1/wallpapers/:id` and `/thumbnail` answer any signed-in member, since every page is drawn on the image, as `image/webp`, `inline`, `nosniff`, with `Cache-Control: private, max-age=31536000, immutable`: an id's bytes never change. The proxy leaves that header in place for this path only (`ownCache`); every other API response stays `no-store`. Same-origin images already pass the security policy (`img-src 'self'`).
+- **Size.** `WALLPAPER_MAX_MB` (default and maximum 10) caps an upload, checked from the declared length before the body is read and again on the file. The maximum is the proxy's body buffer (`proxyClientMaxBodySize`, 10 MB by default): a larger body would reach the handler truncated.
+- **The accent follows the wallpaper.** One pure module (`src/core/config/wallpaper-accent.ts`) runs on the server over an upload's decoded pixels and in `scripts/build/wallpaper-accents.ts` (also with sharp) for the built-ins; nothing the browser measures is trusted:
+  - *Picking.* Over a 64 × 64 copy, every pixel goes to OKLCH; pixels under chroma 0.02 are grey and ignored; the rest fall into 24 hue buckets of 15°, each scored by the sum of its pixels' chroma (chroma × coverage). The best bucket covering at least 3 % of the image gives the chroma-weighted mean of its colours. No bucket, or a mean under chroma 0.02, means no accent.
+  - *Making it readable.* The hue is kept, chroma clamped to 0.06–0.13 and reduced further only to stay in sRGB, and lightness walked (night from 0.80–0.86 up, paper from 0.42–0.50 down) until the accent clears 4.5:1 on both grounds of its theme: the night inset sheet `#31313a` and canvas `#242428`, the paper ground `#eceef1` and surface `#fdfdfe`. `--accent-soft` is the same hue at lightness 0.68 and 24 % opacity at night and an opaque 0.94 tint on paper; `--on-accent` is the hue at lightness 0.22 at night and white on paper.
+  - *Never "overdue".* Danger (hue about 24°) and warning (about 75°) reserve the arc from −1° to 100°. A hue up to 12° inside it moves to the nearer edge; deeper inside, the accent is sage.
+  - *Where it lives.* The built-ins' accents are generated into `tokens.css` as `--wallpaper-accent-{night,paper}`, `--wallpaper-accent-soft-*`, `--wallpaper-on-accent-*` per `data-wallpaper`; an upload's picked colour is stored as `#rrggbb` (or null), its tokens derived while the page renders and carried on `<html>` as the same custom properties in a `style` attribute (`style-src 'unsafe-inline'`, ADR 0025, covers attributes). `html[data-wallpaper]` and `html.dark[data-wallpaper]` map them onto `--accent`, `--accent-soft` and `--on-accent`, with the sage values as fallbacks.
+  - Results: Jade night `#b5c59b` / paper `#4e5b35`, Neon `#90cace` / `#255f63`, Sky `#98c3e9` / `#3f6789`; Ribbon, Folds, Stone and Arc have no colour above the grey threshold on 3 % of their area and keep sage; Copper's hue (about 50°) sits in the reserved arc and keeps sage.
+- **The set.** Jade is the default for a workspace that never chose. Indigo, Fan and Mist are retired; a saved value naming one no longer parses and is read as Jade. The page's fallback wallpaper (`--wallpaper`, used behind the sign-in pages when an upload cannot be shown) is Jade over `#0a0f0b`, and the reduced-transparency ground is a near-black green. The light-wallpaper glass now applies to uploads measured light (`data-wallpaper-tone='light'`, average brightness 0.5 or more).
+
+## Consequences
+
+- The brand mark and every accent mark change with the wallpaper; the accent is never a status colour and always reads at 4.5:1 or better on the surfaces it is drawn on.
+- Disk and backup size grow with uploads and shrink when they are deleted.
+- An upload costs a decode and two encodes on the server (about a second for a large photograph), inside the request's write transaction; uploads are rare and administrator-only, so the lock is accepted rather than adding a second phase.
+- Images uploaded before the re-encoding (this install's development data only) stay as they were stored and answer their thumbnail with the full image.
+
+## Alternatives considered
+
+- Store the original and only check its first bytes: leaves metadata such as GPS in the served file and trusts whatever else the file carries; rejected.
+- Measure tone and accent in the browser: the values cannot be trusted; rejected.
+- Pick the plain average colour: gives grey-brown for most photographs; rejected by the owner's design.
+- A server-rendered `<style>` element per page for the accent: works under the policy too, but the custom properties on `<html>` reuse the runtime-style path the lint rules already sanction and keep one source for built-ins and uploads.

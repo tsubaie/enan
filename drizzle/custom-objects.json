@@ -1,0 +1,9 @@
+{
+  "indexes": {
+    "settings": ["settings_scope_key"],
+    "tasks": ["tasks_active_order_idx"]
+  },
+  "triggers": {
+    "tasks": ["tasks_depth_check_insert", "tasks_depth_check_update"]
+  }
+}
