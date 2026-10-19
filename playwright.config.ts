@@ -18,6 +18,10 @@ export default defineConfig({
     baseURL: laneBaseURL(0),
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
+    // Page transitions (ADR 0019) shrink to 1 ms under reduced motion. At full length the outgoing
+    // page stays in the DOM beside the incoming one for about half a second, and a locator that
+    // resolves during that window finds both.
+    reducedMotion: 'reduce',
   },
   // One production build, one server per lane (its own port, database, files and backups).
   // Reuses a server already answering on a lane's port; otherwise serves the build for CI.
