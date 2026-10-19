@@ -8,7 +8,9 @@ export default defineConfig({
   fullyParallel: false,
   workers: lanes,
   forbidOnly: true,
-  retries: 0,
+  // One retry on CI only. GitHub's hosted runners are slower than a workstation, and a few specs
+  // race the page that is leaving; a pass on the retry is reported as flaky, so it stays visible.
+  retries: process.env.CI ? 1 : 0,
   // Assertions wait up to 10 s (Playwright's default is 5): on the CI host several jobs share the
   // cores, and a server-rendered page can take more than 5 s to appear without anything being wrong.
   expect: { timeout: 10_000 },
@@ -18,6 +20,10 @@ export default defineConfig({
     baseURL: laneBaseURL(0),
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
+    // Page transitions (ADR 0019) shrink to 1 ms under reduced motion. At full length the outgoing
+    // page stays in the DOM beside the incoming one for about half a second, and a locator that
+    // resolves during that window finds both.
+    reducedMotion: 'reduce',
   },
   // One production build, one server per lane (its own port, database, files and backups).
   // Reuses a server already answering on a lane's port; otherwise serves the build for CI.

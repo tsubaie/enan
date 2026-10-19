@@ -108,6 +108,8 @@ test('ADMIN-B40 on a phone the overview is the index and every page links back t
   // No rail below lg: the overview's index is the navigation.
   await expect(rail(page)).toBeHidden();
   const link = page.locator('section[aria-labelledby^="admin-index-"] a[href="/admin/backups"]');
+  // Just after a navigation the outgoing page can still hold its own overview; wait for one.
+  await expect(link).toHaveCount(1);
   await link.scrollIntoViewIfNeeded();
   await link.click();
   await expect(page.getByRole('heading', { level: 1, name: en.admin.backups })).toBeVisible();
