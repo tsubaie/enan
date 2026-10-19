@@ -90,8 +90,8 @@ jobs:
       - uses: ./.github/actions/setup
       - run: pnpm audit:data
 
-  # The suite is split across runners, each in its own container: the desktop project in three
-  # Playwright shards and the mobile project in two. Each job builds once (from the restored Next
+  # The suite is split across runners, each in its own container: the desktop and mobile projects
+  # in five Playwright shards each. Each job builds once (from the restored Next
   # cache) and runs its shard on two lanes (e2e/lanes.ts). The audits that follow the suite
   # (bundle, OpenAPI, accessibility, performance) run once, in the first desktop shard.
   browser:
@@ -102,11 +102,16 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { project: desktop, shard: 1, of: 3, audits: true }
-          - { project: desktop, shard: 2, of: 3, audits: false }
-          - { project: desktop, shard: 3, of: 3, audits: false }
-          - { project: mobile, shard: 1, of: 2, audits: false }
-          - { project: mobile, shard: 2, of: 2, audits: false }
+          - { project: desktop, shard: 1, of: 5, audits: true }
+          - { project: desktop, shard: 2, of: 5, audits: false }
+          - { project: desktop, shard: 3, of: 5, audits: false }
+          - { project: desktop, shard: 4, of: 5, audits: false }
+          - { project: desktop, shard: 5, of: 5, audits: false }
+          - { project: mobile, shard: 1, of: 5, audits: false }
+          - { project: mobile, shard: 2, of: 5, audits: false }
+          - { project: mobile, shard: 3, of: 5, audits: false }
+          - { project: mobile, shard: 4, of: 5, audits: false }
+          - { project: mobile, shard: 5, of: 5, audits: false }
     # Chromium and its system packages are preinstalled in the image. The tag must equal the
     # lockfile's @playwright/test version (checked below).
     container:
