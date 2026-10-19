@@ -212,7 +212,7 @@ jobs:
       - name: Bundle audit
         run: pnpm audit:bundle
       - name: Provision the browser-test administrator
-        run: pnpm test:e2e --project desktop e2e/security.spec.ts
+        run: pnpm test:e2e e2e/security.spec.ts --project desktop
         env:
           E2E_WORKERS: '1'
       - name: OpenAPI audit
