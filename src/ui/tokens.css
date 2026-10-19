@@ -1,0 +1,1864 @@
+@import 'tailwindcss';
+@custom-variant dark (&:where(.dark, .dark *));
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--raised);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-text-muted: var(--muted-text);
+  --color-text-faint: var(--faint-text);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-info: var(--accent);
+  --color-status-good: var(--status-good);
+  --color-status-warn: var(--status-warn);
+  --color-status-bad: var(--status-bad);
+  --color-status-good-ink: var(--status-good-ink);
+  --color-status-warn-ink: var(--status-warn-ink);
+  --color-status-bad-ink: var(--status-bad-ink);
+  --color-background: var(--bg);
+  --color-foreground: var(--text);
+  /* ADR 0030: the primary action is ink on the ground, not the accent. The accent is a marker --
+     the active view, the current row, a count -- and a filled button in it would be the loudest
+     thing on every page. Ink on night (or on paper) is the quietest way to be unmistakable. */
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--on-primary);
+  --color-on-accent: var(--on-accent);
+  --color-secondary: var(--raised);
+  --color-secondary-foreground: var(--text);
+  --color-muted: var(--raised);
+  --color-muted-foreground: var(--muted-text);
+  --color-input: var(--border);
+  --color-ring: var(--accent);
+  --color-destructive: var(--danger);
+  --color-popover: var(--surface);
+  --color-popover-foreground: var(--text);
+  --color-scrim: var(--scrim);
+  --radius-lg: 0.625rem;
+  --radius-xl: 0.875rem;
+  --font-sans: 'Inter', var(--font-arabic), sans-serif;
+  /* ADR 0030: the named steps the restyle added between Tailwind's own, so a size is a decision
+     made once here rather than a number written into a component. `meta` is a property label,
+     `nav` an Arabic navigation label (Arabic letterforms sit smaller on the line than Latin ones),
+     `brand` the wordmark, `heading` a group heading, `title` a record's title and `display` the
+     day's headline on Home. Page titles take Tailwind's 2xl (24 px). Each level is visibly
+     smaller than the one above, after Apple's Large Title / Title / Headline (ADR 0031). */
+  --text-meta: 0.8125rem;
+  --text-nav: 0.9375rem;
+  --text-brand: 1.25rem;
+  --text-heading: 1.125rem;
+  --text-title: 1.375rem;
+  --text-display: 2.25rem;
+  /* The display face carries titles, the day's headline and the headings a list is read by; the
+     text face carries everything else (docs/05 § Typography, ADR 0030). */
+  --font-display: var(--display-stack);
+}
+:root {
+  /* ADR 0030, the paper theme: a cool grey paper ground, a near-white sheet for surfaces, near-black
+     ink, and moss as the marker -- the sage of the night theme taken down until it clears 4.5:1
+     on the sheet, so the two themes share one marker hue at two depths. */
+  --bg: #eceef1;
+  --surface: #fdfdfe;
+  --raised: #e6e9ed;
+  --border: #cbd0d6;
+  --text: #161a1f;
+  --muted-text: #555c66;
+  /* A third step of ink, for a status that is deliberately recessive: the quietest tone that still
+     clears 4.5:1 on the surface it sits on in this theme. Receding on a pale ground means darker,
+     not paler. */
+  --faint-text: #4c535c;
+  --accent: #2e6b54;
+  --accent-soft: #e1eee6;
+  --on-accent: #ffffff;
+  --primary: #161a1f;
+  --primary-hover: #2a2f36;
+  --primary-active: #000000;
+  --on-primary: #fdfdfe;
+  --success: #2a6e4f;
+  --warning: #8a5e0b;
+  --warning-soft: #f4e9cb;
+  --danger: #b03a3a;
+  --danger-soft: #f5e0de;
+  --scrim: #1b1e1c99;
+  --elevated: #fcfbf8;
+  --sheet-top: var(--elevated);
+  --canvas: var(--surface);
+  /* A row in a navigation menu: the wash under the pointer and under the current entry. */
+  --nav-hover: rgb(0 0 0 / 0.045);
+  --nav-selected: rgb(0 0 0 / 0.08);
+  /* Scorecard status scale (features/kpis.md): three hues a state is read in, each dark enough to
+     carry a word on the sheet as well as a mark. */
+  --status-good: #157a3c;
+  --status-warn: #b05205;
+  --status-bad: #b91c1c;
+  --status-good-ink: #157a3c;
+  --status-warn-ink: #b05205;
+  --status-bad-ink: #b91c1c;
+  --shadow-panel: 0 10px 30px -14px #1b1e1c40;
+  /* EP-B26: the slide-over covers the list instead of sitting beside it, so it needs the
+     elevation of something in front of content rather than of another surface on the ground.
+     Two layers, both cast evenly rather than downwards: running the full height, the edge that
+     has to separate from the rows is the vertical one, and an offset shadow would have to be
+     mirrored for RTL to keep falling on the list (EP-B09). A tight layer reads as contact, a
+     wide one as height. */
+  --shadow-slideover: 0 0 2px #1b1e1c26, 0 0 44px -6px #1b1e1c66;
+  /* Motion (docs/05 § Motion). One deceleration curve for anything that arrives, and one step that
+     sets the cascade's rhythm: every entrance delay is a multiple of it, so the whole page is
+     retimed from this single number. Both are theme-independent, so the dark block leaves them. */
+  --ease-rise: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --step-rise: 70ms;
+  /* Latin first in LTR; the Arabic face leads in RTL (below), the way the text stack does. */
+  --display-stack: 'Inter', var(--font-arabic), sans-serif;
+  /* The language toggle's flags, in their official colours: the same in every theme, because a
+     flag is a mark, not a surface. */
+  --flag-uk-blue: #012169;
+  --flag-uk-red: #c8102e;
+  --flag-sa-green: #006c35;
+  --flag-white: #ffffff;
+}
+.dark {
+  /* ADR 0031, the night theme and the default, after Apple's dark materials: a wallpaper
+     behind everything (the drawn indigo of ADR 0031 is retired; Jade is the default, ADR 0037), the page as frosted glass over it, text as white at four
+     strengths rather than four greys, and Apple's system hues for meaning. The glass is a grey frost
+     at 66 %, lighter than the wallpaper the way Apple's is,, so contrast is measured over the peak of a light band before any blur, the worst a
+     reader can meet: there every text token clears 4.5:1 on the canvas, the raised step and an
+     inset sheet (tertiary text 4.6:1, the green ink 11:1, the red ink 4.6:1). The inks are a step lighter than
+     Apple's own marks for that reason; the marks keep Apple's values (status scale below). */
+  --wallpaper-base: #0a0f0b;
+  /* A tile of fractal noise at a few per cent: the frost's texture, invisible as a pattern. Served
+     from public/ because the security policy allows images from the app itself, not data: URLs. */
+  --frost-grain: url('/frost-grain.svg');
+  /* The wallpaper a page falls back to when it carries no choice, or when an uploaded image cannot
+     be shown (ADR 0037): the default, Jade, over its own near-black green. */
+  --wallpaper: url('/wallpapers/jade.jpg');
+  --bg: rgb(10 10 24 / 0.4);
+  --surface: rgb(36 36 40 / 0.7);
+  --raised: rgb(255 255 255 / 0.08);
+  --border: rgb(255 255 255 / 0.14);
+  --text: rgb(255 255 255 / 0.96);
+  --muted-text: rgb(235 235 245 / 0.8);
+  --faint-text: rgb(235 235 245 / 0.72);
+  --accent: #9ad8b4;
+  --accent-soft: rgb(84 170 124 / 0.24);
+  --on-accent: #0b2418;
+  /* The primary action is Apple's own button, as apple.com draws it: a capsule in Apple blue with
+     white text (4.7:1). Apple's lighter hover blue drops below 4.5:1, so hover and press darken a
+     step instead (4.9:1 and 5.6:1). */
+  --primary: #0071e3;
+  --primary-hover: #006edb;
+  --primary-active: #0064c8;
+  --on-primary: #ffffff;
+  --success: #7aeba2;
+  --warning: #ffc670;
+  --warning-soft: rgb(255 159 10 / 0.2);
+  --danger: #ffa8a1;
+  --danger-soft: rgb(255 69 58 / 0.2);
+  /* A mark needs 3:1 and a word needs 4.5:1: the dot, the spark, the columns and the arc take
+     Apple's system green, orange and red; the word beside them takes the lighter ink. */
+  --status-good: #30d158;
+  --status-warn: #ff9f0a;
+  --status-bad: #ff453a;
+  --status-good-ink: #7aeba2;
+  --status-warn-ink: #ffc670;
+  --status-bad-ink: #ffa8a1;
+  --shadow-panel: inset 0 1px 0 rgb(255 255 255 / 0.12), 0 24px 60px -24px rgb(0 0 0 / 0.7);
+  --shadow-slideover: 0 0 1px rgb(255 255 255 / 0.12), 0 0 60px -10px rgb(0 0 0 / 0.75);
+  --scrim: rgb(5 5 15 / 0.6);
+  --elevated: #232326;
+  /* The record sheet's tone where its sheen is, as it renders over the wallpaper: the scrolled
+     bar's backing takes it so the bar reads as part of the sheet. */
+  --sheet-top: rgb(49 49 58 / 0.97);
+  /* The page card is the same frost as the menu (ADR 0031: the maintainer's call, over Apple's
+     advice to keep content off glass; contrast is measured at the brightest point regardless). */
+  --canvas: rgb(36 36 40 / 0.7);
+  /* On glass a row brightens rather than darkens, the way a sidebar does on Apple's platforms: a
+     faint white wash under the pointer, a stronger one under the current entry, no outline. A
+     dark fill on glass reads as a hole punched in it. */
+  --nav-hover: rgb(255 255 255 / 0.07);
+  --nav-selected: rgb(255 255 255 / 0.13);
+  color-scheme: dark;
+}
+/* ADR 0032: weight carries the hierarchy, in both languages. Only the day's headline on Home is
+   Extra Light, the one hero; page titles are 20 px Semibold, as a macOS window titles its toolbar;
+   a record's title is 22 px Semibold in every module; group headings are Regular so they
+   hold their place; names are Medium; descriptions, the views menu and secondary lines are Light
+   so the names stand out against them. */
+.font-display:is(.text-display, .text-3xl, .text-4xl) {
+  font-weight: 200;
+}
+/* ADR 0031: every control in the list bar is a capsule, like every button: the search field, the
+   segmented groups and the sort trigger share the buttons' shape. */
+.entity-toolbar [data-slot='select-trigger'] {
+  border-radius: 9999px;
+}
+/* The list's controls and every menu's choices are Light, the weight of the views menu beside them,
+   so the page's titles and the record names carry the weight: the search field (its placeholder
+   and what is typed), the bar's filter, sort and period controls, the items of any select, combobox
+   or menu, and the filter sheet's controls. The primary action keeps its own weight. */
+.entity-toolbar
+  :is(input, [data-slot='select-trigger'], button[data-slot='button']:not(.bg-primary)),
+.entity-toolbar input::placeholder,
+:is([data-slot='select-item'], [data-slot='combobox-item'], [data-slot='dropdown-menu-item']),
+[data-slot='dialog-content']
+  :is(input, [data-slot='select-trigger'], button[data-slot='button']:not(.bg-primary), label) {
+  font-weight: 300;
+}
+/* The list bar's controls are a compact step with a pointer: 32 px tall, 13 px labels and 14 px
+   icons, so search, sort and filter sit quietly beside the page title rather than matching its
+   weight. Touch keeps the 44 px target from the base layer (docs/05 § Density), so this applies only
+   where the pointer is fine. */
+@media (pointer: fine) {
+  .entity-toolbar
+    :is(input, [data-slot='select-trigger'], button[data-slot='button']:not(.bg-primary)) {
+    min-height: 32px;
+    height: 32px;
+    font-size: var(--text-meta);
+  }
+  .entity-toolbar
+    :is([data-slot='select-trigger'], button[data-slot='button']:not(.bg-primary))
+    svg {
+    width: 14px;
+    height: 14px;
+  }
+}
+/* The primary button presses in a touch, as Apple's prominent buttons do, and springs back. */
+@media (prefers-reduced-motion: reduce) {
+  button[data-slot='button'].bg-primary:active {
+    transform: none;
+  }
+}
+/* A card answers the pointer: it rises a pixel, its edge brightens and a soft shadow settles under
+   it. Under 2 px and 160 ms, so it reads as feedback rather than motion; only translate, colour and
+   shadow move, never layout, and leaving reverses it the same way. Off under reduced motion. */
+.entity-card {
+  transition:
+    translate 160ms var(--ease-rise),
+    border-color 160ms ease-out,
+    background-color 160ms ease-out,
+    box-shadow 160ms ease-out;
+}
+@media (hover: hover) {
+  .entity-card:hover {
+    translate: 0 -1px;
+    box-shadow: 0 8px 22px -14px rgb(0 0 0 / 0.55);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .entity-card {
+    transition: none;
+  }
+  .entity-card:hover {
+    translate: none;
+  }
+}
+/* ADR 0031: the wallpaper is the window's own background, fixed so the glass slides over it. */
+html.dark {
+  background-color: var(--wallpaper-base);
+  background-image: var(--wallpaper);
+  background-attachment: fixed;
+}
+/* ADMIN-B42: the workspace's wallpaper, chosen in Administration and carried on <html> as
+   `data-wallpaper`: a photograph from public/wallpapers/ (or an uploaded image, ADMIN-B47),
+   covering the window behind the glass. Ribbon is drawn larger than the window so its sweep
+   crosses behind the menus. The same images are the picker's swatches. */
+html.dark {
+  background-size: cover;
+  background-position: center;
+}
+html.dark[data-wallpaper] {
+  background-color: #000;
+  background-size: cover;
+  background-position: center;
+}
+html.dark[data-wallpaper='ribbon'] {
+  background-image: url('/wallpapers/ribbon.jpg');
+  background-size: max(140vw, 250vh) auto;
+  background-position: 70% 28%;
+}
+html.dark[data-wallpaper='copper'] {
+  background-image: url('/wallpapers/copper.jpg');
+}
+html.dark[data-wallpaper='jade'] {
+  background-image: url('/wallpapers/jade.jpg');
+}
+html.dark[data-wallpaper='neon'] {
+  background-image: url('/wallpapers/neon.jpg');
+}
+html.dark[data-wallpaper='folds'] {
+  background-image: url('/wallpapers/folds.jpg');
+}
+html.dark[data-wallpaper='stone'] {
+  background-image: url('/wallpapers/stone.jpg');
+}
+html.dark[data-wallpaper='arc'] {
+  background-image: url('/wallpapers/arc.jpg');
+}
+html.dark[data-wallpaper='sky'] {
+  background-image: url('/wallpapers/sky.jpg');
+}
+/* ADMIN-B47: an image an administrator uploaded. The page carries its address on <html> as
+   `--wallpaper-image`, since the image is the workspace's own and not one this sheet can name. */
+html.dark[data-wallpaper='custom'] {
+  background-image: var(--wallpaper-image, var(--wallpaper));
+}
+/* ADR 0037: the accent follows the wallpaper. The page carries the wallpaper's accent for both
+   themes on <html> (computed once for the built-ins, at upload for an image); each theme takes its
+   own, and a page without them keeps the sage of ADR 0036. */
+html[data-wallpaper] {
+  --accent: var(--wallpaper-accent-paper, #2e6b54);
+  --accent-soft: var(--wallpaper-accent-soft-paper, #e1eee6);
+  --on-accent: var(--wallpaper-on-accent-paper, #ffffff);
+}
+html.dark[data-wallpaper] {
+  --accent: var(--wallpaper-accent-night, #9ad8b4);
+  --accent-soft: var(--wallpaper-accent-soft-night, rgb(84 170 124 / 0.24));
+  --on-accent: var(--wallpaper-on-accent-night, #0b2418);
+}
+/* BEGIN wallpaper accents: generated by scripts/build/wallpaper-accents.ts. */
+/* ribbon: picked nothing (sage) */
+html[data-wallpaper='ribbon'] {
+  --wallpaper-accent-night: #9ad8b4;
+  --wallpaper-accent-soft-night: #54aa7c3d;
+  --wallpaper-on-accent-night: #0b2418;
+  --wallpaper-accent-paper: #2e6b54;
+  --wallpaper-accent-soft-paper: #e1eee6;
+  --wallpaper-on-accent-paper: #ffffff;
+}
+/* copper: picked #9b6749 */
+html[data-wallpaper='copper'] {
+  --wallpaper-accent-night: #9ad8b4;
+  --wallpaper-accent-soft-night: #54aa7c3d;
+  --wallpaper-on-accent-night: #0b2418;
+  --wallpaper-accent-paper: #2e6b54;
+  --wallpaper-accent-soft-paper: #e1eee6;
+  --wallpaper-on-accent-paper: #ffffff;
+}
+/* jade: picked #525848 */
+html[data-wallpaper='jade'] {
+  --wallpaper-accent-night: #b5c59b;
+  --wallpaper-accent-soft-night: #909f763d;
+  --wallpaper-on-accent-night: #181d0d;
+  --wallpaper-accent-paper: #4e5b35;
+  --wallpaper-accent-soft-paper: #e8ede0;
+  --wallpaper-on-accent-paper: #ffffff;
+}
+/* neon: picked #265f63 */
+html[data-wallpaper='neon'] {
+  --wallpaper-accent-night: #90cace;
+  --wallpaper-accent-soft-night: #6ba4a83d;
+  --wallpaper-on-accent-night: #071f20;
+  --wallpaper-accent-paper: #255f63;
+  --wallpaper-accent-soft-paper: #deeff0;
+  --wallpaper-on-accent-paper: #ffffff;
+}
+/* folds: picked nothing (sage) */
+html[data-wallpaper='folds'] {
+  --wallpaper-accent-night: #9ad8b4;
+  --wallpaper-accent-soft-night: #54aa7c3d;
+  --wallpaper-on-accent-night: #0b2418;
+  --wallpaper-accent-paper: #2e6b54;
+  --wallpaper-accent-soft-paper: #e1eee6;
+  --wallpaper-on-accent-paper: #ffffff;
+}
+/* stone: picked nothing (sage) */
+html[data-wallpaper='stone'] {
+  --wallpaper-accent-night: #9ad8b4;
+  --wallpaper-accent-soft-night: #54aa7c3d;
+  --wallpaper-on-accent-night: #0b2418;
+  --wallpaper-accent-paper: #2e6b54;
+  --wallpaper-accent-soft-paper: #e1eee6;
+  --wallpaper-on-accent-paper: #ffffff;
+}
+/* arc: picked nothing (sage) */
+html[data-wallpaper='arc'] {
+  --wallpaper-accent-night: #9ad8b4;
+  --wallpaper-accent-soft-night: #54aa7c3d;
+  --wallpaper-on-accent-night: #0b2418;
+  --wallpaper-accent-paper: #2e6b54;
+  --wallpaper-accent-soft-paper: #e1eee6;
+  --wallpaper-on-accent-paper: #ffffff;
+}
+/* sky: picked #436b8d */
+html[data-wallpaper='sky'] {
+  --wallpaper-accent-night: #98c3e9;
+  --wallpaper-accent-soft-night: #749dc23d;
+  --wallpaper-on-accent-night: #0b1c2a;
+  --wallpaper-accent-paper: #3f6789;
+  --wallpaper-accent-soft-paper: #e0edf9;
+  --wallpaper-on-accent-paper: #ffffff;
+}
+/* END wallpaper accents */
+.wallpaper-swatch {
+  background-color: #000;
+  background-size: cover;
+  background-position: center;
+}
+.wallpaper-swatch[data-swatch='ribbon'] {
+  background-image: url('/wallpapers/ribbon.jpg');
+}
+.wallpaper-swatch[data-swatch='copper'] {
+  background-image: url('/wallpapers/copper.jpg');
+}
+.wallpaper-swatch[data-swatch='jade'] {
+  background-image: url('/wallpapers/jade.jpg');
+}
+.wallpaper-swatch[data-swatch='neon'] {
+  background-image: url('/wallpapers/neon.jpg');
+}
+.wallpaper-swatch[data-swatch='folds'] {
+  background-image: url('/wallpapers/folds.jpg');
+}
+.wallpaper-swatch[data-swatch='stone'] {
+  background-image: url('/wallpapers/stone.jpg');
+}
+.wallpaper-swatch[data-swatch='arc'] {
+  background-image: url('/wallpapers/arc.jpg');
+}
+.wallpaper-swatch[data-swatch='sky'] {
+  background-image: url('/wallpapers/sky.jpg');
+}
+/* The glass. `backdrop-filter` is written once, unprefixed: the CSS pipeline adds Safari's prefix
+   itself, and writing both made it keep only the prefixed one, which Chrome ignores.
+   ADR 0031, after Apple's Liquid Glass guidance: glass is the navigation layer, never the content.
+   The menu is the one large glass plane, floating over the wallpaper with the heavy blur that turns
+   the bands of light into soft clouds and a faint grain that makes it read as frosted rather than
+   tinted. The page card takes the same frost as the menu, by the maintainer's choice. Menus, selects and dialogs are controls, so they take a light glass; the list bar is
+   the page's scroll edge effect, a light blur over the rows that pass beneath it. */
+.dark .app-sidebar {
+  background:
+    radial-gradient(
+      130% 28% at 50% 0%,
+      color-mix(in oklch, var(--color-accent) 6%, transparent),
+      transparent 75%
+    ),
+    var(--frost-grain), rgb(36 36 42 / 0.26);
+  backdrop-filter: blur(48px) saturate(140%);
+  box-shadow: var(--shadow-panel);
+}
+/* The page card's frost is drawn on a layer beneath it, not on the card itself. An element with a
+   backdrop-filter becomes a closed backdrop for everything inside it, so the sticky list bar's own
+   blur saw only the card's interior and rendered near black; it is also a containing block for
+   fixed descendants, which the slide-over is. On a pseudo-element the frost looks the same and the
+   card stays open, so the bar frosts over the same wallpaper as everything else. */
+.dark .app-canvas {
+  position: relative;
+  background-color: transparent;
+}
+.dark .app-canvas::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background-color: var(--canvas);
+  background-image: var(--frost-grain);
+  backdrop-filter: blur(72px) saturate(120%);
+  pointer-events: none;
+}
+.dark .app-canvas {
+  isolation: isolate;
+}
+.dark
+  :is([data-slot='popover-content'], [data-slot='select-content'], [data-slot='dialog-content']) {
+  backdrop-filter: blur(28px) saturate(120%);
+}
+/* Popovers and menus (the account menu, notifications, pickers, selects) float over everything in
+   their own layer, so they are the same liquid glass as Spotlight and the toast: a clear tint over a
+   heavy saturated blur, a sheen across the top, the grain, a bright rim and a deep shadow. */
+.dark :is([data-slot='popover-content'], [data-slot='select-content']) {
+  background-color: rgb(48 48 60 / 0.5);
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.08), transparent 45%), var(--frost-grain);
+  backdrop-filter: blur(28px) saturate(180%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.24),
+    inset 0 0 0 1px rgb(255 255 255 / 0.1),
+    0 24px 60px -20px rgb(0 0 0 / 0.75);
+}
+/* The list bar is part of the page, not a strip on it: no tint and no rule of its own at rest. Its
+   blur is Apple's scroll edge effect, a layer beneath its controls that frosts the rows as they
+   scroll under it and fades out towards the list, so no edge is ever drawn. Over an empty card it
+   blurs the card's own frost, which is the same colour, so the bar is invisible as a surface. */
+.dark .entity-toolbar {
+  background: transparent;
+  border-bottom-color: transparent;
+}
+.dark .entity-toolbar::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 -1rem;
+  z-index: -1;
+  backdrop-filter: blur(20px);
+  mask-image: linear-gradient(to bottom, black 70%, transparent);
+  pointer-events: none;
+}
+/* The search palette is Spotlight in Liquid Glass. Opening it blurs and lightly dims the page
+   behind, so the panel floats over a soft field. The panel itself is clear glass: a thin tint, a
+   saturated blur of the already-blurred page, a sheen across its top half, a bright specular rim
+   and a deep soft shadow. Over the blurred dark page every text token stays above 4.5:1. */
+.dark .search-palette {
+  background-color: rgb(48 48 60 / 0.42);
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.09), transparent 45%), var(--frost-grain);
+  backdrop-filter: blur(28px) saturate(180%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.28),
+    inset 0 0 0 1px rgb(255 255 255 / 0.12),
+    inset 0 -1px 0 rgb(255 255 255 / 0.05),
+    0 40px 90px -24px rgb(0 0 0 / 0.75);
+}
+:has(> .search-palette) > [data-slot='dialog-overlay'] {
+  background: rgb(5 5 15 / 0.28);
+  backdrop-filter: blur(18px);
+}
+/* No browser clear button in the field: Escape clears and closes, as Spotlight does. */
+.search-palette input[type='search']::-webkit-search-cancel-button {
+  appearance: none;
+}
+/* The record sheet scrolls without a visible scrollbar, as macOS hides one until scrolling: a bar
+   takes a strip at the sheet's edge (the left in Arabic) that the sticky bar's backing cannot
+   reach, which left it looking cut. Home does the same: on a short window it runs a little past
+   the page card, and a bar beside its tiles read as clutter (HOME-B15). Wheel, trackpad, touch
+   and keyboard all still scroll both. */
+.entity-detail,
+.expanded-body,
+main:has(.home-page) {
+  scrollbar-width: none;
+}
+/* And no elastic bounce at Home's edges: when the page fits, a trackpad flick must not move it. */
+main:has(.home-page) {
+  overscroll-behavior: none;
+}
+.entity-detail::-webkit-scrollbar,
+.expanded-body::-webkit-scrollbar,
+main:has(.home-page)::-webkit-scrollbar {
+  display: none;
+}
+/* The record's bar (EntityPanel): Apple's scroll edge effect. Once content scrolls under it, a
+   backing in the sheet's own tone appears behind the controls, so nothing reads through behind
+   the title, and its lower edge is a soft shadow rather than a rule. It is solid rather than a
+   blur: a backdrop blur nested inside the sheet's own backdrop blur does not take effect, so a
+   translucent backing let the text beneath show through, and fading it with a mask did the same. */
+.panel-bar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-start-start-radius: inherit;
+  border-start-end-radius: inherit;
+  background: var(--sheet-top);
+  box-shadow: 0 12px 20px -14px rgb(0 0 0 / 0.55);
+  opacity: 0;
+  transition: opacity 200ms ease-out;
+  pointer-events: none;
+}
+.panel-bar-scrolled::before {
+  opacity: 1;
+}
+@media (prefers-reduced-transparency: reduce) {
+  .panel-bar::before {
+    background: var(--color-surface);
+    backdrop-filter: none;
+    box-shadow: none;
+    border-bottom: 1px solid var(--color-border);
+  }
+}
+/* The expanded field and the AI review are a sheet of the record's own glass: the same frost, rim
+   and sheen as the record panel, over a lightly blurred window, with no rules between its header,
+   body and actions. */
+.dark .expanded-sheet {
+  background-color: rgb(36 36 40 / 0.78);
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 30%), var(--frost-grain);
+  backdrop-filter: blur(64px) saturate(160%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.14),
+    inset 0 0 0 1px rgb(255 255 255 / 0.1),
+    0 40px 100px -24px rgb(0 0 0 / 0.75);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .dark .expanded-sheet {
+    background-color: var(--elevated);
+    background-image: none;
+    backdrop-filter: none;
+  }
+}
+/* In a review the proposed text's own frame is tinted and edged in the selection blue, while the
+   original stays neutral: the frame says "new" without a second box around it. */
+.review-rewrite [data-field-frame],
+.review-rewrite [data-slot='textarea'] {
+  border-color: color-mix(in oklch, var(--color-primary), transparent 45%);
+  background: color-mix(in oklch, var(--color-primary), transparent 92%);
+}
+/* A result is selected the way Spotlight selects one: a soft lighter fill inside a fine rim. */
+.dark .spotlight-hit:is(:hover, :focus-visible) {
+  background: rgb(255 255 255 / 0.1);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.16);
+  outline: none;
+}
+@media (prefers-reduced-transparency: reduce) {
+  .dark .search-palette {
+    background-color: var(--elevated);
+    background-image: none;
+    backdrop-filter: none;
+  }
+}
+/* A record is a floating sheet of the same frosted glass as the page and the menu: inset from the
+   window with the same corners, the menu's density, a blur heavy enough that the rows behind melt
+   into colour and never ghost through its fields, and the lit edge the other glass carries. */
+.dark .entity-detail {
+  background-color: rgb(36 36 40 / 0.58);
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 35%), var(--frost-grain);
+  backdrop-filter: blur(64px) saturate(170%);
+  border-color: rgb(255 255 255 / 0.12);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.14),
+    0 30px 80px -20px rgb(0 0 0 / 0.7);
+}
+/* A reader who has asked the system for less transparency gets the same theme on solid ground. */
+@media (prefers-reduced-transparency: reduce) {
+  .dark {
+    --bg: #0e130f;
+    --surface: #1e1e21;
+    --raised: #2a2a2e;
+    --border: #3a3a3f;
+    --elevated: #2a2a2e;
+    --canvas: #1a1a1c;
+  }
+  html.dark {
+    background-image: none;
+  }
+  .dark
+    :is(
+      .app-canvas,
+      .entity-detail,
+      .entity-toolbar,
+      [data-slot='popover-content'],
+      [data-slot='select-content'],
+      [data-slot='dialog-content']
+    ) {
+    backdrop-filter: none;
+  }
+  .dark .entity-detail {
+    background: var(--elevated);
+    background-image: none;
+  }
+  .dark .entity-toolbar {
+    background: var(--canvas);
+    border-bottom-color: var(--border);
+  }
+}
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  /* 16px base: the office reads on tablets and many readers are over forty (docs/05 § Density). */
+  html {
+    font-size: 16px;
+    background: var(--bg);
+  }
+  /* Both faces are always in the stack and the real faces come before the size-matched
+     fallbacks next/font synthesises (those carry Arabic glyphs and would win otherwise): an
+     Arabic title in the English view renders in the Arabic face and a Latin acronym in the
+     Arabic view in Inter (docs/05 § Typography). */
+  body {
+    margin: 0;
+    color: var(--text);
+    /* ADR 0032: Inter first, then Noto Sans Arabic. Inter has no Arabic glyphs, so every Arabic
+       character falls through to Noto, while Latin stays in Inter (Noto carries Latin glyphs of its
+       own, so the order is what keeps English in Inter). Inter is named on its own, without the
+       Arial-based fallback face next/font pairs with it: that face covers Arabic and would catch
+       every Arabic character before Noto. */
+    font-family: 'Inter', var(--font-arabic), sans-serif;
+  }
+  html[dir='rtl'] body {
+    font-family: 'Inter', var(--font-arabic), sans-serif;
+  }
+  button:not(:disabled),
+  a {
+    cursor: pointer;
+  }
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+  }
+  /* EP-B17 focuses the record's heading on open so assistive technology announces it. The heading
+     is not tabbable, so the ring buys a sighted user nothing and makes an editable title read as a
+     selected input; the focus itself stays. */
+  [tabindex='-1']:focus-visible {
+    outline: none;
+  }
+  /* Controls are 36px with a pointer and 44px on touch (docs/05 § Density and § Mobile). The
+     select trigger is named here too: it is a Base UI button rather than a <select> or a
+     `data-slot="button"`, so it was the one control in the set sizing itself off its own padding,
+     which left every ChoiceSelect a few pixels short of the input and the buttons beside it. Its
+     own `sm` variant is a utility and still overrides this. */
+  input,
+  textarea,
+  select,
+  [data-slot='select-trigger'],
+  button[data-slot='button'] {
+    min-height: 36px;
+  }
+  @media (pointer: coarse) {
+    input,
+    textarea,
+    select,
+    [data-slot='select-trigger'],
+    button[data-slot='button'] {
+      min-height: 44px;
+    }
+  }
+  /* An icon button is a circle at every size (docs/design-system.md § Shape), so the floor above is
+     not stretched over it: with a pointer it keeps its own square, and on touch it grows to 44 px
+     both ways, a larger circle rather than an oval. */
+  button[data-slot='button'][data-size^='icon'] {
+    min-height: 0;
+  }
+  @media (pointer: coarse) {
+    button[data-slot='button'][data-size^='icon'] {
+      min-width: 44px;
+      min-height: 44px;
+    }
+  }
+  h1,
+  h2,
+  h3,
+  p {
+    overflow-wrap: anywhere;
+  }
+  /* One scrollbar for the whole product, in the theme's own colours: a thin track that keeps the
+     surface it sits on and a rounded thumb in the border step, which darkens under the pointer.
+     `color-scheme` already hands the platform a matching default, so this is the same bar drawn
+     slimmer; Firefox takes the two-value form and every other engine the parts below. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--muted-text);
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}
+/* EP-B26: the detail arrives as a slide-over from the end edge. The distance is a variable rather
+   than a second set of frames, because the two widths want different journeys from the same
+   entrance: a phone swaps one full-screen view for another and needs only the nudge that says
+   which way the stack moved, while from 1024 px the panel travels its own width in from beyond the
+   workspace's clipped edge, which is what makes it read as arriving over the list rather than as
+   another column appearing inside it. EP-B09: direction is the same variable negated, so the RTL
+   mirror is one declaration instead of a duplicated animation. */
+.entity-detail {
+  --panel-slide: 1rem;
+  animation: enter-detail 220ms var(--ease-rise);
+}
+[dir='rtl'] .entity-detail {
+  --panel-slide: -1rem;
+}
+@keyframes enter-detail {
+  from {
+    opacity: 0;
+    translate: var(--panel-slide);
+  }
+  to {
+    opacity: 1;
+    translate: 0;
+  }
+}
+@media (min-width: 1024px) {
+  .entity-detail {
+    --panel-slide: 100%;
+    animation-duration: 260ms;
+  }
+  [dir='rtl'] .entity-detail {
+    --panel-slide: -100%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .entity-detail {
+    animation: none;
+  }
+}
+
+/* Shared entity surfaces keep list and detail independently reachable. The page fills the column
+   the shell gives it, which is the screen less the header and the bottom bar; measuring either of
+   those here would only be a second copy of a number the shell already knows (docs/05). */
+.entity-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+/* The completion toggle keeps a 44px hit area at every pointer type; the ring inside is 18px. */
+.entity-check[data-slot='checkbox'] {
+  width: 44px;
+  height: 44px;
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+}
+.entity-check[data-slot='checkbox']::before {
+  content: '';
+  position: absolute;
+  inset: 13px;
+  border: 1.5px solid var(--color-text-muted);
+  border-radius: inherit;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+.entity-check[data-checked]::before {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+.entity-check [data-slot='checkbox-indicator'] {
+  position: relative;
+  color: var(--color-background);
+}
+.entity-check::after {
+  display: none;
+}
+/* Completing a task: the ring pops and the tick scales in. */
+.entity-check[data-checked]::before {
+  animation: check-pop 220ms cubic-bezier(0.2, 0.9, 0.3, 1.3);
+}
+.entity-check[data-checked] [data-slot='checkbox-indicator'] {
+  animation: check-in 200ms ease-out;
+}
+@keyframes check-pop {
+  0% {
+    transform: scale(0.8);
+  }
+  60% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes check-in {
+  from {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+/* A row leaving the list (completed, trashed, restored) fades, then collapses. */
+.entity-row-leaving {
+  display: grid;
+  grid-template-rows: 1fr;
+  animation: row-leave 300ms ease-in forwards;
+  pointer-events: none;
+}
+.entity-row-leaving > * {
+  min-height: 0;
+  overflow: hidden;
+}
+@keyframes row-leave {
+  0% {
+    opacity: 1;
+    grid-template-rows: 1fr;
+  }
+  50% {
+    opacity: 0;
+    grid-template-rows: 1fr;
+  }
+  100% {
+    opacity: 0;
+    grid-template-rows: 0fr;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .entity-check[data-checked]::before,
+  .entity-check[data-checked] [data-slot='checkbox-indicator'] {
+    animation: none;
+  }
+  .entity-row-leaving {
+    animation-duration: 1ms;
+  }
+}
+/* Popups scale in from their anchor and out again (Base UI starting and ending styles). */
+[data-slot='select-content'],
+[data-slot='popover-content'] {
+  transform-origin: var(--transform-origin);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
+}
+[data-slot='select-content'][data-starting-style],
+[data-slot='select-content'][data-ending-style],
+[data-slot='popover-content'][data-starting-style],
+[data-slot='popover-content'][data-ending-style] {
+  opacity: 0;
+  transform: scale(0.96);
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-slot='select-content'],
+  [data-slot='popover-content'] {
+    transition: none;
+  }
+}
+/* Text that may be Arabic inside an English list (or the reverse) keeps its own direction while
+   staying aligned with the row (docs/05 § Mixed direction). */
+.plaintext {
+  unicode-bidi: plaintext;
+}
+/* ADR 0030: the shell's one flourish. A faint wash of the marker hue falls from behind the brand
+   and is gone before the first destination ends, so the rail has depth without a drawn edge or a
+   decoration. It is a background on the ground token, so it follows both themes. */
+.app-sidebar {
+  background:
+    radial-gradient(
+      130% 28% at 50% 0%,
+      color-mix(in oklch, var(--color-accent) 9%, transparent),
+      transparent 75%
+    ),
+    var(--color-bg);
+}
+/* ADR 0030: the page canvas, lifted off the frame the menu belongs to. */
+@media (min-width: 1024px) {
+  .app-canvas {
+    box-shadow: var(--shadow-panel);
+  }
+}
+/* Popups scale in from their anchor and out again (Base UI starting and ending styles). */
+[data-slot='select-content'],
+[data-slot='popover-content'] {
+  transform-origin: var(--transform-origin);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
+}
+[data-slot='select-content'][data-starting-style],
+[data-slot='select-content'][data-ending-style],
+[data-slot='popover-content'][data-starting-style],
+[data-slot='popover-content'][data-ending-style] {
+  opacity: 0;
+  transform: scale(0.96);
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-slot='select-content'],
+  [data-slot='popover-content'] {
+    transition: none;
+  }
+}
+/* Text that may be Arabic inside an English list (or the reverse) keeps its own direction while
+   staying aligned with the row (docs/05 § Mixed direction). */
+.plaintext {
+  unicode-bidi: plaintext;
+}
+/* Secondary controls unfold on hover or focus where a pointer can hover; touch sees them always. */
+@media (hover: hover) {
+  .hover-reveal-target {
+    display: grid;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transition:
+      grid-template-rows 120ms ease,
+      opacity 120ms ease;
+  }
+  .hover-reveal-target > * {
+    min-height: 0;
+    overflow: hidden;
+  }
+  .hover-reveal:hover .hover-reveal-target,
+  .hover-reveal:focus-within .hover-reveal-target {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .hover-reveal-target {
+      transition: none;
+    }
+  }
+}
+/* HOME-B12: Home has one entrance and only one: the opening headline settles into place — a short
+   rise out of a soft blur — and nothing else on the page moves on arrival. The tiles, the strip
+   and the marks are at rest from the first frame, so the one moment that moves is the one that
+   matters. `backwards` holds it at its start state until it runs. */
+.home-headline {
+  animation: home-headline 640ms var(--ease-rise) backwards;
+}
+@keyframes home-headline {
+  from {
+    opacity: 0;
+    translate: 0 0.375rem;
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+    filter: blur(0);
+  }
+}
+.home-page .meter-fill {
+  animation: none;
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    translate: 0 0.5rem;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+/* A meter draws itself from the edge the reader starts at. The fill is a percentage-width rect, so
+   the growth is a scale of its own box (fill-box), which leaves the RTL mirror on the parent svg
+   free to point it the right way. */
+.meter-fill {
+  transform-box: fill-box;
+  transform-origin: left;
+  animation: meter-fill 520ms var(--ease-rise) calc(var(--step-rise) * 3) backwards;
+}
+@keyframes meter-fill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+/* The arc draws itself the way the linear meter fills. `pathLength` normalises every arc to 1, so
+   one keyframe covers a tenth of a sweep and a full one without either length being known here. */
+.meter-arc {
+  stroke-dasharray: 1;
+  animation: meter-arc 620ms var(--ease-rise) calc(var(--step-rise) * 2) backwards;
+}
+@keyframes meter-arc {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+/* EP-B29: one control opens the record and the whole row is its hit area. The row is the
+   positioned ancestor and the control's own pseudo-element covers it, so the accessible name and
+   the focus ring stay on a single button — a row of nested buttons is a row the keyboard has to
+   walk through cell by cell to get past. Cells holding controls of their own are lifted above it. */
+.entity-table-open::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+/* EP-B27: a grid of tiles arrives as a cascade rather than all at once, for the reason Home's lead
+   rows do — it walks the eye across the page in reading order instead of presenting a finished
+   wall. The delays are the same step every other entrance in the app is timed from, they are set
+   by position rather than by an index the markup would have to carry, and they stop: the seventh
+   tile and everything after it share the last delay, so a long scorecard does not turn into a
+   ticker. Rows are keyed by identity, so a refetch that returns the same measures re-renders them
+   without re-running any of this; a new view or a new comparison period is a new screen and does
+   run it, which is the one time the movement is telling the truth about what happened. */
+.entity-grid > * {
+  animation: rise 320ms var(--ease-rise) backwards;
+}
+.entity-grid > *:nth-child(1) {
+  animation-delay: calc(var(--step-rise) * 0.5);
+}
+.entity-grid > *:nth-child(2) {
+  animation-delay: calc(var(--step-rise) * 1);
+}
+.entity-grid > *:nth-child(3) {
+  animation-delay: calc(var(--step-rise) * 1.5);
+}
+.entity-grid > *:nth-child(4) {
+  animation-delay: calc(var(--step-rise) * 2);
+}
+.entity-grid > *:nth-child(5) {
+  animation-delay: calc(var(--step-rise) * 2.4);
+}
+.entity-grid > *:nth-child(6) {
+  animation-delay: calc(var(--step-rise) * 2.8);
+}
+.entity-grid > *:nth-child(n + 7) {
+  animation-delay: calc(var(--step-rise) * 3.2);
+}
+/* The strip above it is one block and rises as one, ahead of the tiles it summarises. */
+[data-entity-stats] {
+  animation: rise 300ms var(--ease-rise) backwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-headline,
+  .entity-grid > *,
+  [data-entity-stats],
+  .meter-arc,
+  .meter-fill {
+    animation: none;
+  }
+}
+/* ADR 0019: replacing one screen with another. The old one leaves quickly so it stops competing
+   for attention, the new one arrives more gently and waits for the old to clear. The shell does
+   not take part: the sidebar and top bar persist across a navigation, so the root group is
+   silenced and only the named page groups animate. Nothing here is directional, because the
+   destinations are siblings rather than a hierarchy, which also keeps it correct in both
+   directions without a mirror. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+}
+::view-transition-old(.page-out) {
+  animation: 140ms ease-in both page-fade reverse;
+}
+::view-transition-new(.page-in) {
+  animation:
+    220ms var(--ease-rise) 140ms both page-fade,
+    340ms var(--ease-rise) both page-slide;
+}
+@keyframes page-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes page-slide {
+  from {
+    translate: 0 0.5rem;
+  }
+  to {
+    translate: 0 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(.page-out),
+  ::view-transition-new(.page-in) {
+    animation-duration: 1ms;
+    animation-delay: 0ms;
+  }
+}
+/* EP-B25: a record is read far more often than it is edited, so the panel reads as a record and
+   becomes a form on contact. A property's control keeps its shape and its hit area and drops only
+   its chrome, so nothing moves when it comes back; the row restores on hover and on focus-within,
+   which covers the keyboard. Where there is no pointer to hover with, the chrome stays: on touch
+   an uncoloured control would be the only thing telling a reader the value can be changed. */
+@media (hover: hover) {
+  .property-quiet
+    :is(
+      [data-slot='select-trigger'],
+      [data-slot='popover-trigger'],
+      [data-slot='input'],
+      [data-slot='textarea'],
+      [data-slot='native-select']
+    ):not([data-property-action]) {
+    border-color: transparent;
+    background: transparent;
+  }
+  .property-quiet:hover
+    :is(
+      [data-slot='select-trigger'],
+      [data-slot='popover-trigger'],
+      [data-slot='input'],
+      [data-slot='textarea'],
+      [data-slot='native-select']
+    ),
+  .property-quiet:focus-within
+    :is(
+      [data-slot='select-trigger'],
+      [data-slot='popover-trigger'],
+      [data-slot='input'],
+      [data-slot='textarea'],
+      [data-slot='native-select']
+    ) {
+    border-color: var(--color-border);
+  }
+  /* A picker with nothing set still says so in words ("No date", "Unassigned"), so it can lose its
+     chrome and stay readable. An empty text field has no words at all, and taking its outline away
+     would leave a label standing over a void. It keeps the outline, because that outline is the
+     affordance to add the value. */
+  .property-quiet.property-empty :is([data-slot='input'], [data-slot='textarea']) {
+    border-color: var(--color-border);
+  }
+  /* The chevron is an affordance, not information: it belongs to the hovered state. */
+  .property-quiet [data-slot='select-trigger'] > svg:last-child {
+    opacity: 0;
+    transition: opacity 120ms ease;
+  }
+  .property-quiet:hover [data-slot='select-trigger'] > svg:last-child,
+  .property-quiet:focus-within [data-slot='select-trigger'] > svg:last-child {
+    opacity: 1;
+  }
+}
+/* A date reads as a fact, so at rest it is as wide as the date. The selects keep their column so
+   the values below them stay aligned. */
+.property-quiet [data-slot='popover-trigger']:not([data-property-action]) {
+  width: auto;
+}
+/* On a property sheet an empty text value is a row like any other: no outline until it is pointed
+   at or focused, and a faint "Add…" where the value would be, saying what a press does
+   (docs/design-system.md § Records). */
+@media (hover: hover) {
+  .property-sheet .property-quiet.property-empty:not(:hover, :focus-within) [data-slot='input'] {
+    border-color: transparent;
+    background: transparent;
+  }
+}
+/* Values line up on the sheet's start edge whatever script they are typed in: an email or a Latin
+   organisation name in an Arabic record sits beside its label, not across the row from it. The
+   input keeps its own direction, so the text still reads correctly. */
+.property-sheet:dir(rtl) [data-slot='input'] {
+  text-align: right;
+}
+.property-sheet:dir(ltr) [data-slot='input'] {
+  text-align: left;
+}
+.property-sheet [data-slot='input']::placeholder {
+  color: var(--color-text-faint);
+}
+/* A value nobody has set is not a value. It stays legible and reachable, and stops competing with
+   the facts the record does carry. */
+.property-empty
+  :is(
+    [data-slot='select-trigger'],
+    [data-slot='popover-trigger'],
+    [data-slot='input'],
+    [data-slot='textarea'],
+    [data-slot='native-select']
+  ) {
+  color: var(--color-text-muted);
+}
+/* What a record is maintained from folds away under it (KPIS-B08). The marker is the chevron beside
+   the heading, so the browser's own triangle goes and the chevron turns when the section opens. */
+.kpi-fold > summary::-webkit-details-marker {
+  display: none;
+}
+.kpi-fold > summary > svg {
+  transition: rotate 150ms var(--ease-rise);
+}
+.kpi-fold[open] > summary > svg {
+  rotate: 90deg;
+}
+[dir='rtl'] .kpi-fold[open] > summary > svg {
+  rotate: -90deg;
+}
+@media (prefers-reduced-motion: reduce) {
+  .kpi-fold > summary > svg {
+    transition: none;
+  }
+}
+/* Anything that appears in place rather than arriving with the page: the bulk bar when selection
+   starts, a row created into a list already on screen. Same gesture as the page's own entrance, in
+   the shorter time a single element earns. */
+.rise-in {
+  animation: rise 220ms var(--ease-rise) backwards;
+}
+/* EP-B12: a row that arrives is the mirror of one that leaves. The list keys these off identity,
+   so only rows genuinely new to a list already on screen animate; a first load or a view change
+   replaces everything at once and is not an arrival. */
+.entity-row-entering {
+  animation: rise 260ms var(--ease-rise) backwards;
+}
+/* A figure that changes without saying so is a figure nobody notices. The count is remounted on
+   its own value, so the new number replaces the old rather than the element redrawing: the reading
+   is that something was counted again, which is what happened. */
+.count-tick {
+  display: inline-block;
+  animation: count-tick 240ms var(--ease-rise);
+}
+@keyframes count-tick {
+  from {
+    opacity: 0;
+    translate: 0 -0.3em;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+/* The save pill already changes colour; the tick inside it arrives the same way the completion
+   tick does, so "saved" reads as an event rather than a substitution. */
+.save-tick {
+  animation: check-in 200ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rise-in,
+  .entity-row-entering,
+  .count-tick,
+  .save-tick {
+    animation: none;
+  }
+}
+@media (min-width: 1024px) {
+  /* EP-B23 (ADR 0031): an open record is the only thing in focus. A backdrop under the sheet blurs
+     and lightly dims the whole window behind it (menu, list, bar), and fades in with the sheet. */
+  .entity-backdrop {
+    background: color-mix(in oklch, var(--color-scrim), transparent 65%);
+    backdrop-filter: blur(10px) saturate(120%);
+    animation: backdrop-in 220ms ease-out both;
+  }
+  @keyframes backdrop-in {
+    from {
+      opacity: 0;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .entity-backdrop {
+      animation: none;
+    }
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    .entity-backdrop {
+      backdrop-filter: none;
+    }
+  }
+  /* EP-B26: as a slide-over the panel is genuinely in front of the list rather than next to it, so
+     the elevation has to be read as height above content. The blur behind it does half the work
+     and the shadow does the rest; neither changes a colour, so contrast inside the panel and
+     inside the list is what it was. */
+  .entity-detail {
+    box-shadow: var(--shadow-slideover);
+  }
+  /* EP-B34: the panel covers the end of the list, and the sticky bar runs the list's full width, so
+     its controls sat underneath it — drawn, focusable by Tab, and invisible. The bar keeps clear of
+     the panel instead. The rows do not: EP-B26 promises the list keeps the width it had and that no
+     row moves under the click that opened one, and only the bar can step aside without breaking
+     that. The measure is the panel's own (EP-B07), read against the viewport because the panel is
+     fixed to it, and it is logical rather than left or right so RTL needs no second rule. */
+  .entity-page-open .entity-toolbar {
+    padding-inline-end: clamp(480px, 46vw, 880px);
+  }
+}
+
+/* EP-B28: the selected option of a segmented group is set in the medium weight, and a heavier word
+   is a wider word — so stepping the control changed the group's width and everything sharing its
+   row moved with it. Each option reserves the measure its own label will take once selected: a
+   hidden twin at the selected weight sets the width, and the visible text is laid over it in a row
+   of its own that costs no height. The reservation is per option, so the group holds one width
+   whichever is chosen and in either script. */
+.segmented-label {
+  display: inline-grid;
+}
+.segmented-label::before {
+  content: attr(data-label);
+  font-weight: 500;
+  height: 0;
+  visibility: hidden;
+}
+
+/* Below 1024 px the navigation is a capsule of the menu's glass floating over the page, inset from
+   the screen's edges and lifted off the safe area. Its measure is written once here: the shell's
+   scrolling column reserves --mobile-nav-clear at its foot so the last row, a form's buttons and an
+   open record's footer end above the capsule rather than under it, and the toast stands on the same
+   line. 56 px slots plus the capsule's 4 px padding and 1 px rim make the 66 px. */
+:root {
+  --mobile-nav-height: 66px;
+  --mobile-nav-gap: 12px;
+  --mobile-nav-clear: calc(
+    env(safe-area-inset-bottom) + var(--mobile-nav-gap) + var(--mobile-nav-height) +
+      var(--mobile-nav-gap)
+  );
+}
+.mobile-navigation {
+  background: var(--color-bg);
+  box-shadow: var(--shadow-panel);
+}
+/* The night bar is the .app-sidebar recipe — the grain, a clear tint and the heavy blur — a step
+   denser because it floats over rows rather than the wallpaper, with the lit top rim the other
+   floating glass carries. */
+.dark .mobile-navigation {
+  background:
+    radial-gradient(
+      120% 60% at 50% 0%,
+      color-mix(in oklch, var(--color-accent) 6%, transparent),
+      transparent 75%
+    ),
+    var(--frost-grain), rgb(36 36 42 / 0.64);
+  backdrop-filter: blur(48px) saturate(140%);
+  border-color: rgb(255 255 255 / 0.12);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.14),
+    0 18px 40px -12px rgb(0 0 0 / 0.7);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .dark .mobile-navigation {
+    background: var(--elevated);
+    backdrop-filter: none;
+  }
+}
+/* The bar's last slot is a button (the More sheet, ADMIN-B19), not a link. */
+.mobile-navigation > a,
+.mobile-navigation > button {
+  min-width: 44px;
+  min-height: 56px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding-inline: 4px;
+  font-size: 12px;
+}
+
+/* Undo toasts. The toast is the receipt for something that left the screen, so it is centred under
+   the column the thing left rather than parked in a corner of the window: the reader's eye is
+   already on the list, and this lands in the same vertical scan line as the row that vanished.
+   Centring also means there is nothing to mirror — the only directional value is the rail's own
+   measure, and that is a logical inset. On a phone it spans the width and clears the bar the shell
+   floats over the page, because navigation stays reachable while a transient is up. It sits over
+   the page and under a dialog: a modal that is open has the reader's attention and should keep it. */
+[data-slot='toast-viewport'] {
+  position: fixed;
+  z-index: 40;
+  inset-inline: 1rem;
+  inset-block-start: auto;
+  inset-block-end: var(--mobile-nav-clear);
+  /* The insets decide the width and `max-width` caps it, rather than a width that would
+     over-constrain them: with a width set, the end inset is simply dropped when the two disagree,
+     which is what let the toast reach across an open panel. */
+  max-width: 32rem;
+  margin-inline: auto;
+}
+@media (min-width: 1024px) {
+  [data-slot='toast-viewport'] {
+    /* Centred in the working column, clear of the rail, and lifted off the edge: a bar flush to
+       the bottom of the window is read as chrome. */
+    inset-inline-start: calc(208px + 1rem);
+    inset-block-end: 2rem;
+  }
+  /* While a record is open the working column is the list beside it, so the toast centres there
+     instead of straddling the panel's edge. The measure is the panel's own, the same one the
+     toolbar already steps aside by (EP-B07), and it is logical, so RTL needs no second rule. */
+  body:has(.entity-page-open) [data-slot='toast-viewport'] {
+    inset-inline-end: calc(clamp(480px, 46vw, 880px) + 1rem);
+  }
+}
+/* The stack grows upwards from the newest toast, which is the one at index 0 and the one in front.
+   The ones behind peek over its top edge and step down in scale, and their content is hidden until
+   the viewport is hovered or focused, at which point the stack opens out into a column. There is no
+   countdown bar: a shrinking timer is a loop in the periphery, and motion here marks an event and
+   stops (docs/05 § Motion). The reader is told the record is in Trash instead, which outlives the
+   toast.
+
+   The toast stays in the theme it interrupts. Inverting it — a pale bar over the dark app — is the
+   usual snackbar answer and the wrong one here: this product opens dark, and a bright block sitting
+   in the reader's periphery for eight seconds after every delete is glare, not emphasis. Separation
+   comes from elevation instead: the elevated ground, and a hairline drawn from the text colour
+   rather than the border token, so it is brighter than any edge the page itself paints. No accent
+   rule down the leading edge either — that bar means "the open record" in this product (EP-B14),
+   and a coloured stripe on a notice is the oldest alert cliche there is. */
+[data-slot='toast'] {
+  --toast-peek: 0.5rem;
+  --toast-gap: 0.5rem;
+  --toast-scale: calc(max(0, 1 - (var(--toast-index) * 0.05)));
+  --toast-expanded-y: calc(
+    var(--toast-offset-y) * -1 + (var(--toast-index) * var(--toast-gap) * -1) +
+      var(--toast-swipe-movement-y)
+  );
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0;
+  z-index: calc(40 - var(--toast-index));
+  background: var(--elevated);
+  color: var(--text);
+  border: 0;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklch, var(--text), transparent 86%),
+    var(--shadow-panel);
+  transform-origin: bottom center;
+  height: var(--toast-frontmost-height, var(--toast-height));
+  transform: translateY(
+      calc(var(--toast-swipe-movement-y) - (var(--toast-index) * var(--toast-peek)))
+    )
+    scale(var(--toast-scale));
+  transition:
+    transform 260ms var(--ease-rise),
+    opacity 260ms var(--ease-rise),
+    height 150ms var(--ease-rise);
+}
+/* The night theme's toast is liquid glass, the material Spotlight is made of: it floats over
+   everything in its own layer, so unlike a tile inside the page card it can blur what is behind it.
+   A clear tint, a heavy saturated blur, a sheen across its top half and the frost grain, a bright
+   specular rim and a deep soft shadow, in a capsule. It is the one toast every module raises (a
+   task done, an order saved, a record moved to Trash), so they all arrive in the same glass. */
+.dark [data-slot='toast'] {
+  border-radius: 26px;
+  background-color: rgb(48 48 60 / 0.42);
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.1), transparent 55%), var(--frost-grain);
+  backdrop-filter: blur(28px) saturate(180%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.28),
+    inset 0 0 0 1px rgb(255 255 255 / 0.12),
+    inset 0 -1px 0 rgb(255 255 255 / 0.05),
+    0 24px 60px -20px rgb(0 0 0 / 0.75);
+}
+.dark [data-slot='toast-content'] {
+  padding-inline-start: 1.25rem;
+}
+@media (prefers-reduced-transparency: reduce) {
+  .dark [data-slot='toast'] {
+    background-color: var(--elevated);
+    background-image: none;
+    backdrop-filter: none;
+  }
+}
+[data-slot='toast-content'] {
+  min-height: 52px;
+  font-size: 0.9375rem;
+  line-height: 1.4;
+}
+/* The action takes the tinted pair the product already confirms in — the ground and ink the save
+   tick wears (SaveStatus) — rather than a filled accent pill. It is reached for against a clock, so
+   it is a control and not a word; it is the only one on the toast and does not have to shout. */
+/* These two carry their own floor. The control sizes in the base layer are keyed on the button's
+   own data-slot, and the toast parts replace that attribute with their own, so the 36 px pointer
+   and 44 px touch minimums (docs/05 § Density) have to be restated here or the only way back from
+   a delete would be a 28 px target. */
+[data-slot='toast-action'],
+[data-slot='toast-close'] {
+  min-height: 36px;
+  min-width: 36px;
+}
+@media (pointer: coarse) {
+  [data-slot='toast-action'],
+  [data-slot='toast-close'] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+[data-slot='toast-action'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+  padding-inline: 0.875rem;
+  font-weight: 500;
+}
+[data-slot='toast-action']:hover {
+  background: color-mix(in oklch, var(--accent-soft), var(--accent) 22%);
+  color: var(--accent);
+}
+[data-slot='toast-close'] {
+  color: var(--muted-text);
+}
+[data-slot='toast-close']:hover {
+  background: color-mix(in oklch, var(--elevated), var(--text) 10%);
+  color: var(--text);
+}
+[data-slot='toast'][data-expanded] {
+  height: var(--toast-height);
+  transform: translateY(var(--toast-expanded-y)) scale(1);
+}
+/* The gap between stacked toasts is dead ground the pointer would fall through on its way to the
+   one behind, collapsing the stack under the reader's hand. This bridges it. */
+[data-slot='toast']::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  inset-block-start: 100%;
+  height: calc(var(--toast-gap) + 1px);
+}
+[data-slot='toast'][data-starting-style],
+[data-slot='toast'][data-ending-style] {
+  opacity: 0;
+  transform: translateY(120%);
+}
+[data-slot='toast'][data-ending-style][data-swipe-direction='down'] {
+  transform: translateY(calc(var(--toast-swipe-movement-y) + 120%));
+}
+/* Over the limit: the toast is kept mounted so it can leave, but it is no longer shown. */
+[data-slot='toast'][data-limited] {
+  opacity: 0;
+}
+[data-slot='toast-content'] {
+  transition: opacity 200ms var(--ease-rise);
+}
+[data-slot='toast-content'][data-behind] {
+  opacity: 0;
+}
+[data-slot='toast-content'][data-expanded] {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-slot='toast'],
+  [data-slot='toast-content'] {
+    transition: none;
+  }
+  /* Resting appearance in every phase: the toast appears and disappears without travelling. */
+  [data-slot='toast'][data-starting-style],
+  [data-slot='toast'][data-ending-style],
+  [data-slot='toast'][data-ending-style][data-swipe-direction='down'] {
+    transform: translateY(calc(var(--toast-index) * var(--toast-peek) * -1))
+      scale(var(--toast-scale));
+  }
+}
+/* EP-B45: a text area written in one language keeps every line on that language's side. Browsers
+   give `textarea[dir=auto]` per-paragraph direction (`plaintext`), which sends any line without a
+   letter (the empty line after Enter, a list marker, a row of figures) to the left in an Arabic
+   note. Every line follows the field instead, and the field follows its first letter. */
+textarea[dir='auto'] {
+  unicode-bidi: isolate;
+}
+/* Every progress bar is a capsule: the track and the filled part both have round ends
+   (docs/design-system.md § Shape). Native `<progress>` draws square ends in each engine, so the
+   track and its value are rounded here, once, for the whole product. */
+progress {
+  appearance: none;
+  overflow: hidden;
+  border: 0;
+  border-radius: 9999px;
+  background: var(--color-surface-raised);
+}
+progress::-webkit-progress-bar {
+  border-radius: 9999px;
+  background: var(--color-surface-raised);
+}
+progress::-webkit-progress-value {
+  border-radius: 9999px;
+  background: currentColor;
+}
+progress::-moz-progress-bar {
+  border-radius: 9999px;
+  background: currentColor;
+}
+/* List pages are nearly see-through: on a page of records the page card keeps only a light tint
+   and a soft blur, so the wallpaper shows behind the list and the cards stand out on it as glass.
+   The views rail is its own lighter glass, clearer than a solid panel and less clear than a card.
+   Other pages keep the frosted card. */
+.dark .app-canvas:has(.entity-page)::before {
+  background-color: rgb(24 24 32 / 0.48);
+  backdrop-filter: blur(16px) saturate(120%);
+}
+/* Over a light wallpaper (`data-wallpaper-tone`: a built-in's own, or the tone measured from an
+   uploaded image) the list side takes the menu's own frost (its tint, blur and grain), so the two
+   panels read as the same light glass rather than a white menu beside a grey page. */
+html.dark[data-wallpaper-tone='light'] .app-canvas:has(.entity-page)::before {
+  background-color: rgb(36 36 42 / 0.26);
+  background-image: var(--frost-grain);
+  backdrop-filter: blur(48px) saturate(140%);
+}
+/* The administration pages sit on the menu's own frost: its tint, its grain and its blur, so the
+   page card and the menu beside it read as one sheet of glass. The card keeps its edge and panel
+   shadow; only the layer beneath it changes, so the sticky bars inside still frost over the wallpaper. */
+.dark .app-canvas:has(.admin-page)::before {
+  background-color: rgb(36 36 42 / 0.26);
+  background-image: var(--frost-grain);
+  backdrop-filter: blur(48px) saturate(140%);
+}
+.dark .entity-rail {
+  background-color: rgb(30 30 38 / 0.12);
+  background-image: var(--frost-grain);
+  backdrop-filter: blur(40px) saturate(140%);
+}
+/* Glass cards: every list's cards and the KPI scorecard's tiles (`.entity-glass`, given by the list
+   framework to both). They are the same frosted glass as the views rail beside them: a grey tint
+   over a heavy, saturated blur of the wallpaper, the frost grain and a fine edge. No drop shadow,
+   no lift and no edge highlights: the glass is flat on the page. On
+   a KPI tile the status is light, kept faint and inside the tile: a wash on the arc's side and a
+   dim light behind the arc. Hover brightens the tint and the edge, and nothing moves. */
+.dark .entity-glass {
+  --tile-glow: rgb(255 255 255 / 0.22);
+  --tile-wash-at: 14% 78%;
+  position: relative;
+  isolation: isolate;
+  border-color: rgb(255 255 255 / 0.08);
+  background-color: rgb(30 30 38 / 0.12);
+  background-image:
+    radial-gradient(
+      55% 85% at var(--tile-wash-at),
+      color-mix(in oklab, var(--tile-glow) 5%, transparent),
+      transparent 72%
+    ),
+    var(--frost-grain);
+  backdrop-filter: blur(40px) saturate(140%);
+  box-shadow: none;
+  transition:
+    border-color 180ms ease-out,
+    background-color 180ms ease-out;
+}
+.dark[dir='rtl'] .entity-glass {
+  --tile-wash-at: 86% 78%;
+}
+/* The table view is the same frosted glass as the cards, as one panel: its rows sit on a steady
+   ground for contrast, and only the row under the pointer changes, not the panel. */
+.dark .entity-table-frame {
+  border-color: rgb(255 255 255 / 0.08);
+  background-color: rgb(30 30 38 / 0.12);
+  background-image: var(--frost-grain);
+  backdrop-filter: blur(40px) saturate(140%);
+}
+.dark .entity-glass:has([data-kpi-tone='positive']) {
+  --tile-glow: var(--status-good);
+}
+.dark .entity-glass:has([data-kpi-tone='caution']) {
+  --tile-glow: var(--status-warn);
+}
+.dark .entity-glass:has([data-kpi-tone='negative']) {
+  --tile-glow: var(--status-bad);
+}
+/* A glass surface that is not itself a control (`.glass-static`, such as a Home tile, whose rows
+   are the controls) keeps its tint under the pointer, so it never suggests it can be clicked. */
+@media (hover: hover) {
+  .dark .entity-glass:not(.glass-static):hover {
+    translate: none;
+    border-color: rgb(255 255 255 / 0.14);
+    background-color: rgb(40 40 50 / 0.2);
+  }
+}
+.dark .entity-glass[data-current] {
+  border-color: rgb(255 255 255 / 0.22);
+}
+/* The light behind the arc, in the status colour, and a faint glow along the arc itself. */
+.kpi-dial::before {
+  content: '';
+  position: absolute;
+  inset: 10%;
+  border-radius: 9999px;
+  background: radial-gradient(
+    circle,
+    color-mix(in oklab, var(--tile-glow, transparent) 55%, transparent),
+    transparent 70%
+  );
+  filter: blur(14px);
+  opacity: 0.16;
+  transition: opacity 220ms ease-out;
+}
+.entity-tile:hover .kpi-dial::before {
+  opacity: 0.26;
+}
+.dark .kpi-dial .meter-arc {
+  filter: drop-shadow(0 0 1.5px color-mix(in oklab, var(--tile-glow) 25%, transparent));
+}
+/* The status reads as a small piece of the same glass: its wash, and a hairline rim of light. */
+.dark .kpi-status {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.12),
+    inset 0 0 0 1px rgb(255 255 255 / 0.06);
+}
+@media (prefers-reduced-motion: reduce) {
+  .dark .entity-glass,
+  .kpi-dial::before {
+    transition: none;
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .dark .entity-glass {
+    background-color: var(--elevated);
+    background-image: none;
+    backdrop-filter: none;
+  }
+  .dark .app-canvas:has(.entity-page)::before {
+    background-color: var(--canvas);
+  }
+  .dark .app-canvas:has(.admin-page)::before {
+    background-color: var(--canvas);
+    backdrop-filter: none;
+  }
+}
+/* The sign-in pages (login, setup, recovery; AuthForm). The form is one pane of the side menu's
+   own material, copied from `.app-sidebar` value for value rather than a recipe of its own: on
+   paper the ground with the accent's faint wash, at night the clear grey tint, the grain and the
+   heavy blur over the wallpaper, with the panel shadow's lit top edge. */
+.auth-glass {
+  background:
+    radial-gradient(
+      130% 28% at 50% 0%,
+      color-mix(in oklch, var(--color-accent) 9%, transparent),
+      transparent 75%
+    ),
+    var(--color-bg);
+  box-shadow: var(--shadow-panel);
+}
+.dark .auth-glass {
+  background:
+    radial-gradient(
+      130% 28% at 50% 0%,
+      color-mix(in oklch, var(--color-accent) 6%, transparent),
+      transparent 75%
+    ),
+    var(--frost-grain), rgb(36 36 42 / 0.26);
+  backdrop-filter: blur(48px) saturate(140%);
+}
+/* An uploaded wallpaper is served only to a signed-in reader, so a signed-out visitor's request for
+   it is refused. Behind the sign-in pages the drawn wallpaper is laid under the image, so a refused
+   image leaves the default Jade wallpaper rather than a black window. */
+html.dark[data-wallpaper='custom']:has(.auth-page) {
+  background-color: var(--wallpaper-base);
+  background-image: var(--wallpaper-image, none), var(--wallpaper);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .dark .auth-glass {
+    background: var(--elevated);
+    backdrop-filter: none;
+  }
+}
+/* Home (HOME-B15). The page sits on the list pages' see-through canvas, so its tiles read as the
+   same glass over the wallpaper as the cards on Tasks and the tiles on KPIs. Hover is the shared
+   one: a tile is not a control and is `.glass-static`; its rows take the panel-row wash. */
+.dark .app-canvas:has(.home-page)::before {
+  background-color: rgb(24 24 32 / 0.48);
+  backdrop-filter: blur(16px) saturate(120%);
+}
+html.dark[data-wallpaper-tone='light'] .app-canvas:has(.home-page)::before {
+  background-color: rgb(36 36 42 / 0.26);
+  background-image: var(--frost-grain);
+  backdrop-filter: blur(48px) saturate(140%);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .dark .app-canvas:has(.home-page)::before {
+    background-color: var(--canvas);
+  }
+}
+/* A small text link on Home ("View all", the week link) keeps its 12 px text but takes a hit area
+   of at least 24 px, and 44 px under a coarse pointer, drawn by an invisible box around it. */
+.home-hit {
+  position: relative;
+}
+.home-hit::after {
+  content: '';
+  position: absolute;
+  inset: -4px -8px;
+}
+@media (pointer: coarse) {
+  .home-hit::after {
+    inset: -14px -8px;
+  }
+}
+/* A home row's title wraps to two lines and then ends in an ellipsis. The clamped block takes the
+   page's own direction rather than the title's (`dir="auto"` set Arabic titles against the left
+   edge of an Arabic page), so every title aligns to the reading start of the interface; the bdi
+   inside keeps the title's own word order. */
+.home-title {
+  display: -webkit-box;
+  overflow: hidden;
+  text-align: start;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+/* The mention list (NOTES-B08) opens inside the record sheet, which is already glass: a blur inside
+   a blur does not draw, so the list would read as a bare tint. It takes the solid raised surface
+   with the popovers' rim and shadow instead, so the names are never read over the text beneath. */
+.mention-menu {
+  background-color: var(--elevated);
+  color: var(--text);
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 0.1),
+    0 18px 44px -16px rgb(0 0 0 / 0.6);
+}
+:root:not(.dark) .mention-menu {
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.08),
+    0 18px 44px -16px rgb(0 0 0 / 0.25);
+}

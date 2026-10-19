@@ -1,0 +1,217 @@
+import { CommitteeReference } from '@/modules/committees/schema/validation';
+import { z } from 'zod';
+export const DefaultType = z.enum([
+  'board_meeting',
+  'executive_meeting',
+  'sector_meeting',
+  'one_on_one',
+  'personal',
+  'other',
+]);
+export const defaultTypes = DefaultType.options;
+export const Sort = z.enum(['default', 'title', 'created_at']);
+export const Band = z.enum(['upcoming', 'today', 'week', 'month', 'earlier']);
+const dedupe = (values: string[]) =>
+  values.filter(
+    (value, index) =>
+      values.findIndex((other) => other.toLowerCase() === value.toLowerCase()) === index,
+  );
+export const Tag = z.string().trim().min(1).max(50);
+// NOTES-I03: at most ten tags, deduplicated case-insensitively with the first spelling kept.
+export const Tags = z.array(Tag).max(10).transform(dedupe);
+const Ids = z
+  .array(z.uuid())
+  .max(50)
+  .transform((values) => [...new Set(values)]);
+const Title = z.string().trim().min(1).max(500);
+const Content = z.string().max(50000);
+const Type = z.string().trim().min(1).max(100);
+const revision = z.number().int().positive();
+export const NoteCreate = z.strictObject({
+  committeeId: z.uuid().nullable().default(null),
+  title: Title,
+  content: Content.default(''),
+  type: Type.nullable().default(null),
+  noteDate: z.iso.date().nullable().default(null),
+  tags: Tags.default([]),
+  participantIds: Ids.default([]),
+});
+export type NoteCreate = z.infer<typeof NoteCreate>;
+export const NotePatch = z.strictObject({
+  committeeId: z.uuid().nullable().optional(),
+  title: Title.optional(),
+  content: Content.optional(),
+  type: Type.nullable().optional(),
+  noteDate: z.iso.date().optional(),
+  tags: Tags.optional(),
+  participantIds: Ids.optional(),
+  revision,
+});
+export type NotePatch = z.infer<typeof NotePatch>;
+const timestamp = z.preprocess(
+  (v) => (v instanceof Date ? v.toISOString() : v),
+  z.iso.datetime({ offset: true }),
+);
+export const Participant = z.object({
+  id: z.uuid(),
+  name: z.string(),
+  kind: z.enum(['internal', 'external']),
+});
+export type Participant = z.infer<typeof Participant>;
+export const NoteTask = z.object({
+  id: z.uuid(),
+  revision: z.number().int(),
+  title: z.string(),
+  status: z.string(),
+  priority: z.string().nullable(),
+  dueDate: z.iso.date().nullable(),
+  completedAt: timestamp.nullable(),
+  ownerName: z.string().nullable(),
+});
+export type NoteTask = z.infer<typeof NoteTask>;
+export const Note = z.object({
+  committee: CommitteeReference.nullable().default(null),
+  committeeId: z.uuid().nullable().default(null),
+  id: z.uuid(),
+  revision: z.number().int(),
+  title: Title,
+  content: Content,
+  type: Type.nullable(),
+  noteDate: z.iso.date(),
+  tags: z.array(z.string()),
+  archivedAt: timestamp.nullable(),
+  createdAt: timestamp,
+  updatedAt: timestamp,
+  createdBy: z.uuid().nullable(),
+  updatedBy: z.uuid().nullable(),
+  deletedAt: timestamp.nullable(),
+  deletedOpId: z.uuid().nullable(),
+  participants: z.array(Participant).default([]),
+  openTaskCount: z.number().default(0),
+  doneTaskCount: z.number().default(0),
+  band: Band.nullable().default(null),
+});
+export type Note = z.infer<typeof Note>;
+export const NoteDetail = Note.extend({ tasks: z.array(NoteTask).default([]) });
+export type NoteDetail = z.infer<typeof NoteDetail>;
+export const NoteType = z.object({
+  id: z.string(),
+  labels: z.record(z.string(), z.string()).nullable(),
+  enabled: z.boolean(),
+});
+export type NoteType = z.infer<typeof NoteType>;
+export const NoteTypes = z.object({
+  data: z.array(NoteType),
+  meta: z.object({ defaultType: z.string().nullable() }),
+});
+// NOTES-B27: a template a new note can start from; label and body per locale.
+export const NoteTemplate = z.object({
+  id: z.string(),
+  labels: z.record(z.string(), z.string()),
+  body: z.record(z.string(), z.string()),
+  enabled: z.boolean(),
+});
+export type NoteTemplate = z.infer<typeof NoteTemplate>;
+export const NoteTemplates = z.object({ data: z.array(NoteTemplate) });
+// The body for a locale, falling back to English and then to whatever the template carries.
+export function templateBody(template: NoteTemplate, locale: string): string {
+  return template.body[locale] ?? template.body.en ?? Object.values(template.body)[0] ?? '';
+}
+export const NoteListQuery = z.strictObject({
+  committeeId: z.union([z.uuid(), z.literal('')]).default(''),
+  view: z.string().max(120).default('all'),
+  q: z.string().max(500).default(''),
+  type: z.union([Type, z.literal('')]).default(''),
+  tag: z.union([Tag, z.literal('')]).default(''),
+  personId: z.union([z.uuid(), z.literal('')]).default(''),
+  from: z.union([z.iso.date(), z.literal('')]).default(''),
+  to: z.union([z.iso.date(), z.literal('')]).default(''),
+  sort: Sort.default('default'),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  cursor: z.string().max(4000).optional(),
+});
+export type NoteListQuery = z.infer<typeof NoteListQuery>;
+export const Counts = z.record(z.string(), z.number());
+export const NoteList = z.object({
+  data: z.array(NoteDetail),
+  meta: z.object({
+    counts: Counts,
+    total: z.number(),
+    nextCursor: z.string().nullable(),
+    today: z.iso.date(),
+    timezone: z.string(),
+    types: z.array(NoteType),
+  }),
+});
+export const Revision = z.strictObject({ revision });
+const items = z
+  .array(z.strictObject({ id: z.uuid(), revision }))
+  .min(1)
+  .max(200)
+  .refine((v) => new Set(v.map((item) => item.id)).size === v.length, 'duplicate ids');
+export const BulkItems = z.strictObject({ items });
+export type BulkItems = z.infer<typeof BulkItems>;
+export const BulkTag = z.strictObject({ items, tag: Tag });
+export type BulkTag = z.infer<typeof BulkTag>;
+export const BulkResult = z.object({ data: z.object({ updatedIds: z.array(z.uuid()) }) });
+export const TagList = z.object({
+  data: z.array(z.object({ tag: z.string(), count: z.number() })),
+});
+export const ManageTags = z.strictObject({
+  tags: z.array(Tag).min(1).max(200).transform(dedupe),
+  target: Tag.nullable(),
+});
+export type ManageTags = z.infer<typeof ManageTags>;
+export const ManageTagsResult = z.object({
+  data: z.object({ updatedCount: z.number().int().nonnegative() }),
+});
+
+export const SuggestedTask = z.object({
+  title: z.string().trim().min(1).max(120),
+  description: z.string().max(10000).nullable(),
+  status: z.enum(['inbox', 'next_action', 'waiting_on']),
+  priority: z.enum(['low', 'medium', 'high', 'urgent']).nullable(),
+  due_date: z.string().nullable(),
+  owner_name: z.string().nullable(),
+  source_snippet: z.string().nullable(),
+});
+export const RefinementOutput = z.object({
+  refined_content: z.string().max(50000),
+  suggested_tasks: z.array(SuggestedTask).max(15),
+  suggested_tags: z.array(z.string().min(1).max(50)).max(5),
+  summary_of_changes: z.string().max(5000),
+});
+export const TagOutput = z.object({ tags: z.array(z.string().min(1).max(50)).max(5) });
+export const NoteAiApply = z
+  .strictObject({
+    jobId: z.uuid(),
+    acceptContent: z.boolean(),
+    // NOTES-B18: the rewrite as the reader left it after editing, in place of the job's own text.
+    content: Content.optional(),
+    taskIndexes: z.array(z.number().int().min(0).max(14)).max(15),
+    taskTitles: z
+      .array(
+        z.strictObject({
+          index: z.number().int().min(0).max(14),
+          title: SuggestedTask.shape.title,
+        }),
+      )
+      .max(15)
+      .optional(),
+    tagIndexes: z.array(z.number().int().min(0).max(4)).max(5),
+  })
+  .refine(
+    (input) =>
+      new Set(input.taskTitles?.map((task) => task.index)).size ===
+        (input.taskTitles?.length ?? 0) &&
+      (input.taskTitles ?? []).every((task) => input.taskIndexes.includes(task.index)) &&
+      new Set(input.taskIndexes).size === input.taskIndexes.length &&
+      new Set(input.tagIndexes).size === input.tagIndexes.length &&
+      (input.content === undefined || input.acceptContent),
+  );
+export const NoteAiRestore = z.strictObject({ jobId: z.uuid() });
+
+// NOTES-B08: shared by manual editing and applying refined content.
+export function derivedParticipants(content: string, candidates: { id: string; name: string }[]) {
+  return candidates.filter((item) => content.includes(`@${item.name}`)).map((item) => item.id);
+}

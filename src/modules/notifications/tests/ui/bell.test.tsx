@@ -1,0 +1,159 @@
+// @vitest-environment jsdom
+import { afterEach, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { useQuery } from '@tanstack/react-query';
+import en from '@/core/i18n/messages/en.json';
+import ar from '@/core/i18n/messages/ar.json';
+import type { Notification } from '../../schema/validation';
+import { NotificationBell } from '../../ui/NotificationBell';
+import { mount, plural } from './harness';
+// The bell is read through the one HTTP client and leaves through the router; both are stood in
+// for here so a scenario can say what the API answered and see where the reader was sent.
+const mocks = vi.hoisted(() => ({ push: vi.fn(), request: vi.fn() }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mocks.push }) }));
+vi.mock('@/core/http/client', () => ({ request: mocks.request }));
+vi.mock('@tanstack/react-query', async (original) => {
+  const actual = await original<typeof import('@tanstack/react-query')>();
+  return { ...actual, useQuery: vi.fn(actual.useQuery) };
+});
+afterEach(cleanup);
+const line = (overrides: Partial<Notification> = {}): Notification => ({
+  id: '01a08a9f-1991-760a-b73a-568f6f866500',
+  kind: 'task.assigned',
+  subjectType: 'tasks',
+  subjectId: '01a08a9f-1991-760a-b73a-568f6f866501',
+  title: 'Review the board pack',
+  href: '/tasks?id=01a08a9f-1991-760a-b73a-568f6f866501',
+  actorName: 'Assigning Actor',
+  createdAt: '2026-09-10T08:00:00.000Z',
+  readAt: null,
+  ...overrides,
+});
+function serve(items: Notification[], unread = items.filter((item) => !item.readAt).length) {
+  mocks.request.mockImplementation(async (path: string) => {
+    if (path === '/notifications') return { data: { items, unread, nextCursor: null } };
+    if (path.endsWith('/read')) return { data: { id: path.split('/')[2] } };
+    if (path === '/notifications/read-all') return { data: { marked: unread } };
+    throw new Error(`unexpected request ${path}`);
+  });
+}
+const writes = () =>
+  mocks.request.mock.calls
+    .filter(([, , options]) => (options as { method?: string } | undefined)?.method === 'POST')
+    .map(([path]) => path as string);
+const sentence = (messages: typeof en, item: Notification) =>
+  messages.notifications.taskAssigned
+    .replace('{actor}', item.actorName ?? messages.notifications.someone)
+    .replace('{title}', item.title);
+const popover = () => document.querySelector('[data-slot="popover-content"]');
+it('NOTIF-B08 NOTIF-A01 the bell shows the unread count and says it in its name', async () => {
+  serve([line(), line({ id: '01a08a9f-1991-760a-b73a-568f6f866502' })], 2);
+  mount(<NotificationBell />);
+  const bell = await screen.findByRole('button', {
+    name: plural(en.notifications.unread, 'other', 2),
+  });
+  expect(within(bell).getByText('2').className).toContain('tabular-nums');
+});
+it('NOTIF-B08 the badge is absent at zero and reads 99+ past ninety-nine', async () => {
+  serve([], 0);
+  mount(<NotificationBell />);
+  const quiet = await screen.findByRole('button', { name: en.notifications.title });
+  await waitFor(() => expect(mocks.request).toHaveBeenCalled());
+  expect(within(quiet).queryByText('0')).toBeNull();
+  expect(quiet.textContent).toBe('');
+  serve([line()], 120);
+  mount(<NotificationBell />);
+  await screen.findByText('99+');
+  expect(screen.queryByText('120')).toBeNull();
+});
+it('NOTIF-A01 NOTIF-B07 opening the centre lists the row naming the actor and the task and marks nothing read', async () => {
+  const item = line();
+  serve([item]);
+  mount(<NotificationBell />);
+  fireEvent.click(
+    await screen.findByRole('button', { name: plural(en.notifications.unread, 'one') }),
+  );
+  expect(await screen.findByText(sentence(en, item))).toBeTruthy();
+  expect(screen.getByRole('heading', { name: en.notifications.title })).toBeTruthy();
+  expect(screen.getByRole('button', { name: en.notifications.markAllRead })).toBeTruthy();
+  expect(writes()).toEqual([]);
+  expect(mocks.push).not.toHaveBeenCalled();
+});
+it('NOTIF-A01 the Arabic row orders the actor and the record its own way', async () => {
+  const item = line({ actorName: 'سارة' });
+  serve([item]);
+  mount(<NotificationBell />, 'ar');
+  fireEvent.click(
+    await screen.findByRole('button', { name: plural(ar.notifications.unread, 'one') }),
+  );
+  const row = await screen.findByText(sentence(ar, item));
+  expect(row.getAttribute('dir')).toBe('auto');
+  expect(screen.getByRole('heading', { name: ar.notifications.title })).toBeTruthy();
+});
+it('NOTIF-B09 NOTIF-A03 opening a row marks it read, goes to its subject and closes the centre', async () => {
+  const item = line();
+  serve([item]);
+  mount(<NotificationBell />);
+  fireEvent.click(
+    await screen.findByRole('button', { name: plural(en.notifications.unread, 'one') }),
+  );
+  fireEvent.click(await screen.findByText(sentence(en, item)));
+  await waitFor(() => expect(writes()).toEqual([`/notifications/${item.id}/read`]));
+  expect(mocks.push).toHaveBeenCalledWith(item.href);
+  await waitFor(() => expect(popover()).toBeNull());
+});
+it('NOTIF-B09 NOTIF-B07 a row already read is only opened, never marked again', async () => {
+  const item = line({ readAt: '2026-09-10T08:30:00.000Z' });
+  serve([item]);
+  mount(<NotificationBell />);
+  fireEvent.click(await screen.findByRole('button', { name: en.notifications.title }));
+  // Nothing is unread, so the header offers no "Mark all as read" either.
+  expect(await screen.findByText(sentence(en, item))).toBeTruthy();
+  expect(screen.queryByRole('button', { name: en.notifications.markAllRead })).toBeNull();
+  fireEvent.click(screen.getByText(sentence(en, item)));
+  await waitFor(() => expect(mocks.push).toHaveBeenCalledWith(item.href));
+  expect(writes()).toEqual([]);
+});
+it('NOTIF-B07 mark all as read is one write for the whole feed', async () => {
+  serve([line()]);
+  mount(<NotificationBell />);
+  fireEvent.click(
+    await screen.findByRole('button', { name: plural(en.notifications.unread, 'one') }),
+  );
+  fireEvent.click(await screen.findByRole('button', { name: en.notifications.markAllRead }));
+  await waitFor(() => expect(writes()).toEqual(['/notifications/read-all']));
+});
+it('NOTIF-B12 the empty centre says nothing has arrived and offers nothing', async () => {
+  serve([], 0);
+  mount(<NotificationBell />);
+  fireEvent.click(await screen.findByRole('button', { name: en.notifications.title }));
+  expect(await screen.findByText(en.notifications.empty)).toBeTruthy();
+  const content = popover();
+  if (!content) throw new Error('centre not open');
+  expect(within(content as HTMLElement).queryAllByRole('button')).toHaveLength(0);
+  expect(within(content as HTMLElement).queryAllByRole('link')).toHaveLength(0);
+  expect(screen.queryByText(en.notifications.loading)).toBeNull();
+});
+it('NOTIF-B12 the Arabic empty centre names the purpose in Arabic', async () => {
+  serve([], 0);
+  mount(<NotificationBell />, 'ar');
+  fireEvent.click(await screen.findByRole('button', { name: ar.notifications.title }));
+  expect(await screen.findByText(ar.notifications.empty)).toBeTruthy();
+});
+it('NOTIF-B11 the feed refetches on window focus and every sixty seconds, with no socket', async () => {
+  serve([]);
+  mount(<NotificationBell />);
+  await waitFor(() =>
+    expect(mocks.request).toHaveBeenCalledWith('/notifications', expect.anything()),
+  );
+  type Options = {
+    refetchOnWindowFocus?: boolean;
+    refetchInterval?: number;
+    queryKey?: readonly string[];
+  };
+  const options = vi
+    .mocked(useQuery)
+    .mock.calls.map(([query]) => query as Options)
+    .find((query) => JSON.stringify(query.queryKey) === JSON.stringify(['notifications', 'list']));
+  expect(options).toMatchObject({ refetchOnWindowFocus: true, refetchInterval: 60_000 });
+});

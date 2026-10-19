@@ -1,0 +1,59 @@
+import 'server-only';
+import type { Context } from '@/core/auth/session';
+import type { JobHandler } from '@/core/jobs/types';
+import type { SearchProvider } from '@/core/search/types';
+// Server contribution of a module: home sections and job kinds, composed by core/modules/registry.
+// HOME-B01: a row carries the few facts the principal triages on. Every fact is optional because
+// each section answers a different question; the page renders only what a section supplies.
+export type HomeSectionItem = {
+  id: string;
+  title: string;
+  href: string;
+  date?: string | null;
+  owner?: string | null;
+  committee?: string | null;
+  count?: number | null;
+  // Present when the row can be acted on in place; the mutation needs the concurrency token.
+  revision?: number | null;
+  // How much of `count` is already overdue, where the row aggregates other work.
+  overdue?: number | null;
+  // Work the row has already finished, so progress can be shown alongside what is left.
+  done?: number | null;
+  // A state word from the owning module's own vocabulary, where the row is a measure rather than
+  // a piece of work; the page looks the word and its tone up through that module's labels.
+  status?: string | null;
+  // How far through its limit the row is, 0..1 and beyond, for a row drawn as an arc.
+  ratio?: number | null;
+};
+export type HomeSection = {
+  key: string;
+  enabled: boolean;
+  count: number;
+  items: HomeSectionItem[];
+  href: string | null;
+  // HOME-B09: how many of `count` are past the stale threshold, for sections that age. It answers
+  // whether a pile is a backlog or a crisis, which a bare total cannot.
+  stale?: number | null;
+  // HOME-B14: the shape of the week ahead, one entry per calendar day starting today, for the
+  // section whose module owns dated work. The page draws it as the strip that leads the screen.
+  days?: { date: string; count: number; href: string }[] | null;
+};
+export type ServerManifest = {
+  id: string;
+  homeSummary?: (ctx: Context, today: string) => Promise<HomeSection[]>;
+  jobs?: Record<string, JobHandler>;
+  // ADR 0021: a module answers the workspace-wide query over its own tables, because it already
+  // owns what its records are visible to whom and what counts as a match -- notes widen theirs to
+  // tags and participant names, and that knowledge does not belong in core.
+  search?: SearchProvider;
+  // ADR 0022: the kinds a module emits and how it turns a subject id back into something the feed
+  // can draw. Core owns the rows, the read state and the query; it never learns what a task is.
+  notifications?: NotificationContribution;
+};
+// NOTIF-B06: the feed resolves subjects at read time, and a subject the reader can no longer see
+// resolves to null so the line is dropped rather than rendered as a dead link.
+export type NotificationSubject = { title: string; href: string };
+export type NotificationContribution = {
+  kinds: readonly string[];
+  resolve: (ctx: Context, ids: readonly string[]) => Promise<Map<string, NotificationSubject>>;
+};

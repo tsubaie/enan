@@ -1,0 +1,80 @@
+import 'server-only';
+import { server as committees } from '@/modules/committees';
+import type { JobHandler } from '@/core/jobs/types';
+import type { Context } from '@/core/auth/session';
+import type { HomeSection, ServerManifest } from './server-manifest';
+import { server as tasks } from '@/modules/tasks';
+import { server as people } from '@/modules/people';
+import { server as notes } from '@/modules/notes';
+import { server as kpis } from '@/modules/kpis';
+import { server as users } from '@/modules/users';
+import { server as settings } from '@/modules/settings';
+import { server as account } from '@/modules/account';
+// Home aggregates these providers; the home module itself is the consumer, so it is not listed.
+// The notifications module is the same: it consumes the contributions below and is not among them.
+export const serverModules: readonly ServerManifest[] = [
+  tasks,
+  notes,
+  committees,
+  kpis,
+  people,
+  users,
+  settings,
+  account,
+];
+export function homeProviders(modules: readonly ServerManifest[] = serverModules) {
+  return modules.flatMap((item) => (item.homeSummary ? [item.homeSummary] : []));
+}
+// HOME-B06: section ownership is checked the way job kinds are (ADMIN-B15). Picking the first
+// match instead would make the page depend on module import order and hide a section silently.
+export async function collectHomeSections(
+  ctx: Context,
+  keys: readonly string[],
+  today: string,
+  modules: readonly ServerManifest[] = serverModules,
+) {
+  const owned = new Map<string, HomeSection>();
+  for (const provide of homeProviders(modules))
+    for (const section of await provide(ctx, today)) {
+      if (!keys.includes(section.key))
+        throw new Error(`Home section ${section.key} is not a known section`);
+      if (owned.has(section.key)) throw new Error(`Home section ${section.key} is provided twice`);
+      owned.set(section.key, section);
+    }
+  return owned;
+}
+// ADR 0021: collected the way home sections are. A module that declares none is simply skipped;
+// unlike a home section there is no ownership to check, because two modules matching the same
+// query is the normal case and the merge is what handles it.
+export function searchProviders(modules: readonly ServerManifest[] = serverModules) {
+  return modules.flatMap((item) => (item.search ? [{ id: item.id, search: item.search }] : []));
+}
+// ADR 0022: subject resolution is by module, the way search providers are. A kind is owned by
+// exactly one module -- two modules claiming `task.assigned` is a registration bug, not a merge --
+// so this checks ownership the way home sections do (HOME-B06, ADMIN-B15).
+export function notificationContributors(modules: readonly ServerManifest[] = serverModules) {
+  const owners = new Map<string, string>();
+  for (const item of modules)
+    for (const kind of item.notifications?.kinds ?? []) {
+      if (owners.has(kind)) throw new Error(`Notification kind ${kind} is registered twice`);
+      owners.set(kind, item.id);
+    }
+  return {
+    kinds: owners,
+    resolvers: new Map(
+      modules.flatMap((item) => (item.notifications ? [[item.id, item.notifications.resolve]] : [])),
+    ),
+  };
+}
+export function mergeJobs(
+  base: Record<string, JobHandler>,
+  modules: readonly ServerManifest[] = serverModules,
+) {
+  const merged: Record<string, JobHandler> = { ...base };
+  for (const item of modules)
+    for (const [kind, handler] of Object.entries(item.jobs ?? {})) {
+      if (kind in merged) throw new Error(`Job kind ${kind} is registered twice`);
+      merged[kind] = handler;
+    }
+  return merged;
+}
