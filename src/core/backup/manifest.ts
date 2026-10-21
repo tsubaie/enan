@@ -24,18 +24,24 @@ export async function checksum(path: string, signal?: AbortSignal) {
 }
 // ADMIN-B32: the declared size is checked before the checksum, so a file that grew or shrank is
 // refused without hashing it, and restore can trust `bytes` as the ceiling for extraction.
-export async function verifyBackup(directory: string, signal?: AbortSignal) {
+// The cheap half of verifying: the manifest parses and every file has the size it names. Enough
+// to list a backup; a download or a restore also reads the checksums (verifyBackup).
+export async function readBackup(directory: string) {
   const raw: unknown = JSON.parse(await readFile(join(directory, 'manifest.json'), 'utf8'));
   if (LegacyManifest.safeParse(raw).success)
     throw new Error(
       'Backup holds a PostgreSQL dump (db.dump) from before ADR 0029; this version restores db.sqlite backups only',
     );
   const manifest = Manifest.parse(raw);
-  for (const [name, value] of Object.entries(manifest.files)) {
-    const path = join(directory, name);
-    if ((await stat(path)).size !== value.bytes) throw new Error('Backup size mismatch');
-    if ((await checksum(path, signal)) !== value.sha256)
+  for (const [name, value] of Object.entries(manifest.files))
+    if ((await stat(join(directory, name))).size !== value.bytes)
+      throw new Error('Backup size mismatch');
+  return manifest;
+}
+export async function verifyBackup(directory: string, signal?: AbortSignal) {
+  const manifest = await readBackup(directory);
+  for (const [name, value] of Object.entries(manifest.files))
+    if ((await checksum(join(directory, name), signal)) !== value.sha256)
       throw new Error('Backup checksum mismatch');
-  }
   return manifest;
 }

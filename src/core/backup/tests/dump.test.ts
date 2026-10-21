@@ -134,3 +134,16 @@ it('ADMIN-B12 ADMIN-B48 a backup count of N keeps the N newest backups and nothi
   expect([...(await names(space.backups))].sort()).toEqual([middle, newest, 'not-a-backup'].sort());
   expect(await pruneBackups(5)).toEqual([]);
 });
+it('ADMIN-B12 the polled backup list reads manifests and sizes, not checksums; a download still checks them', async () => {
+  const id = crypto.randomUUID();
+  await createBackup(id);
+  await rewriteManifest(join(space.backups, id), (value) => {
+    value.files['db.sqlite']!.sha256 = '0'.repeat(64);
+  });
+  expect((await listBackups()).map((entry) => entry.id)).toEqual([id]);
+  await expect(verifyBackup(join(space.backups, id))).rejects.toThrow('checksum mismatch');
+  await rewriteManifest(join(space.backups, id), (value) => {
+    value.files['db.sqlite']!.bytes += 1;
+  });
+  expect(await listBackups()).toEqual([]);
+});
