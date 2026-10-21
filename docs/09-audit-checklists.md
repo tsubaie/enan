@@ -6,7 +6,7 @@ Audits keep an agent-built codebase honest. Script audits run in `pnpm audit:all
 
 | Script | Checks | Enforcement |
 |---|---|---|
-| `audit:structure` | Module manifest (`02-architecture.md`), no extra top-level entries, every module has a spec, every linkable module registers a link resolver and a job kind file if it declares jobs | runtime |
+| `audit:structure` | Module manifest (`02-architecture.md`), no extra top-level entries, no inline lint directives (`eslint-disable`, `oxlint-disable`, `/* eslint … */`), every module has a spec, every linkable module registers a link resolver and a job kind file if it declares jobs | runtime |
 | `depcruise` | Layering matrix on the real import graph including barrels, aliases, dynamic imports; `server-only` boundaries; no cycles | static |
 | `audit:bundle` | No server code markers in client chunks; route-specific client JS (chunks beyond the root bundle every route loads) ≤ 300 KB gzipped (ADR 0038), measured on the production build; the root bundle size is reported so growth stays visible | runtime |
 | `audit:i18n` | Catalog key parity; every literal `t('key')` resolves; ICU syntax valid and argument names equal in both catalogs; dynamic keys (`t(value)`, template keys) are reported per file as warnings because they cannot be resolved statically | runtime |

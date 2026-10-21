@@ -1,0 +1,308 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": [
+    "nextjs",
+    "typescript"
+  ],
+  // The project's own rules (tools/eslint), loaded through Oxlint's ESLint-plugin support. The
+  // plugin has no meta.name, so it is named here.
+  "jsPlugins": [
+    {
+      "name": "eos",
+      "specifier": "./tools/eslint/index.mjs"
+    }
+  ],
+  "categories": {
+    "correctness": "off"
+  },
+  "env": {
+    "builtin": true
+  },
+  // Inline disable comments are forbidden outright (docs/10-agent-workflow.md); Oxlint has no
+  // switch for that, so audit:structure rejects them, and this reports any that slip through.
+  "options": {
+    "reportUnusedDisableDirectives": "error"
+  },
+  "ignorePatterns": [
+    ".next/**",
+    "next-env.d.ts",
+    "coverage/**",
+    "test-results/**",
+    "playwright-report/**",
+    "drizzle/meta/**",
+    "scripts/audit/tests/fixtures/**"
+  ],
+  // From eslint-config-next (core-web-vitals and typescript), converted by @oxlint/migrate.
+  "rules": {
+    "no-array-constructor": "error",
+    "no-unused-expressions": "warn",
+    "no-unused-vars": "warn",
+    "nextjs/google-font-display": "warn",
+    "nextjs/google-font-preconnect": "warn",
+    "nextjs/next-script-for-ga": "warn",
+    "nextjs/no-async-client-component": "warn",
+    "nextjs/no-before-interactive-script-outside-document": "warn",
+    "nextjs/no-css-tags": "warn",
+    "nextjs/no-head-element": "warn",
+    "nextjs/no-html-link-for-pages": "error",
+    "nextjs/no-img-element": "warn",
+    "nextjs/no-page-custom-font": "warn",
+    "nextjs/no-styled-jsx-in-document": "warn",
+    "nextjs/no-sync-scripts": "error",
+    "nextjs/no-title-in-document-head": "warn",
+    "nextjs/no-typos": "warn",
+    "nextjs/no-unwanted-polyfillio": "warn",
+    "nextjs/inline-script-id": "error",
+    "nextjs/no-assign-module-variable": "error",
+    "nextjs/no-document-import-in-page": "error",
+    "nextjs/no-duplicate-head": "error",
+    "nextjs/no-head-import-in-document": "error",
+    "nextjs/no-script-component-in-head": "error",
+    "typescript/ban-ts-comment": "error",
+    "typescript/no-duplicate-enum-values": "error",
+    "typescript/no-empty-object-type": "error",
+    "typescript/no-explicit-any": "error",
+    "typescript/no-extra-non-null-assertion": "error",
+    "typescript/no-misused-new": "error",
+    "typescript/no-namespace": "error",
+    "typescript/no-non-null-asserted-optional-chain": "error",
+    "typescript/no-require-imports": "error",
+    "typescript/no-this-alias": "error",
+    "typescript/no-unnecessary-type-constraint": "error",
+    "typescript/no-unsafe-declaration-merging": "error",
+    "typescript/no-unsafe-function-type": "error",
+    "typescript/no-wrapper-object-types": "error",
+    "typescript/prefer-as-const": "error",
+    "typescript/prefer-namespace-keyword": "error",
+    "typescript/triple-slash-reference": "error"
+  },
+  "overrides": [
+    {
+      "files": [
+        "**/*.{js,jsx,mjs,ts,tsx,mts,cts}"
+      ],
+      "rules": {
+        "react/display-name": "error",
+        "react/jsx-key": "error",
+        "react/jsx-no-comment-textnodes": "error",
+        "react/jsx-no-duplicate-props": "error",
+        "react/jsx-no-target-blank": "off",
+        "react/jsx-no-undef": "error",
+        "react/no-children-prop": "error",
+        "react/no-danger-with-children": "error",
+        "react/no-direct-mutation-state": "error",
+        "react/no-find-dom-node": "error",
+        "react/no-is-mounted": "error",
+        "react/no-render-return-value": "error",
+        "react/no-string-refs": "error",
+        "react/no-unescaped-entities": "error",
+        "react/no-unknown-property": "off",
+        "react/no-unsafe": "off",
+        "react/react-in-jsx-scope": "off",
+        "import/no-anonymous-default-export": "warn",
+        "jsx-a11y/alt-text": [
+          "warn",
+          {
+            "elements": [
+              "img"
+            ],
+            "img": [
+              "Image"
+            ]
+          }
+        ],
+        "jsx-a11y/aria-props": "warn",
+        "jsx-a11y/aria-proptypes": "warn",
+        "jsx-a11y/aria-unsupported-elements": "warn",
+        "jsx-a11y/role-has-required-aria-props": "warn",
+        "jsx-a11y/role-supports-aria-props": "warn",
+        "react/rules-of-hooks": "error",
+        "react/exhaustive-deps": "warn",
+        "react/static-components": "error",
+        "react/use-memo": "error",
+        "react/preserve-manual-memoization": "error",
+        "react/incompatible-library": "warn",
+        "react/immutability": "error",
+        "react/globals": "error",
+        "react/refs": "error",
+        "react/set-state-in-effect": "error",
+        "react/error-boundaries": "error",
+        "react/purity": "error",
+        "react/set-state-in-render": "error",
+        "react/unsupported-syntax": "warn"
+      },
+      "plugins": [
+        "react",
+        "import",
+        "jsx-a11y"
+      ],
+      "env": {
+        "browser": true,
+        "node": true
+      }
+    },
+    {
+      "files": [
+        "**/*.ts",
+        "**/*.tsx",
+        "**/*.mts",
+        "**/*.cts"
+      ],
+      "rules": {
+        "constructor-super": "off",
+        "getter-return": "off",
+        "no-class-assign": "off",
+        "no-const-assign": "off",
+        "no-dupe-class-members": "off",
+        "no-dupe-keys": "off",
+        "no-func-assign": "off",
+        "no-import-assign": "off",
+        "no-new-native-nonconstructor": "off",
+        "no-obj-calls": "off",
+        "no-redeclare": "off",
+        "no-setter-return": "off",
+        "no-this-before-super": "off",
+        "no-unreachable": "off",
+        "no-unsafe-negation": "off",
+        "no-var": "error",
+        "no-with": "off",
+        "prefer-const": "error",
+        "prefer-rest-params": "error",
+        "prefer-spread": "error"
+      }
+    },
+    // WI-0001 explicitly requires a CommonJS dependency-cruiser configuration.
+    {
+      "files": [
+        "**/*.cjs"
+      ],
+      "rules": {
+        "typescript/no-require-imports": "off"
+      }
+    },
+    {
+      "files": [
+        "**/*.{ts,tsx,mjs,cjs}"
+      ],
+      "rules": {
+        "no-console": "error",
+        "no-empty": [
+          "error",
+          {
+            "allowEmptyCatch": false
+          }
+        ],
+        "no-restricted-globals": [
+          "error",
+          "alert",
+          "confirm",
+          "prompt"
+        ],
+        "eos/environment": "error"
+      }
+    },
+    {
+      "files": [
+        "**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "max-lines": [
+          "error",
+          {
+            "max": 400,
+            "skipBlankLines": false,
+            "skipComments": false
+          }
+        ],
+        "max-lines-per-function": [
+          "error",
+          {
+            "max": 60,
+            "skipBlankLines": false,
+            "skipComments": false
+          }
+        ],
+        "complexity": [
+          "error",
+          12
+        ],
+        "eos/cast-comments": "error",
+        "eos/sql-boundary": "error",
+        "eos/services-throw": "error",
+        "eos/server-marker": "error",
+        "eos/effect-sync": "error",
+        "eos/component-safety": "error",
+        "eos/component-limits": "error",
+        "eos/unknown-boundary": "error",
+        "typescript/no-non-null-assertion": "error"
+      }
+    },
+    {
+      "files": [
+        "src/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "eos/no-color-literals": "error",
+        "eos/logical-props": "error",
+        "eos/styling": "error",
+        "eos/no-literal-strings": "error"
+      }
+    },
+    {
+      "files": [
+        "**/*.tsx"
+      ],
+      "rules": {
+        "max-lines": [
+          "error",
+          250
+        ]
+      }
+    },
+    {
+      "files": [
+        "**/*.test.{ts,tsx}",
+        "**/*.spec.{ts,tsx}",
+        "**/tests/**",
+        "e2e/**",
+        "src/ui/primitives/**"
+      ],
+      "rules": {
+        "max-lines": "off",
+        "max-lines-per-function": "off",
+        "complexity": "off",
+        "eos/component-limits": "off"
+      }
+    },
+    {
+      "files": [
+        "**/*.test.{ts,tsx}",
+        "**/*.spec.{ts,tsx}",
+        "**/tests/**",
+        "e2e/**"
+      ],
+      "rules": {
+        "typescript/no-non-null-assertion": "off"
+      }
+    },
+    // Toolchain configuration that runs before (or outside) the app: the build's worker count,
+    // the browser suite's lanes, the scripts that prepare them and the unit suite's per-worker
+    // database read their own knobs (NEXT_BUILD_CPUS, CI, E2E_WORKERS, E2E_LANE,
+    // E2E_CREDENTIALS_FILE, VITEST_POOL_ID) from the environment. The app itself still goes
+    // through src/core/config/env.ts only.
+    {
+      "files": [
+        "next.config.ts",
+        "playwright.config.ts",
+        "e2e/lanes.ts",
+        "e2e/fixtures/test.ts",
+        "e2e/global-setup.ts",
+        "scripts/db/e2e-account.ts",
+        "tests/setup/worker-database.ts"
+      ],
+      "rules": {
+        "eos/environment": "off"
+      }
+    }
+  ]
+}

@@ -89,6 +89,19 @@ export function evaluateTopLevel(files: string[], allowed: Set<string>): Finding
       message: 'not in the repository layout',
     }));
 }
+// Lint rules are never disabled inline (docs/10-agent-workflow.md). Oxlint has no switch that
+// ignores directive comments, and a directive can switch off any rule that would catch it, so they
+// are rejected here. The audit's own tests spell directives out on purpose.
+const lintDirective = /\b(?:eslint|oxlint)-(?:disable|enable)\b|\/\*\s*(?:eslint|oxlint)\s/u;
+const lintedFile = /\.[cm]?[jt]sx?$/u;
+export function evaluateLintDirectives(file: string, text: string): Finding[] {
+  if (!lintedFile.test(file) || file.startsWith('scripts/audit/tests/')) return [];
+  return text.split('\n').flatMap((line, index) =>
+    lintDirective.test(line)
+      ? [{ rule: 'lint-directive', file: `${file}:${index + 1}`, message: 'inline lint directive' }]
+      : [],
+  );
+}
 export async function collectModule(
   root: string,
   name: string,
@@ -131,7 +144,10 @@ export async function auditStructure(root: string): Promise<Report> {
   const specs = await loadSpecs(root);
   for (const name of (await readdir(join(root, 'src/modules'))).sort())
     result.violations.push(...evaluateModule(await collectModule(root, name, specs), manifest));
-  result.violations.push(...evaluateTopLevel(tracked(root), parseTopLevel(doc)));
+  const files = tracked(root);
+  result.violations.push(...evaluateTopLevel(files, parseTopLevel(doc)));
+  for (const file of files)
+    result.violations.push(...evaluateLintDirectives(file, await read(join(root, file))));
   return result;
 }
 if (process.argv[1]?.endsWith('structure.ts')) finish(await auditStructure(process.cwd()));

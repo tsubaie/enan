@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import {
   collectModule,
+  evaluateLintDirectives,
   evaluateModule,
   evaluateTopLevel,
   parseManifest,
@@ -60,6 +61,22 @@ describe('audit:structure', () => {
       'top-level-entry:not in the repository layout',
       'top-level-entry:not in the repository layout',
     ]);
+  });
+  it('rejects inline lint directives in source files', () => {
+    const text = [
+      'const a = 1; // eslint-disable-line no-console',
+      '/* oxlint-disable */',
+      '/* eslint no-console: off */',
+      '// oxlint-enable',
+      'const disable = "lint";',
+    ].join('\n');
+    expect(evaluateLintDirectives('src/ui/Example.tsx', text).map((f) => f.file)).toEqual([
+      'src/ui/Example.tsx:1',
+      'src/ui/Example.tsx:2',
+      'src/ui/Example.tsx:3',
+      'src/ui/Example.tsx:4',
+    ]);
+    expect(evaluateLintDirectives('docs/07-coding-guidelines.md', text)).toEqual([]);
   });
 });
 describe('audit:i18n', () => {

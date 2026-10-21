@@ -1,7 +1,1 @@
-[
-  {
-    "id": 1240992,
-    "expires": "2026-11-04",
-    "reason": "braces <=3.0.3 stack exhaustion (GHSA-vfj7-8cjw-p6xm) has no patched release. Dev-only: reached through eslint-config-next > @next/eslint-plugin-next > fast-glob > micromatch, which expands the repository's own lint globs, never untrusted input. Remove once braces ships a fix and an override can pin it."
-  }
-]
+[]

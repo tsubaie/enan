@@ -1,6 +1,6 @@
 # 07 — Coding guidelines
 
-Every rule is labeled by how it is enforced: **[static]** lint or dependency-cruiser fails CI; **[runtime]** a test or audit script fails CI; **[review]** a reviewer checks it against the checklist. Agents do not argue with static or runtime rules; review rules need a written justification to deviate.
+Every rule is labeled by how it is enforced: **[static]** lint (Oxlint, ADR 0042) or dependency-cruiser fails CI; **[runtime]** a test or audit script fails CI; **[review]** a reviewer checks it against the checklist. Agents do not argue with static or runtime rules; review rules need a written justification to deviate.
 
 ## Language and compiler
 
@@ -44,7 +44,7 @@ Generated primitives (`src/ui/primitives`) and test files are exempt from the si
 | `core/entity/service` | `core/db/audit-repo`, `core/http/errors` | modules; it receives repo functions as an adapter from the calling service |
 
 - **[static]** Server-only modules import `server-only`; the client bundle audit fails if any of them appears in a client chunk.
-- **[static]** `process.env` readable only in `core/config/env.ts`. The toolchain's own configuration (`next.config.ts`, `playwright.config.ts`, the browser-test lanes and their setup scripts) reads its knobs directly; the list is in `eslint.config.mjs`.
+- **[static]** `process.env` readable only in `core/config/env.ts`. The toolchain's own configuration (`next.config.ts`, `playwright.config.ts`, the browser-test lanes and their setup scripts) reads its knobs directly; the list is in `.oxlintrc.json`.
 - **[static]** No import cycles.
 
 ## Data access
@@ -110,4 +110,4 @@ Generated primitives (`src/ui/primitives`) and test files are exempt from the si
 
 ## Forbidden list
 
-`any` · `!` · undocumented casts · `process.env` outside env.ts · `fetch` in components · `useEffect` fetching · inline `style` without reason · color literals · physical direction classes · English literals in JSX · `alert` · clickable `<div>` · empty `catch` · `console.*` · SQL outside repos · `child_process` outside `core/backup` · event emitters for domain effects · TODO without an issue link · placeholder pages · tests that read source files (except `scripts/audit/tests`).
+`any` · `!` · undocumented casts · `process.env` outside env.ts · `fetch` in components · `useEffect` fetching · inline `style` without reason · color literals · physical direction classes · English literals in JSX · `alert` · clickable `<div>` · empty `catch` · `console.*` · SQL outside repos · `child_process` outside `core/backup` · event emitters for domain effects · TODO without an issue link · placeholder pages · inline lint directives (`eslint-disable`, `oxlint-disable`) · tests that read source files (except `scripts/audit/tests`).
