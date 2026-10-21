@@ -18,6 +18,8 @@ const handler = vi.hoisted(() => ({
 vi.mock('@/core/db/jobs-repo', () => repo);
 vi.mock('../registry', () => ({ jobKinds: ['system.backup'], handlerFor: () => handler }));
 vi.mock('../scheduler', () => ({ scheduleDue: vi.fn(async () => {}) }));
+const maintenance = vi.hoisted(() => ({ restoring: false }));
+vi.mock('@/core/backup/maintenance', () => ({ isRestoring: async () => maintenance.restoring }));
 vi.mock('@/core/db/ids', () => ({ id: () => 'owner' }));
 vi.mock('@/core/config/env', () => ({
   env: () => ({ JOBS_CONCURRENCY: 4, JOBS_DRAIN_SECONDS: 2 }),
@@ -29,6 +31,7 @@ const job = { id: 'job-1', kind: 'system.backup', payload: {}, attempt: 1 };
 beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllMocks();
+  maintenance.restoring = false;
   repo.requestedCancellations.mockResolvedValue([]);
   repo.claim.mockResolvedValueOnce(job).mockResolvedValue(null);
   repo.publish.mockResolvedValue(undefined);
@@ -112,6 +115,17 @@ describe('runner drain', () => {
     await vi.advanceTimersByTimeAsync(30_000);
     expect(signal?.aborted).toBe(true);
     work.resolve({ completed: true });
+    await stop();
+  });
+  it('ADMIN-B13 nothing is claimed while a restore runs, and claiming resumes after it', async () => {
+    maintenance.restoring = true;
+    handler.run.mockResolvedValue({ completed: true });
+    const stop = startRunner();
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(repo.claim).not.toHaveBeenCalled();
+    maintenance.restoring = false;
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(repo.claim).toHaveBeenCalled();
     await stop();
   });
   it('ADMIN-B33 stopping twice drains once', async () => {

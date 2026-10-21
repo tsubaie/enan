@@ -1,5 +1,5 @@
 import 'server-only';
-import { access, writeFile, rm, mkdir } from 'node:fs/promises';
+import { access, writeFile, readFile, rm, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { env } from '@/core/config/env';
 import { reconcileDatabaseClient } from './database';
@@ -27,4 +27,43 @@ export async function maintenanceFile(enabled: boolean) {
   const file = join(env().BACKUP_DIR, '.maintenance');
   if (enabled) await writeFile(file, new Date().toISOString());
   else await rm(file, { force: true });
+}
+// ADMIN-B31: one backup or restore at a time, across processes: the restore is a command of its
+// own while backups run in the server. The lock file names its holder's pid; one left by a process
+// that has died, or by this process before it restarted (pid 1 again in a container), is taken over.
+let holding = false;
+function alive(pid: number) {
+  if (!Number.isInteger(pid) || pid <= 0 || (pid === process.pid && !holding)) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error instanceof Error && 'code' in error && error.code === 'EPERM';
+  }
+}
+async function claim(file: string, retry = true): Promise<boolean> {
+  try {
+    await writeFile(file, String(process.pid), { flag: 'wx' });
+    return true;
+  } catch (error) {
+    if (!(error instanceof Error && 'code' in error && error.code === 'EEXIST')) throw error;
+    const holder = Number(await readFile(file, 'utf8').catch(() => ''));
+    if (!retry || alive(holder)) return false;
+    await rm(file, { force: true });
+    return claim(file, false);
+  }
+}
+export async function withBackupLock<T>(
+  work: () => Promise<T>,
+): Promise<{ acquired: true; value: T } | { acquired: false }> {
+  await mkdir(env().BACKUP_DIR, { recursive: true });
+  const file = join(env().BACKUP_DIR, '.lock');
+  if (holding || !(await claim(file))) return { acquired: false };
+  holding = true;
+  try {
+    return { acquired: true, value: await work() };
+  } finally {
+    holding = false;
+    await rm(file, { force: true });
+  }
 }

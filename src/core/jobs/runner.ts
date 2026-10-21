@@ -15,6 +15,7 @@ import {
 } from '@/core/db/jobs-repo';
 import { handlerFor, jobKinds } from './registry';
 import { scheduleDue } from './scheduler';
+import { isRestoring } from '@/core/backup/maintenance';
 function startHeartbeat(job: Claimed, controller: AbortController) {
   return setInterval(() => {
     void renew(job).then(
@@ -110,6 +111,8 @@ export function startRunner() {
   }
   async function claimRound() {
     try {
+      // ADMIN-B13: nothing starts during a restore; its writes would hit the database being replaced.
+      if (await isRestoring()) return;
       for (const cancelled of await requestedCancellations([...active.keys()]))
         active.get(cancelled.id)?.abort();
       for (const kind of jobKinds) {

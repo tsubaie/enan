@@ -12,5 +12,4 @@ export const defaults = {
   cookieName: 'eos_session',
   setupLock: 7232,
   migrationLock: 7231,
-  restoreLock: 7235,
 };

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { users } from '@/core/db/system-schema';
 import { closeDatabase, databaseFor, pool, type DatabaseClient } from '@/core/db/client';
@@ -179,6 +180,15 @@ describe('restore sequence', () => {
     await expect(restoreBackup(source(), { confirmed: false })).rejects.toThrow('--confirm');
     await maintenanceFile(false);
     await maintenanceFile(false);
+    await expectUntouched();
+  });
+  it('ADMIN-B31 a restore is refused while a backup or another restore holds the lock, and changes nothing', async () => {
+    await makeBackup(source(), good());
+    // Held by a live process other than this one: the server writing a backup, say.
+    await mkdir(space.backups, { recursive: true });
+    await writeFile(join(space.backups, '.lock'), String(process.ppid));
+    await expect(restoreBackup(source(), { confirmed: true })).rejects.toThrow('already running');
+    expect(await isRestoring()).toBe(false);
     await expectUntouched();
   });
   it('ADMIN-B31 refuses a backup from before ADR 0029 by name', async () => {
