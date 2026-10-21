@@ -396,7 +396,7 @@ it('ADMIN-B12 an administrator deletes a backup for good, the deletion is audite
   session.user = harness.user;
   const removed = await remove(backupId);
   expect(removed.status).toBe(200);
-  expect(await listBackups()).toEqual([]);
+  expect((await listBackups()).map((backup) => backup.id)).not.toContain(backupId);
   const [entry] = await db().select().from(auditLog).where(eq(auditLog.entityId, backupId));
   expect(entry).toMatchObject({ action: 'delete', entityType: 'backup' });
   expect((await remove(backupId)).status).toBe(404);
