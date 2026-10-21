@@ -22,16 +22,23 @@ describe('ACCT-B01 ACCT-B06 the name is a field and the address is a form of its
     expect(paths(AccountPatch, { revision: 1, name: '   ' })).toEqual(['name']);
     expect(paths(AccountPatch, { revision: 1, name: 'x'.repeat(201) })).toEqual(['name']);
   });
-  it('ACCT-B01 lowercases the address, refuses a malformed or oversized one, and needs the revision', () => {
-    expect(EmailChange.parse({ revision: 3, email: 'Reader@Example.TEST' }).email).toBe(
-      'reader@example.test',
-    );
-    expect(paths(EmailChange, { revision: 3, email: 'not-an-address' })).toEqual(['email']);
-    expect(paths(EmailChange, { revision: 3, email: `${'a'.repeat(320)}@example.test` })).toEqual([
+  it('ACCT-B01 lowercases the address, refuses a malformed or oversized one, and needs the revision and current password', () => {
+    expect(
+      EmailChange.parse({ revision: 3, email: 'Reader@Example.TEST', current: 'pw' }).email,
+    ).toBe('reader@example.test');
+    expect(paths(EmailChange, { revision: 3, email: 'not-an-address', current: 'pw' })).toEqual([
       'email',
     ]);
-    expect(paths(EmailChange, { email: 'reader@example.test' })).toEqual(['revision']);
-    expect(paths(EmailChange, { revision: 0, email: 'reader@example.test' })).toEqual(['revision']);
+    expect(
+      paths(EmailChange, { revision: 3, email: `${'a'.repeat(320)}@example.test`, current: 'pw' }),
+    ).toEqual(['email']);
+    expect(paths(EmailChange, { email: 'reader@example.test', current: 'pw' })).toEqual([
+      'revision',
+    ]);
+    expect(
+      paths(EmailChange, { revision: 0, email: 'reader@example.test', current: 'pw' }),
+    ).toEqual(['revision']);
+    expect(paths(EmailChange, { revision: 3, email: 'reader@example.test' })).toEqual(['current']);
   });
 });
 describe('ACCT-B02 a password change names the current password and a new one the registration rules accept', () => {

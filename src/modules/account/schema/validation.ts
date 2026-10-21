@@ -20,6 +20,7 @@ export const AccountPatch = z.strictObject({
 export const EmailChange = z.strictObject({
   revision: z.number().int().positive(),
   email: z.email().max(320).transform((value) => value.toLowerCase()),
+  current: z.string().min(1).max(256),
 });
 export const PasswordChange = z.strictObject({
   current: z.string().min(1).max(256),

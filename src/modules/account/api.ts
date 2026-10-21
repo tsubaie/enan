@@ -24,7 +24,7 @@ export const email = defineHandler({
   response,
   idempotent: true,
   handler: async (input, ctx) => ({
-    data: await service.changeEmail(authenticated(ctx), input.revision, input.email),
+    data: await service.changeEmail(authenticated(ctx), input.revision, input.email, input.current),
   }),
 });
 export const password = defineHandler({

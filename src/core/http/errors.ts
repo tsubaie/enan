@@ -29,6 +29,9 @@ export class AppError extends Error {
   constructor(
     public code: ErrorCode,
     public details: z.infer<ReturnType<typeof z.json>> = null,
+    // Keep the request's writes and answer with this error after they commit (a recorded failed
+    // login must outlive the 401 it causes).
+    public commit = false,
   ) {
     super(code);
   }

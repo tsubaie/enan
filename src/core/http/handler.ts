@@ -159,7 +159,7 @@ async function execute<I extends z.ZodType, O extends z.ZodType>(
 ) {
   // One immediate transaction per request (ADR 0029): a retry carrying the same Idempotency-Key
   // waits at BEGIN until the first attempt commits, then replays its stored response.
-  return withTransaction(db(), async (database) => {
+  const outcome = await withTransaction(db(), async (database) => {
     const key = options.idempotent ? z.uuid().parse(request.headers.get('idempotency-key')) : null;
     const hash = digest(JSON.stringify({ method: request.method, url: request.url, input }));
     if (key && ctx.user) {
@@ -169,14 +169,20 @@ async function execute<I extends z.ZodType, O extends z.ZodType>(
         return previous.body;
       }
     }
-    const result = options.response.parse(
-      await options.handler(input, { ...ctx, db: database }, params, request),
-    );
-    const json = z.json().parse(result);
+    let output: unknown;
+    try {
+      output = await options.handler(input, { ...ctx, db: database }, params, request);
+    } catch (error) {
+      if (error instanceof AppError && error.commit) return error;
+      throw error;
+    }
+    const json = z.json().parse(options.response.parse(output));
     if (key && ctx.user)
       await storeRequest(database, ctx.user.id, key, hash, options.status ?? 200, json);
     return json;
   });
+  if (outcome instanceof AppError) throw outcome;
+  return outcome;
 }
 // ADMIN-B38: a transaction the busy retry gave up on is contention, not a fault. It is logged as a
 // warning and answered with the retryable envelope (docs/04 § errors): 429 `rate_limited`, scope

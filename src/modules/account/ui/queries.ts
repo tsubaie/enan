@@ -21,7 +21,7 @@ export function usePatchAccount() {
   );
 }
 export function useChangeEmail() {
-  return useAccountMutation((input: { revision: number; email: string }) =>
+  return useAccountMutation((input: { revision: number; email: string; current: string }) =>
     request('/account/email', response, { method: 'POST', body: input }),
   );
 }

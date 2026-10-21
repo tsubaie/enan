@@ -22,11 +22,15 @@ vi.mock('@/core/auth/session', async (original) => ({
   setSessionCookie: async () => {},
   setLocaleCookie: async () => {},
 }));
+// Recovery is throttled per client address only (ADMIN-B22); a test that needs a bucket sets one.
+const address = vi.hoisted(() => ({ ip: null as string | null }));
+vi.mock('@/core/http/client-ip', () => ({ clientIp: () => address.ip }));
 vi.mock('next-intl/server', () => ({ getTranslations: async () => (key: string) => key }));
 beforeAll(() => migrateDatabase());
 beforeEach(async () => {
   await harness.reset();
   session.user = harness.user;
+  address.ip = null;
 });
 afterAll(() => closeDatabase());
 type Meta = { guard: string; status: number; idempotent: boolean; enqueues: boolean };
@@ -346,6 +350,40 @@ it('ADMIN-B02 ADMIN-A06 recovery resets a chosen administrator once; the second 
     sql`select count(*) as count from recovery_token_uses`,
   );
   expect(used?.count).toBe(1);
+});
+it('ADMIN-B20 failed logins over HTTP are recorded, so the sixth attempt is throttled', async () => {
+  session.user = null;
+  const attempt = () =>
+    loginApi(
+      request(
+        'POST',
+        '/login',
+        { email: 'guessed@example.test', password: 'wrong-password' },
+        { key: null },
+      ),
+    );
+  for (let failure = 0; failure < 5; failure++) expect((await attempt()).status).toBe(401);
+  const throttled = await attempt();
+  expect(throttled.status).toBe(429);
+  expect(await throttled.json()).toMatchObject({ error: { code: 'rate_limited' } });
+});
+it('ADMIN-B22 wrong recovery tokens over HTTP are recorded, so the sixth attempt is throttled', async () => {
+  session.user = null;
+  address.ip = '203.0.113.7';
+  const target = await addUser('admin', 'locked-out@example.test');
+  const attempt = () =>
+    recoveryApi(
+      request(
+        'POST',
+        '/recovery',
+        { email: target.email, password: 'a-brand-new-password-1', token: 'not-the-token' },
+        { key: null },
+      ),
+    );
+  for (let failure = 0; failure < 5; failure++) expect((await attempt()).status).toBe(403);
+  const throttled = await attempt();
+  expect(throttled.status).toBe(429);
+  expect(await throttled.json()).toMatchObject({ error: { code: 'rate_limited' } });
 });
 it('ADMIN-B12 ADMIN-B15 ADMIN-B16 Create now enqueues one backup, the jobs page lists it, and the audit page shows the change without secrets', async () => {
   const created = await admin.backupCreate(request('POST', '/admin/backups', {}));

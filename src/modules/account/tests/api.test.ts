@@ -194,7 +194,7 @@ it('ACCT-B06 without a session every endpoint answers 401 in the error envelope'
   expect(Object.keys(read.body.error).sort()).toEqual(['code', 'details', 'message', 'requestId']);
   for (const [handler, method, path, body] of [
     [api.patch, 'PATCH', '', { revision: 1, name: 'Nobody' }],
-    [api.email, 'POST', '/email', { revision: 1, email: 'nobody@example.test' }],
+    [api.email, 'POST', '/email', { revision: 1, email: 'nobody@example.test', current: PASSWORD }],
     [api.password, 'POST', '/password', { current: PASSWORD, next: 'another long password' }],
     [api.revokeOthers, 'POST', '/sessions/revoke-others', {}],
   ] as const) {
@@ -223,7 +223,7 @@ it('ACCT-B06 a write from another origin or without the request marker is refuse
     api.email,
     'POST',
     '/email',
-    { revision: 1, email: 'x@example.test' },
+    { revision: 1, email: 'x@example.test', current: PASSWORD },
     {
       requestedWith: null,
     },
@@ -247,7 +247,7 @@ it('ACCT-B01 ACCT-B02 ACCT-B04 validation failures name the field in dotted path
   expect(Object.keys(name.body.error.details.fieldErrors).sort()).toEqual(['locale', 'name']);
   const email = await call(api.email, 'POST', '/email', { revision: 1, email: 'not-an-address' });
   expect(email.status).toBe(400);
-  expect(Object.keys(email.body.error.details.fieldErrors)).toEqual(['email']);
+  expect(Object.keys(email.body.error.details.fieldErrors).sort()).toEqual(['current', 'email']);
   const password = await call(api.password, 'POST', '/password', { current: '', next: 'short' });
   expect(password.status).toBe(400);
   expect(Object.keys(password.body.error.details.fieldErrors).sort()).toEqual(['current', 'next']);
@@ -276,6 +276,7 @@ it('ACCT-B01 renaming returns the account, bumps the revision and a stale revisi
   const staleEmail = await call(api.email, 'POST', '/email', {
     revision: 1,
     email: 'late@example.test',
+    current: PASSWORD,
   });
   expect(staleEmail.status).toBe(409);
   expect(await userRow(holder.id)).toMatchObject({
@@ -288,12 +289,14 @@ it('ACCT-B01 the address is lowercased on the way in and a taken address is a fi
   const changed = await call(api.email, 'POST', '/email', {
     revision: 1,
     email: 'Holder.New@Example.TEST',
+    current: PASSWORD,
   });
   expect(changed.status).toBe(200);
   expect(changed.body.data.user).toMatchObject({ email: 'holder.new@example.test', revision: 2 });
   const taken = await call(api.email, 'POST', '/email', {
     revision: 2,
     email: 'MEMBER@example.test',
+    current: PASSWORD,
   });
   expect(taken.status).toBe(400);
   expect(taken.body.error).toMatchObject({
