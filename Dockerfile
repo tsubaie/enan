@@ -10,6 +10,12 @@ FROM base AS deps
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 
+# The runtime image ships production packages only. tsx is one of them: the container runs
+# db:migrate and backup:create/restore through it, from src and scripts.
+FROM base AS prod-deps
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --prod --frozen-lockfile
+
 FROM deps AS development
 COPY . .
 RUN mkdir -p .next /var/lib/executiveos/data /var/lib/executiveos/files /var/lib/executiveos/backups && chown -R node:node .next /var/lib/executiveos
@@ -21,7 +27,9 @@ FROM deps AS builder
 ARG NEXT_BUILD_CPUS=
 ENV NEXT_BUILD_CPUS=$NEXT_BUILD_CPUS
 COPY . .
-RUN pnpm build
+# .next/cache is never reused inside Docker (.next is in .dockerignore), and keeping it would make
+# the CI layer cache save a layer that changes on every push.
+RUN pnpm build && rm -rf .next/cache
 
 # ADR 0029: the database is one SQLite file on the data volume, so the runtime image is plain
 # Node with no database client of any kind.
@@ -30,6 +38,10 @@ RUN groupadd --gid 1001 executiveos && useradd --uid 1001 --gid executiveos --cr
 COPY --from=base /opt/corepack /opt/corepack
 RUN ln -s ../lib/node_modules/corepack/dist/pnpm.js /usr/local/bin/pnpm
 WORKDIR /app
+# node_modules changes only with the lockfile, so it comes before the layers every push changes:
+# Docker reuses a layer only when nothing above it changed. The standalone output's own traced
+# node_modules lands on top of it, file for file the same packages.
+COPY --from=prod-deps --chown=executiveos:executiveos /app/node_modules ./node_modules
 COPY --from=builder --chown=executiveos:executiveos /app/.next/standalone ./
 COPY --from=builder --chown=executiveos:executiveos /app/.next/static ./.next/static
 COPY --from=builder --chown=executiveos:executiveos /app/public ./public
@@ -38,7 +50,6 @@ COPY --from=builder --chown=executiveos:executiveos /app/scripts ./scripts
 COPY --from=builder --chown=executiveos:executiveos /app/tests/fixtures ./tests/fixtures
 COPY --from=builder --chown=executiveos:executiveos /app/drizzle ./drizzle
 COPY --from=builder --chown=executiveos:executiveos /app/tsconfig.json /app/package.json /app/pnpm-lock.yaml ./
-COPY --from=deps --chown=executiveos:executiveos /app/node_modules ./node_modules
 RUN mkdir -p /var/lib/executiveos/data /var/lib/executiveos/files /var/lib/executiveos/backups && chown -R executiveos:executiveos /var/lib/executiveos
 USER executiveos
 ENV NODE_ENV=production HOSTNAME=0.0.0.0 PORT=3000 COREPACK_HOME=/opt/corepack NEXT_MANUAL_SIG_HANDLE=true

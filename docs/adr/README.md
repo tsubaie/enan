@@ -45,5 +45,7 @@ One decision per file. Format: **Status**, **Context**, **Decision**, **Conseque
 | 0039 | A push to main deploys to the server | accepted, amended by 0040 |
 | 0040 | CI on GitHub's hosted runners; deployment is opt-in and configured outside the code | accepted |
 | 0041 | Page changes start their data early and prefetch on intent | accepted |
+| 0042 | Oxlint replaces ESLint | accepted |
+| 0043 | TypeScript 7, and dependency-cruiser parses with swc | accepted |
 
 Open decisions awaiting an ADR: license (see roadmap); chart library confirmation (`recharts`).

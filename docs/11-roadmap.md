@@ -10,7 +10,7 @@ Done when: the maintainer has resolved the open decisions below that are marked 
 
 ## Phase 1 — Skeleton and admin
 
-- Scaffold per `02-architecture.md`: Next.js, strict TS, ESLint with custom rules in `tools/eslint`, dependency-cruiser, Prettier, Vitest, Playwright, knip, gitleaks, pnpm.
+- Scaffold per `02-architecture.md`: Next.js, strict TS, ESLint with custom rules in `tools/eslint` (since replaced by Oxlint running the same rules, ADR 0042), dependency-cruiser, Prettier, Vitest, Playwright, knip, gitleaks, pnpm.
 - `core/config`, `core/db` with Drizzle, migration runner (one immediate transaction), first migration (workspace, users, sessions, login_attempts, settings, idempotency_keys, jobs, job_attempts, schedules, ai_invocations, audit_log, files, people), `db:reset`, seed.
 - `core/auth`: setup with token, login, logout, sessions, recovery, guards, rate limit, origin check.
 - `core/http`: handler wrapper, envelopes, pagination, idempotency, client, OpenAPI.

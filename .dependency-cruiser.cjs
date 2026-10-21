@@ -107,6 +107,9 @@ module.exports = {
   ],
   options: {
     tsConfig: { fileName: 'tsconfig.json' },
+    // swc parses TypeScript without the typescript package (ADR 0043). It labels imports
+    // 'undetermined' instead of 'type-only' or 'aliased'; every rule above is path-based.
+    parser: 'swc',
     tsPreCompilationDeps: true,
     doNotFollow: { path: 'node_modules' },
     exclude: { path: '(?:^|/)(?:tests|fixtures)/|\\.(?:test|spec)\\.' },

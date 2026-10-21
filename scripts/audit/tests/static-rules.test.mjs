@@ -1,63 +1,55 @@
 import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
-import { describe, expect, it } from 'vitest';
-import { Linter } from 'eslint';
-import { parser } from 'typescript-eslint';
+import { fileURLToPath } from 'node:url';
+import { describe, it } from 'vitest';
+import { RuleTester } from 'oxlint/plugins-dev';
 import eos from '../../../tools/eslint/index.mjs';
 
 const fixtures = JSON.parse(
   await readFile(new URL('./fixtures/static-invalid.json', import.meta.url), 'utf8'),
 );
 
-function lint(code, rule, file = 'src/ui/Example.tsx') {
-  return new Linter().verify(
-    code,
-    [
-      {
-        files: ['**/*.{ts,tsx}'],
-        languageOptions: {
-          parser,
-          parserOptions: {
-            ecmaVersion: 'latest',
-            sourceType: 'module',
-            ecmaFeatures: { jsx: true },
-          },
-        },
-        plugins: { eos },
-        rules: { [`eos/${rule}`]: 'error' },
-      },
-    ],
-    { filename: resolve(file) },
-  );
+// The rules run the way `pnpm lint` runs them: through Oxlint's ESLint-plugin support, with file
+// names relative to the repository root.
+RuleTester.describe = describe;
+RuleTester.it = it;
+const tester = new RuleTester({
+  cwd: fileURLToPath(new URL('../../..', import.meta.url)),
+  languageOptions: { sourceType: 'module', parserOptions: { lang: 'tsx' } },
+});
+
+function run(rule, valid, invalid) {
+  tester.run(`eos/${rule}`, eos.rules[rule], { valid, invalid });
 }
 
 describe('WI-0001-M1 static guardrails reject violating fixtures', () => {
-  it.each(fixtures)('$rule rejects $code', ({ code, rule, file }) => {
-    const messages = lint(code, rule, file);
-    expect(messages.some((message) => message.ruleId === `eos/${rule}`)).toBe(true);
-    expect(messages.some((message) => message.fatal)).toBe(false);
-  });
+  for (const rule of new Set(fixtures.map((fixture) => fixture.rule)))
+    run(
+      rule,
+      [],
+      fixtures
+        .filter((fixture) => fixture.rule === rule)
+        .map(({ code, file = 'src/ui/Example.tsx' }) => ({ code, filename: file, errors: 1 })),
+    );
+});
 
-  it('accepts semantic logical styling and translated labels', () => {
-    const code =
-      'const c = <button className="bg-surface text-start ms-2" aria-label={t("action")}>{t("action")}</button>;';
-    for (const rule of ['no-color-literals', 'logical-props', 'no-literal-strings'])
-      expect(lint(code, rule)).toEqual([]);
-  });
+describe('WI-0001-M1 static guardrails accept compliant code', () => {
+  const translated =
+    'const c = <button className="bg-surface text-start ms-2" aria-label={t("action")}>{t("action")}</button>;';
+  for (const rule of ['no-color-literals', 'logical-props', 'no-literal-strings'])
+    run(rule, [{ code: translated, filename: 'src/ui/Example.tsx' }], []);
 
-  it('accepts documented external synchronization', () => {
-    expect(
-      lint('// sync: browser focus\nuseEffect(() => subscribe(), []);', 'effect-sync'),
-    ).toEqual([]);
-  });
+  run(
+    'effect-sync',
+    [{ code: '// sync: browser focus\nuseEffect(() => subscribe(), []);', filename: 'src/ui/Example.tsx' }],
+    [],
+  );
 
-  it('accepts documented casts only at allowed boundaries', () => {
-    const code = 'const row = value as Row; // cast: database adapter has validated the row';
-    expect(lint(code, 'cast-comments', 'src/core/db/adapter.ts')).toEqual([]);
-    expect(lint(code, 'cast-comments', 'src/ui/Example.tsx')).toHaveLength(1);
-  });
+  const cast = 'const row = value as Row; // cast: database adapter has validated the row';
+  run(
+    'cast-comments',
+    [{ code: cast, filename: 'src/core/db/adapter.ts' }],
+    [{ code: cast, filename: 'src/ui/Example.tsx', errors: 1 }],
+  );
 
-  it('accepts environment reads only in the configuration module', () => {
-    expect(lint('const raw = process.env;', 'environment', 'src/core/config/env.ts')).toEqual([]);
-  });
+  run('environment', [{ code: 'const raw = process.env;', filename: 'src/core/config/env.ts' }], []);
 });
