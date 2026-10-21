@@ -56,7 +56,8 @@ export const applyNoteAi = transactional(async function applyNoteAi(
     revision: note.revision,
     content,
     tags: Tags.parse(mergedTags),
-    participantIds: derivedParticipants(content, people),
+    // NOTES-B08: the directory plus the note's own participants, who may be mentioned by display name.
+    participantIds: [...new Set(derivedParticipants(content, [...people, ...note.participants]))],
   });
   await applied(ctx, input.jobId, result, ids);
   if (refined) await reviewRefinement(ctx.db, input.jobId, 'applied', ctx.user.id, ids);
