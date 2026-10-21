@@ -7,6 +7,7 @@ import { id } from '@/core/db/ids';
 import { auditLog, jobs, sessions, users } from '@/core/db/system-schema';
 import { getSetting } from '@/core/db/settings-repo';
 import { User } from '@/core/http/user-schema';
+import { createBackup, listBackups } from '@/core/backup/dump';
 import * as api from '../api';
 import * as admin from '@/core/http/admin-api';
 import * as controls from '@/core/http/ai-controls-api';
@@ -384,6 +385,23 @@ it('ADMIN-B22 wrong recovery tokens over HTTP are recorded, so the sixth attempt
   const throttled = await attempt();
   expect(throttled.status).toBe(429);
   expect(await throttled.json()).toMatchObject({ error: { code: 'rate_limited' } });
+});
+it('ADMIN-B12 an administrator deletes a backup for good, the deletion is audited, and a member is refused', async () => {
+  const backupId = crypto.randomUUID();
+  await createBackup(backupId);
+  const remove = (value: string) =>
+    admin.backupDelete(request('DELETE', `/admin/backups/${value}`, {}), params(value));
+  session.user = { ...harness.user, role: 'member' };
+  expect((await remove(backupId)).status).toBe(403);
+  session.user = harness.user;
+  const removed = await remove(backupId);
+  expect(removed.status).toBe(200);
+  expect(await listBackups()).toEqual([]);
+  const [entry] = await db().select().from(auditLog).where(eq(auditLog.entityId, backupId));
+  expect(entry).toMatchObject({ action: 'delete', entityType: 'backup' });
+  expect((await remove(backupId)).status).toBe(404);
+  expect((await remove('..')).status).toBe(404);
+  expect(await db().select().from(auditLog).where(eq(auditLog.entityId, backupId))).toHaveLength(1);
 });
 it('ADMIN-B12 ADMIN-B15 ADMIN-B16 Create now enqueues one backup, the jobs page lists it, and the audit page shows the change without secrets', async () => {
   const created = await admin.backupCreate(request('POST', '/admin/backups', {}));

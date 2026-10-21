@@ -1,12 +1,12 @@
 import 'server-only';
 import { createWriteStream } from 'node:fs';
-import { mkdir, stat, writeFile, rename, readdir, rm } from 'node:fs/promises';
+import { mkdir, stat, writeFile, rename, readdir, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { create } from 'tar';
 import { env } from '@/core/config/env';
 import { resolveInside } from '@/core/files/storage';
-import { checksum, manifestFiles, manifestSchemaVersion, verifyBackup } from './manifest';
+import { checksum, Manifest, manifestFiles, manifestSchemaVersion, verifyBackup } from './manifest';
 import { snapshotDatabase } from './database';
 import { isRestoreWorkspace } from './swap';
 import { appVersion } from '@/core/config/version';
@@ -103,6 +103,21 @@ export async function pruneBackups(keep: number) {
   const removed = found.slice(keep).map((backup) => backup.name);
   for (const name of removed) await rm(resolveInside(root, name), { recursive: true, force: true });
   return removed;
+}
+// ADMIN-B12: deletes one backup for good. Only a folder whose manifest names it counts as a backup;
+// anything else is left alone and answered false. The checksums are not read, so a damaged
+// backup can be deleted too.
+export async function deleteBackup(backupId: string) {
+  const directory = resolveInside(env().BACKUP_DIR, backupId);
+  try {
+    const raw = await readFile(join(directory, 'manifest.json'), 'utf8');
+    if (Manifest.parse(JSON.parse(raw)).id !== backupId) return false;
+  } catch (error) {
+    if (!(error instanceof Error)) throw error;
+    return false;
+  }
+  await rm(directory, { recursive: true, force: true });
+  return true;
 }
 // ADMIN-B44: one backup as a single download: its folder (manifest, database and files) packed
 // into a tar archive as it is read, after the same checks a restore makes, so a damaged or

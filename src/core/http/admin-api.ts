@@ -2,7 +2,8 @@ import 'server-only';
 import { z } from 'zod';
 import { defineHandler, authenticated } from './handler';
 import { checkConnection, aiConnection } from '@/core/ai/client';
-import { listBackups } from '@/core/backup/dump';
+import { deleteBackup, listBackups } from '@/core/backup/dump';
+import { writeAudit } from '@/core/db/audit-repo';
 import { Manifest } from '@/core/backup/manifest';
 import { enqueue, latestJob, listJobs } from '@/core/db/jobs-repo';
 import { env } from '@/core/config/env';
@@ -49,6 +50,20 @@ export const backups = defineHandler({
         job: job ? Job.parse(JSON.parse(JSON.stringify(job))) : null,
       },
     };
+  },
+});
+// ADMIN-B12: the audit entry is written first, so a folder that cannot be removed leaves no record
+// of a deletion that did not happen.
+export const backupDelete = defineHandler({
+  guard: 'admin',
+  input: Empty,
+  response: z.object({ data: z.null() }),
+  handler: async (_, ctx, params) => {
+    const backupId = z.uuid().safeParse(params.id);
+    if (!backupId.success) throw new AppError('not_found');
+    await writeAudit(ctx.db, authenticated(ctx).user.id, 'delete', 'backup', backupId.data, {});
+    if (!(await deleteBackup(backupId.data))) throw new AppError('not_found');
+    return { data: null };
   },
 });
 export const backupCreate = defineHandler({
