@@ -10,7 +10,7 @@ declare global {
 // Exports that only read, or that open their transaction themselves (setup takes a handle, and
 // manageTags predates the wrapper). Everything else a service exports writes and must be atomic.
 const exempt: Record<string, string[]> = {
-  account: ['getAccount'],
+  account: ['getAccount', 'readerTheme', 'readerLocale'],
   committees: [
     'listCommittees',
     'getCommittee',

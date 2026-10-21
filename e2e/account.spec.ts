@@ -142,32 +142,41 @@ for (const locale of ['en', 'ar']) {
       expect(restored.status).toBe(200);
     }
   });
-  test(`ACCT-A03 ACCT-B04 a locale chosen on the account page is the reader own row, and "workspace default" removes it ${locale}`, async ({
+  test(`ACCT-A03 ACCT-B04 a locale chosen on the account page is the reader own row, takes effect at once, and "workspace default" removes it ${locale}`, async ({
     page,
   }) => {
     await loginAs(page, locale);
     await page.goto('/account');
-    const control = page.getByRole('combobox', { name: m.account.locale, exact: true });
-    await expect(control).toContainText(m.account.workspaceDefault);
-    await control.click();
-    await page.getByRole('option', { name: m.account.arabic, exact: true }).click();
-    await expect(control).toContainText(m.account.arabic);
+    const control = (messages: typeof en) =>
+      page.getByRole('combobox', { name: messages.account.locale, exact: true });
+    await expect(control(m)).toContainText(m.account.workspaceDefault);
+    await control(m).click();
+    // The page reloads in the language just chosen.
+    await Promise.all([
+      page.waitForEvent('load'),
+      page.getByRole('option', { name: m.account.arabic, exact: true }).click(),
+    ]);
+    await expect(page.locator('html')).toHaveAttribute('lang', 'ar');
+    await expect(control(ar)).toContainText(ar.account.arabic);
     const set = (await account(page)).body.data?.preferences as {
       locale: string;
       explicit: string[];
     };
     expect(set.locale).toBe('ar');
     expect(set.explicit).toContain('locale');
-    // The row goes rather than being overwritten with today's workspace value (ACCT-I03).
-    await control.click();
-    await page.getByRole('option', { name: m.account.workspaceDefault, exact: true }).click();
-    await expect(control).toContainText(m.account.workspaceDefault);
-    const cleared = (await account(page)).body.data?.preferences as { explicit: string[] };
-    expect(cleared.explicit).not.toContain('locale');
+    // The row goes rather than being overwritten with today's workspace value (ACCT-I03), and the
+    // page follows the workspace default again.
+    await control(ar).click();
+    await Promise.all([
+      page.waitForEvent('load'),
+      page.getByRole('option', { name: ar.account.workspaceDefault, exact: true }).click(),
+    ]);
+    const workspace = (await account(page)).body.data?.preferences as { explicit: string[] };
+    expect(workspace.explicit).not.toContain('locale');
+    const shown = (await page.locator('html').getAttribute('lang')) === 'ar' ? ar : en;
+    await expect(control(shown)).toContainText(shown.account.workspaceDefault);
     await page.reload();
-    await expect(page.getByRole('combobox', { name: m.account.locale, exact: true })).toContainText(
-      m.account.workspaceDefault,
-    );
+    await expect(control(shown)).toContainText(shown.account.workspaceDefault);
   });
   test(`ACCT-A05 ACCT-B05 an account with no directory record is told so, and one with a record links to it ${locale}`, async ({
     page,
