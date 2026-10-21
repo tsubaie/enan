@@ -347,6 +347,22 @@ it('ADMIN-B02 ADMIN-A06 recovery resets a chosen administrator once; the second 
   );
   expect(used?.count).toBe(1);
 });
+it('ADMIN-B20 failed logins over HTTP are recorded, so the sixth attempt is throttled', async () => {
+  session.user = null;
+  const attempt = () =>
+    loginApi(
+      request(
+        'POST',
+        '/login',
+        { email: 'guessed@example.test', password: 'wrong-password' },
+        { key: null },
+      ),
+    );
+  for (let failure = 0; failure < 5; failure++) expect((await attempt()).status).toBe(401);
+  const throttled = await attempt();
+  expect(throttled.status).toBe(429);
+  expect(await throttled.json()).toMatchObject({ error: { code: 'rate_limited' } });
+});
 it('ADMIN-B12 ADMIN-B15 ADMIN-B16 Create now enqueues one backup, the jobs page lists it, and the audit page shows the change without secrets', async () => {
   const created = await admin.backupCreate(request('POST', '/admin/backups', {}));
   expect(created.status).toBe(202);

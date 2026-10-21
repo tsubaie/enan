@@ -47,7 +47,7 @@ export async function login(handle: Database, input: z.infer<typeof Login>, ip: 
     if (!user || !valid) return null;
     return { user: User.parse(user), token: await newSession(database, user.id) };
   });
-  if (!result) throw new AppError('unauthenticated');
+  if (!result) throw new AppError('unauthenticated', null, true);
   return result;
 }
 // ADMIN-B22: recovery is throttled on the client address alone. The secret being guessed is the
@@ -66,7 +66,7 @@ export async function recover(
     await throttle(database, null, ip);
     await recordLogin(database, null, ip, false);
   });
-  if (!matchesToken(input.token, digest(configured))) throw new AppError('forbidden');
+  if (!matchesToken(input.token, digest(configured))) throw new AppError('forbidden', null, true);
   const passwordHash = await hashPassword(input.password);
   await withTransaction(handle, async (database) => {
     await lockWorkspace(database);
