@@ -12,10 +12,14 @@ vi.mock('@/core/db/http-repo', () => ({
   storeRequest: vi.fn(),
 }));
 // The busy error class stays real so the handler's instanceof check is the one under test.
+const transactions = vi.hoisted(() => ({ opened: 0 }));
 vi.mock('@/core/db/client', async (original) => ({
   ...(await original<typeof import('@/core/db/client')>()),
   db: () => ({}),
-  withTransaction: (_database: object, work: (database: object) => Promise<object>) => work({}),
+  withTransaction: (_database: object, work: (database: object) => Promise<object>) => {
+    transactions.opened++;
+    return work({});
+  },
 }));
 vi.mock('../origin', () => ({ checkOrigin: () => {} }));
 vi.mock('next-intl/server', () => ({ getTranslations: async () => (key: string) => key }));
@@ -106,4 +110,19 @@ it('ADMIN-B49 every API response says how long the origin spent on it, success a
   const response = await refused(request());
   expect(response.status).toBe(401);
   expect(response.headers.get('Server-Timing')).toMatch(/^auth;dur=\d+\.\d, total;dur=\d+\.\d$/u);
+});
+it('ADR 0045 a handler marked transaction: false runs without taking the write lock', async () => {
+  const route = (transaction?: false) =>
+    defineHandler({
+      guard: 'public',
+      input: z.strictObject({}),
+      response: z.object({ ok: z.boolean() }),
+      ...(transaction === false ? { transaction } : {}),
+      handler: async () => ({ ok: true }),
+    });
+  const before = transactions.opened;
+  expect((await route(false)(request())).status).toBe(200);
+  expect(transactions.opened).toBe(before);
+  expect((await route()(request())).status).toBe(200);
+  expect(transactions.opened).toBe(before + 1);
 });

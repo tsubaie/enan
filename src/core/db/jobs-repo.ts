@@ -194,18 +194,22 @@ function fence(job: Claimed) {
     gt(jobs.leaseExpiresAt, new Date()),
   );
 }
+// The heartbeat fires on a timer, outside any transaction, so it joins the write queue like every
+// other writer (ADR 0029); a bare write on the pool would block the process behind a request.
 export async function renew(job: Claimed) {
-  const rows = await db()
-    .update(jobs)
-    .set({ leaseExpiresAt: new Date(Date.now() + 120000) })
-    .where(
-      and(
-        fence(job),
-        eq(jobs.cancelRequested, false),
-        or(isNull(jobs.deadlineAt), gt(jobs.deadlineAt, new Date())),
-      ),
-    )
-    .returning();
+  const rows = await withTransaction(db(), (database) =>
+    database
+      .update(jobs)
+      .set({ leaseExpiresAt: new Date(Date.now() + 120000) })
+      .where(
+        and(
+          fence(job),
+          eq(jobs.cancelRequested, false),
+          or(isNull(jobs.deadlineAt), gt(jobs.deadlineAt, new Date())),
+        ),
+      )
+      .returning(),
+  );
   return rows.length === 1;
 }
 export async function publish(

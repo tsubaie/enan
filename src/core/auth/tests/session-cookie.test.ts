@@ -9,6 +9,10 @@ vi.mock('next/headers', () => ({
   }),
 }));
 vi.mock('@/core/db/auth-repo', () => ({ ...repo, insertSession: vi.fn() }));
+vi.mock('@/core/db/client', () => ({
+  db: () => ({}),
+  withTransaction: (database: object, work: (handle: object) => Promise<void>) => work(database),
+}));
 vi.mock('@/core/config/env', () => ({ secureCookies: () => true }));
 const day = 86400000;
 const now = new Date('2026-09-22T12:00:00Z').getTime();
@@ -44,7 +48,7 @@ describe('sliding session cookie', () => {
     repo.sessionByHash.mockResolvedValue(session(5 * 60000, 80));
     await currentUser({ slide: true });
     const expiry = new Date(now + 30 * day);
-    expect(repo.refreshSession).toHaveBeenCalledWith('session-1', expiry);
+    expect(repo.refreshSession).toHaveBeenCalledWith('session-1', expiry, {});
     expect(jar.set).toHaveBeenCalledWith(
       'eos_session',
       'raw-token',
@@ -54,7 +58,7 @@ describe('sliding session cookie', () => {
   it('ACCT-B09 the cookie never outlives the absolute expiry', async () => {
     repo.sessionByHash.mockResolvedValue(session(5 * 60000, 3));
     await currentUser({ slide: true });
-    expect(repo.refreshSession).toHaveBeenCalledWith('session-1', new Date(now + 3 * day));
+    expect(repo.refreshSession).toHaveBeenCalledWith('session-1', new Date(now + 3 * day), {});
     expect(jar.set.mock.calls[0]?.[2]).toMatchObject({ maxAge: 3 * 86400 });
   });
   it('ACCT-B09 page renders and recently seen sessions change neither the row nor the cookie', async () => {

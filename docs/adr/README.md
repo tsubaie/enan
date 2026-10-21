@@ -48,5 +48,6 @@ One decision per file. Format: **Status**, **Context**, **Decision**, **Conseque
 | 0042 | Oxlint replaces ESLint | accepted |
 | 0043 | TypeScript 7, and dependency-cruiser parses with swc | accepted |
 | 0044 | The runtime image is the standalone output | accepted |
+| 0045 | Slow read-only handlers run outside the write lock | accepted |
 
 Open decisions awaiting an ADR: license (see roadmap); chart library confirmation (`recharts`).

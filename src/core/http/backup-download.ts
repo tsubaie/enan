@@ -2,7 +2,7 @@ import 'server-only';
 import { z } from 'zod';
 import { currentUser } from '@/core/auth/session';
 import { backupArchive } from '@/core/backup/dump';
-import { db } from '@/core/db/client';
+import { db, withTransaction } from '@/core/db/client';
 import { writeAudit } from '@/core/db/audit-repo';
 // ADMIN-B44: an administrator downloads one backup as a .tar file. It is a file, not JSON, so it is
 // served here rather than through defineHandler, with the same guards: a session, the admin role,
@@ -23,7 +23,9 @@ export async function backupDownload(
   } catch {
     return Response.json({ error: { code: 'not_found' } }, { status: 404 });
   }
-  await writeAudit(db(), user.id, 'download', 'backup', id.data, {});
+  await withTransaction(db(), (database) =>
+    writeAudit(database, user.id, 'download', 'backup', id.data, {}),
+  );
   const day = archive.manifest.createdAt.slice(0, 10);
   // The archive is read as the response is sent, one chunk at a time.
   const chunks = archive.stream[Symbol.asyncIterator]();

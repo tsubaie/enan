@@ -27,9 +27,24 @@ it('ADMIN-B25 initializes route-local connection status before exposing configur
   await availableCapabilities(ctx);
   expect(connection.check).toHaveBeenCalledTimes(1);
 });
-it('ADMIN-B25 refreshes stale connection status so recovered AI actions can reappear', async () => {
+it('ADMIN-B25 refreshes stale connection status in the background so recovered AI actions reappear', async () => {
   connection.value = { state: 'error', checkedAt: new Date(Date.now() - 61000).toISOString() };
+  let finish: () => void = () => {};
+  connection.check.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = () => {
+          connection.value = { state: 'enabled', checkedAt: new Date().toISOString() };
+          resolve(connection.value);
+        };
+      }),
+  );
   const ctx = { db: {} } as Context;
-  expect(await availableCapabilities(ctx)).toContain('notes.refine');
+  // The provider call is still running: the answer uses the state already known, without waiting.
+  expect(await availableCapabilities(ctx)).toEqual([]);
+  expect(await availableCapabilities(ctx)).toEqual([]);
   expect(connection.check).toHaveBeenCalledTimes(1);
+  finish();
+  await Promise.resolve();
+  expect(await availableCapabilities(ctx)).toContain('notes.refine');
 });

@@ -4,7 +4,8 @@ import { closeDatabase, db, withTransaction } from '../client';
 import { migrateDatabase } from '../migrate';
 import { clearDatabase } from '../reset';
 import { jobs, jobAttempts } from '../system-schema';
-import { claim, enqueue } from '../jobs-repo';
+import { busyTimeoutMs } from '../client';
+import { claim, enqueue, renew } from '../jobs-repo';
 beforeAll(() => migrateDatabase());
 beforeEach(() => clearDatabase());
 afterAll(() => closeDatabase());
@@ -68,4 +69,21 @@ it('ADMIN-B46 the claim sweep fails a running job whose lease expired on its las
   });
   expect((await stored(jobId))?.finishedAt).toBeInstanceOf(Date);
   expect(await attemptRow(jobId, 3)).toMatchObject({ status: 'abandoned' });
+});
+
+it('ADR 0029 a heartbeat during a long write transaction waits its turn instead of failing busy', async () => {
+  await enqueueWith('heartbeat');
+  const job = await claim('runner', kind, 1, 4);
+  if (!job) throw new Error('the job was not claimed');
+  // A request holding the write lock for longer than the driver's busy timeout.
+  let entered: () => void = () => {};
+  const inside = new Promise<void>((resolve) => (entered = resolve));
+  const holder = withTransaction(db(), async (database) => {
+    await database.update(jobs).set({ leaseOwner: 'runner' }).where(eq(jobs.id, job.id));
+    entered();
+    await new Promise((done) => setTimeout(done, busyTimeoutMs + 500));
+  });
+  await inside;
+  await expect(renew(job)).resolves.toBe(true);
+  await holder;
 });

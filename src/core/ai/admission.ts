@@ -22,12 +22,16 @@ import { AiPayload } from './job-schema';
 export function contentHash(input: z.infer<ReturnType<typeof z.json>>) {
   return createHash('sha256').update(JSON.stringify(input)).digest('hex');
 }
+let refreshing: ReturnType<typeof checkConnection> | undefined;
 export async function availableCapabilities(ctx: Context) {
   if (!env().JOBS_ENABLED) return [];
-  // Route bundles may not share instrumentation's module state; initialize on demand.
+  // Route bundles may not share instrumentation's module state; initialize on demand. Only a
+  // never-checked connection is awaited: a stale one is refreshed in the background, because this
+  // often runs inside a request's write transaction and the check is a provider call.
   const connection = aiConnection();
-  if (connection.checkedAt === null || Date.now() - Date.parse(connection.checkedAt) > 60000)
-    await checkConnection(ctx.db);
+  if (connection.checkedAt === null) await checkConnection(ctx.db);
+  else if (Date.now() - Date.parse(connection.checkedAt) > 60000)
+    refreshing ??= checkConnection().finally(() => (refreshing = undefined));
   if (aiConnection().state !== 'enabled') return [];
   const enabled = await getSetting(ctx.db, 'ai.enabled_capabilities');
   const defaultModel = await getSetting(ctx.db, 'ai.model.default');

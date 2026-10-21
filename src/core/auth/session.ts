@@ -2,7 +2,7 @@ import 'server-only';
 import { cookies } from 'next/headers';
 import { secureCookies } from '@/core/config/env';
 import { defaults, Locale } from '@/core/config/defaults';
-import { type Database } from '@/core/db/client';
+import { db, withTransaction, type Database } from '@/core/db/client';
 import { id } from '@/core/db/ids';
 import { insertSession, sessionByHash, refreshSession } from '@/core/db/auth-repo';
 import { digest, token } from './password';
@@ -60,7 +60,7 @@ export async function currentUser(options: { slide?: boolean } = {}) {
   if (!found) return null;
   if (options.slide && Date.now() - found.session.lastSeenAt.getTime() > 60000) {
     const expiry = slidingExpiry(found.session.absoluteExpiresAt);
-    await refreshSession(found.session.id, expiry);
+    await withTransaction(db(), (database) => refreshSession(found.session.id, expiry, database));
     await setSessionCookie(raw, expiry);
   }
   return User.parse(found.user);

@@ -26,6 +26,7 @@ export const aiTest = defineHandler({
   guard: 'admin',
   input: Empty,
   response: z.object({ data: Connection }),
+  transaction: false,
   handler: async () => ({ data: await checkConnection() }),
 });
 export const backups = defineHandler({
@@ -35,6 +36,8 @@ export const backups = defineHandler({
     data: z.array(Manifest),
     meta: z.object({ runner: z.boolean(), job: Job.nullable() }),
   }),
+  // listBackups checksums every backup file.
+  transaction: false,
   // ADMIN-B46: the list carries the latest backup job and whether this server runs jobs at all, so
   // the page shows a backup still to come and never implies that one nobody will run is on its way.
   handler: async (_, ctx) => {
