@@ -169,6 +169,8 @@ function progressOf(meta: BackupsMeta, startedId: string | null, rows: Row[]): P
   if (!startedId) return null;
   if (rows.some((row) => row.id === startedId)) return 'backupFinished';
   if (job?.id === startedId && job.status !== 'succeeded') return 'backupFailed';
+  // Made and since deleted (ADMIN-B12): nothing left to report.
+  if (job?.id === startedId) return null;
   return 'backupStarted';
 }
 function BackupProgress({

@@ -96,6 +96,25 @@ it('ADMIN-B12 a backup is deleted only after the confirmation, and Keep deletes 
   fireEvent.click(screen.getByRole('button', { name: en.admin.backupDeleteAction }));
   expect(state.remove.mutate).toHaveBeenCalledWith('backup-2026-09-10', expect.anything());
 });
+it('ADMIN-B12 ADMIN-B46 a backup made here and then deleted is not reported as started again', () => {
+  state.resource.data = {
+    data: [],
+    meta: {
+      runner: true,
+      job: {
+        id: 'backup-1',
+        kind: 'system.backup',
+        status: 'succeeded',
+        createdAt: '2026-09-10T08:00:00.000Z',
+        lastError: null,
+      },
+    },
+  };
+  Object.assign(state.action, { isSuccess: true, data: { data: { id: 'backup-1' } } });
+  mount(<AdminDataPage resource="backups" />);
+  expect(screen.queryByText(en.admin.backupStarted)).toBeNull();
+  expect(screen.queryByRole('status')).toBeNull();
+});
 it('ADMIN-B15 ADMIN-B16 jobs show kind, status and last error; audit rows show what was done', () => {
   state.resource.data = {
     data: [
