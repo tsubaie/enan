@@ -36,6 +36,13 @@
       "when": 1792578639234,
       "tag": "0004_seed_schedules",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1792584779826,
+      "tag": "0005_dense_sort_orders",
+      "breakpoints": true
     }
   ]
 }
