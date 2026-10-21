@@ -1,7 +1,7 @@
 import 'server-only';
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
-import { db } from '@/core/db/client';
+import { db, withTransaction } from '@/core/db/client';
 import { id } from '@/core/db/ids';
 import { type Claimed } from '@/core/db/jobs-repo';
 import { recordInvocation } from '@/core/db/ai-jobs-repo';
@@ -61,19 +61,22 @@ export async function executeAi<S extends z.ZodType>(
       signal,
       payload.capability === 'notes.suggest_tags' ? aiExecutionLimits.tags.timeoutMs : aiExecutionLimits.defaultTimeoutMs,
     );
-    await recordInvocation(db(), { ...base, effectiveModel: result.model, status: 'ok',
-      ...usageFields(result.usage, payload), latencyMs: Date.now() - started,
-    });
+    const usage = { ...usageFields(result.usage, payload), latencyMs: Date.now() - started };
+    await withTransaction(db(), (database) =>
+      recordInvocation(database, { ...base, effectiveModel: result.model, status: 'ok', ...usage }),
+    );
     return result.output;
   } catch (cause) {
     const error = safeFailure(cause);
-    await recordInvocation(db(), {
-      ...base,
-      status: 'error',
-      ...failedUsage(error.details, payload),
-      error: JSON.stringify(error.details),
-      latencyMs: Date.now() - started,
-    });
+    await withTransaction(db(), (database) =>
+      recordInvocation(database, {
+        ...base,
+        status: 'error',
+        ...failedUsage(error.details, payload),
+        error: JSON.stringify(error.details),
+        latencyMs: Date.now() - started,
+      }),
+    );
     throw error;
   }
 }

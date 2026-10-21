@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { startRunner } from '../runner';
 import { shutdownHandler } from '../shutdown';
+import { DatabaseBusyError } from '@/core/db/client';
 const repo = vi.hoisted(() => ({
   claim: vi.fn(),
   renew: vi.fn(),
@@ -95,6 +96,22 @@ describe('runner drain', () => {
     const stop = startRunner();
     await vi.advanceTimersByTimeAsync(2000);
     expect(repo.fail).toHaveBeenCalledWith(running, 'provider', false, undefined);
+    await stop();
+  });
+  it('ADR 0029 a heartbeat that waited out the write lock keeps the job; a lost lease aborts it', async () => {
+    let signal: AbortSignal | undefined;
+    const work = deferred();
+    handler.run.mockImplementation((_job: object, s: AbortSignal) => {
+      signal = s;
+      return work.promise;
+    });
+    repo.renew.mockRejectedValueOnce(new DatabaseBusyError(10_000)).mockResolvedValueOnce(false);
+    const stop = startRunner();
+    await vi.advanceTimersByTimeAsync(31_000);
+    expect(signal?.aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(signal?.aborted).toBe(true);
+    work.resolve({ completed: true });
     await stop();
   });
   it('ADMIN-B33 stopping twice drains once', async () => {

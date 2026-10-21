@@ -22,6 +22,10 @@ function startHeartbeat(job: Claimed, controller: AbortController) {
         if (!ok) controller.abort();
       },
       (error) => {
+        // A renewal that waited out the write lock is contention: the lease outlasts several
+        // heartbeats, so the next one renews it.
+        if (error instanceof DatabaseBusyError)
+          return logger.warn({ err: error, jobId: job.id }, 'Lease renewal waited out the lock');
         controller.abort();
         logger.error({ err: error, jobId: job.id }, 'Lease renewal failed');
       },
