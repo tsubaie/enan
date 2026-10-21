@@ -32,8 +32,12 @@ export function matchesToken(value: string, hash: string) {
 let placeholder: Promise<string> | undefined;
 // ADMIN-B21: the login failure paths verify this hash so an unknown or inactive account costs the
 // same argon2 work as a real one. The input is random per process, so nothing submitted can match
-// it, and the memoized promise keeps the cost to one hash for the life of the process.
+// it, and the memoized promise keeps the cost to one hash for the life of the process. A refused
+// first hash is not memoized: a cached rejection would answer every unknown email with 429.
 export function placeholderHash() {
-  placeholder ??= hashPassword(token());
+  placeholder ??= hashPassword(token()).catch((error) => {
+    placeholder = undefined;
+    throw error;
+  });
   return placeholder;
 }
