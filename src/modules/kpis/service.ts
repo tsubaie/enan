@@ -19,6 +19,7 @@ import {
 } from '@/core/db/keyset';
 import { AppError } from '@/core/http/errors';
 import { assignablePeople, getPerson } from '@/modules/people';
+import { notifyOffTarget } from './notifications';
 import {
   Kpi,
   KpiDetail,
@@ -285,7 +286,7 @@ export async function listReadings(ctx: Context, kpiId: string) {
 async function addReadingInTransaction(ctx: Context, kpiId: string, input: ReadingCreate) {
   // docs/04 § Concurrency: the immediate transaction holds the write lock for the parent row and
   // its children alike (ADR 0029), so no row lock is taken here.
-  await getKpi(ctx, kpiId);
+  const before = await getKpi(ctx, kpiId);
   const existing = await repo.selectReadingOn(ctx.db, kpiId, input.readingDate);
   if (existing) throw new AppError('conflict', { reason: 'unique', existing: { id: existing.id } });
   const row = await repo.insertReading(ctx.db, {
@@ -296,7 +297,7 @@ async function addReadingInTransaction(ctx: Context, kpiId: string, input: Readi
     updatedBy: ctx.user.id,
   });
   await writeAudit(ctx.db, ctx.user.id, 'create', 'kpi_reading', row.id, toJson(input));
-  return getKpiDetail(ctx, kpiId);
+  return notifyOffTarget(ctx, before, await getKpiDetail(ctx, kpiId));
 }
 async function overwriteReadingInTransaction(
   ctx: Context,
@@ -304,14 +305,14 @@ async function overwriteReadingInTransaction(
   day: string,
   input: { value: number; note: string },
 ) {
-  await getKpi(ctx, kpiId);
+  const before = await getKpi(ctx, kpiId);
   const existing = await repo.selectReadingOn(ctx.db, kpiId, day);
   if (!existing)
     return addReading(ctx, kpiId, { readingDate: day, value: input.value, note: input.note });
   const row = await repo.updateReading(ctx.db, existing.id, existing.revision, input, ctx.user.id);
   if (!row) throw new AppError('conflict', { reason: 'state' });
   await writeAudit(ctx.db, ctx.user.id, 'update', 'kpi_reading', existing.id, toJson(input));
-  return getKpiDetail(ctx, kpiId);
+  return notifyOffTarget(ctx, before, await getKpiDetail(ctx, kpiId));
 }
 async function requireReading(ctx: Context, kpiId: string, readingId: string) {
   const row = await repo.selectReading(ctx.db, readingId);
@@ -324,7 +325,7 @@ async function patchReadingInTransaction(
   readingId: string,
   input: ReadingPatch,
 ) {
-  await getKpi(ctx, kpiId);
+  const before = await getKpi(ctx, kpiId);
   const current = await requireReading(ctx, kpiId, readingId);
   const { revision, ...fields } = input;
   if (current.revision !== revision)
@@ -332,7 +333,7 @@ async function patchReadingInTransaction(
   const row = await repo.updateReading(ctx.db, readingId, revision, fields, ctx.user.id);
   if (!row) throw new AppError('conflict', { reason: 'revision' });
   await writeAudit(ctx.db, ctx.user.id, 'update', 'kpi_reading', readingId, toJson(fields));
-  return getKpiDetail(ctx, kpiId);
+  return notifyOffTarget(ctx, before, await getKpiDetail(ctx, kpiId));
 }
 async function removeReadingInTransaction(ctx: Context, kpiId: string, readingId: string) {
   await getKpi(ctx, kpiId);

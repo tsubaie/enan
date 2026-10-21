@@ -1,5 +1,5 @@
 import 'server-only';
-import { and, eq, isNull, sql, getTableColumns, type SQL } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql, getTableColumns, type SQL } from 'drizzle-orm';
 import type { Database } from '@/core/db/client';
 import { normalize, searchCorpus } from '@/core/search/normalize';
 import { searchMatch, searchRank } from '@/core/db/search';
@@ -367,4 +367,12 @@ export async function searchKpis(database: Database, normalized: string, limit: 
     .where(and(isNull(kpis.deletedAt), searchMatch(kpis.searchText, normalized)))
     .orderBy(searchRank(kpis.searchText, normalized), sql`lower(${kpis.name})`)
     .limit(limit);
+}
+// NOTIF-B06: the live measures a notification can still point at.
+export async function selectKpiSubjects(database: Database, ids: readonly string[]) {
+  if (!ids.length) return [];
+  return database
+    .select({ id: kpis.id, title: kpis.name })
+    .from(kpis)
+    .where(and(inArray(kpis.id, [...ids]), isNull(kpis.deletedAt)));
 }
