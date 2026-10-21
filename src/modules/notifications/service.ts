@@ -3,7 +3,7 @@ import { transactional } from '@/core/db/transaction';
 import type { Context } from '@/core/auth/session';
 import { AppError } from '@/core/http/errors';
 import { notificationContributors } from '@/core/modules/registry';
-import { selectFeed, countUnread, markRead, markManyRead } from '@/core/db/notifications-repo';
+import { selectFeed, selectUnread, markRead, markManyRead } from '@/core/db/notifications-repo';
 import { z } from 'zod';
 import type { FeedRow } from '@/core/db/notifications-repo';
 import { NotificationKind, type Notification } from './schema/validation';
@@ -53,21 +53,31 @@ function draw(
     readAt: row.readAt?.toISOString() ?? null,
   };
 }
+// The cursor is the last row's time and id, so rows sharing a millisecond are never skipped.
+const Cursor = z
+  .string()
+  .regex(/^[^_]+_[^_]+$/u)
+  .transform((value) => value.split('_'))
+  .pipe(z.tuple([z.iso.datetime().transform((at) => new Date(at)), z.uuid()]));
+// NOTIF-B08: the unread rows the reader can see, all of them rather than one page's worth.
+async function visibleUnread(ctx: Context) {
+  const rows = await selectUnread(ctx.db, ctx.user.id);
+  const subjects = await resolveSubjects(ctx, rows);
+  return rows.filter((row) => draw(row, subjects));
+}
 export async function feed(ctx: Context, limit: number, cursor: string | null) {
-  const before = cursor ? new Date(cursor) : null;
-  if (cursor && Number.isNaN(before?.getTime())) throw new AppError('validation_failed');
+  const parsed = cursor === null ? null : Cursor.safeParse(cursor);
+  if (parsed && !parsed.success) throw new AppError('validation_failed');
+  const before = parsed?.data ? { createdAt: parsed.data[0], id: parsed.data[1] } : null;
   const rows = await selectFeed(ctx.db, ctx.user.id, limit + 1, before);
   const page = rows.slice(0, limit);
   const subjects = await resolveSubjects(ctx, page);
-  const drawn = page.map((row) => draw(row, subjects));
-  const items = drawn.flatMap((item) => (item ? [item] : []));
-  const hiddenUnread = page.filter((row, index) => !drawn[index] && !row.readAt).length;
-  const unread = Math.max(0, (await countUnread(ctx.db, ctx.user.id)) - hiddenUnread);
+  const items = page.flatMap((row) => draw(row, subjects) ?? []);
   const last = page.at(-1);
   return {
     items,
-    unread,
-    nextCursor: rows.length > limit && last ? last.createdAt.toISOString() : null,
+    unread: (await visibleUnread(ctx)).length,
+    nextCursor: rows.length > limit && last ? `${last.createdAt.toISOString()}_${last.id}` : null,
   };
 }
 // The payload is written by the emitting service and read back out of jsonb, so it comes back as
@@ -82,10 +92,9 @@ export const readOne = transactional(async function readOne(ctx: Context, notifi
   if (!row) throw new AppError('not_found');
   return { id: row.id, readAt: row.readAt?.toISOString() ?? null };
 });
-// NOTIF-B07: exactly the rows the reader could see. A notification whose subject has gone is not
-// something they were shown, so it is not something "mark all as read" answers for.
+// NOTIF-B07: exactly the rows the reader could see, however far down the feed. A notification
+// whose subject has gone is not something they were shown, so "mark all as read" leaves it.
 export const readAll = transactional(async function readAll(ctx: Context) {
-  const page = await feed(ctx, 200, null);
-  const unread = page.items.filter((item) => !item.readAt).map((item) => item.id);
+  const unread = (await visibleUnread(ctx)).map((row) => row.id);
   return { marked: await markManyRead(ctx.db, ctx.user.id, unread) };
 });

@@ -1,5 +1,5 @@
 import 'server-only';
-import { and, eq, isNull, isNotNull, lt, or, sql, desc, inArray, count } from 'drizzle-orm';
+import { and, eq, isNull, isNotNull, lt, or, sql, desc, inArray } from 'drizzle-orm';
 import { notifications } from './system-schema';
 import { type Database } from './client';
 import { id } from './ids';
@@ -37,11 +37,13 @@ export async function insertNotifications(database: Database, rows: readonly Emi
 }
 export type FeedRow = Awaited<ReturnType<typeof selectFeed>>[number];
 // NOTIF-I04: scoped by the user id from `ctx`, never from a parameter the caller chose.
+// Newest first, ties broken by id: one transaction can emit several rows in the same millisecond,
+// and a cursor on the time alone would skip whichever of them fell past a page boundary.
 export async function selectFeed(
   database: Database,
   userId: string,
   limit: number,
-  before: Date | null,
+  before: { createdAt: Date; id: string } | null,
 ) {
   return database
     .select()
@@ -49,20 +51,24 @@ export async function selectFeed(
     .where(
       and(
         eq(notifications.userId, userId),
-        before ? lt(notifications.createdAt, before) : undefined,
+        before
+          ? or(
+              lt(notifications.createdAt, before.createdAt),
+              and(eq(notifications.createdAt, before.createdAt), lt(notifications.id, before.id)),
+            )
+          : undefined,
       ),
     )
-    .orderBy(desc(notifications.createdAt))
+    .orderBy(desc(notifications.createdAt), desc(notifications.id))
     .limit(limit);
 }
-// The badge counts unread rows; NOTIF-B08 then subtracts the ones whose subject no longer
-// resolves, which only the feed can know.
-export async function countUnread(database: Database, userId: string) {
-  const [row] = await database
-    .select({ total: count() })
+// NOTIF-B08: every unread row, so the badge and "mark all as read" can resolve them all; the rows
+// whose subject has gone are left out by the service, which alone can tell.
+export async function selectUnread(database: Database, userId: string) {
+  return database
+    .select()
     .from(notifications)
     .where(and(eq(notifications.userId, userId), isNull(notifications.readAt)));
-  return row?.total ?? 0;
 }
 export async function markRead(database: Database, userId: string, notificationId: string) {
   const [row] = await database
