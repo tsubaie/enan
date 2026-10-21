@@ -11,6 +11,8 @@ export const availability = defineHandler({
   guard: 'session',
   input: z.strictObject({}),
   response: z.object({ data: AiAvailability }),
+  // It may call the provider (connection check, model catalog).
+  transaction: false,
   handler: async (_, ctx) => {
     const user = authenticated(ctx);
     return { data: { ...(await aiAvailability(user)), canConfigure: user.user.role === 'admin' } };

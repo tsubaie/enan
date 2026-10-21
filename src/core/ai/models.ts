@@ -28,12 +28,26 @@ const Catalog = z.object({
   ),
 });
 let catalog: { credential: string; expiresAt: number; models: z.infer<typeof AiModel>[] } | undefined;
+let refreshing: Promise<z.infer<typeof AiModel>[]> | undefined;
+// A stale catalog for the same credential is served while a fresh one is fetched in the
+// background: callers often hold the write lock, and the fetch is up to 20 provider pages.
 export async function loadModels() {
   const client = await aiClient(10_000);
   if (!client) throw new AppError('ai_unavailable');
   const credential = createHash('sha256').update(client.authToken ?? '').digest('hex');
-  if (catalog?.credential === credential && catalog.expiresAt > Date.now())
+  if (catalog?.credential === credential) {
+    if (catalog.expiresAt <= Date.now())
+      refreshing ??= fetchCatalog(client, credential)
+        .catch(() => [])
+        .finally(() => (refreshing = undefined));
     return eligibleModels(catalog.models);
+  }
+  return eligibleModels(await fetchCatalog(client, credential));
+}
+async function fetchCatalog(
+  client: NonNullable<Awaited<ReturnType<typeof aiClient>>>,
+  credential: string,
+) {
   try {
     // ADMIN-B25: this header selects an incompatible, paginated Anthropic catalog shape.
     const entries = await catalogEntries(client);
@@ -58,7 +72,7 @@ export async function loadModels() {
       .filter((model) => model.inputPrice >= 0 && model.outputPrice >= 0 && supportsModelSlot(model, 'fast'))
       .sort((a, b) => a.name.localeCompare(b.name));
     catalog = { credential, models, expiresAt: Date.now() + 60000 };
-    return eligibleModels(models);
+    return models;
   } catch {
     throw new AppError('ai_unavailable', { reason: 'models' });
   }

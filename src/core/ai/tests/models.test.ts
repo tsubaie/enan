@@ -47,3 +47,19 @@ it('ADMIN-B27 hides models whose most recent invocation reports a routing failur
   transport.outcomes.mockResolvedValueOnce([{ model: compatible.id, status: 'error', error: '{"status":404}' }]);
   expect(await loadModels()).toEqual([]);
 });
+it('ADMIN-B25 a stale catalog is served while the fresh one loads in the background', async () => {
+  vi.useFakeTimers();
+  transport.get.mockResolvedValue({ data: [compatible] });
+  await loadModels();
+  vi.advanceTimersByTime(61_000);
+  let release: (value: object) => void = () => {};
+  transport.get.mockReset().mockReturnValue(new Promise((resolve) => (release = resolve)));
+  // The fetch has not answered, yet the stale list comes back at once.
+  expect((await loadModels()).map((model) => model.id)).toEqual([compatible.id]);
+  expect(transport.get).toHaveBeenCalledTimes(1);
+  release({ data: [{ ...compatible, id: 'vendor/newer' }] });
+  await vi.waitFor(async () =>
+    expect((await loadModels()).map((model) => model.id)).toEqual(['vendor/newer']),
+  );
+  vi.useRealTimers();
+});
