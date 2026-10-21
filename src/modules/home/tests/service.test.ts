@@ -7,7 +7,7 @@ import { User } from '@/core/http/user-schema';
 import { id } from '@/core/db/ids';
 import { createTask } from '@/modules/tasks/service';
 import { TaskCreate } from '@/modules/tasks/schema/validation';
-import { createPerson } from '@/modules/people';
+import { createPerson, removePerson } from '@/modules/people';
 import { createCommittee, patchCommittee, removeCommittee } from '@/modules/committees/service';
 import { CommitteeCreate } from '@/modules/committees/schema/validation';
 import { PersonCreate } from '@/modules/people/schema/validation';
@@ -177,6 +177,41 @@ it('HOME-B10 a waiting row is dated by the earliest thing its holder has due', a
   const row = home.sections.find((item) => item.key === 'waiting')?.items[0];
   // The earliest due date is the late one, and the late share says so.
   expect(row).toMatchObject({ title: 'Holder Person', count: 4, date: '2000-01-01', overdue: 1 });
+});
+it('HOME-B10 TASKS-I06 waiting work held by someone in the trash is reported as unassigned', async () => {
+  const created = await run((ctx) =>
+    createPerson(
+      ctx,
+      PersonCreate.parse({
+        fullName: 'Departed Holder',
+        kind: 'internal',
+        isAssignable: true,
+        tags: [],
+        email: null,
+        phone: null,
+        notes: null,
+        displayName: null,
+        honorific: null,
+        organization: null,
+        roleTitle: null,
+        userId: null,
+      }),
+    ),
+  );
+  const holder = created.data;
+  if (!holder) throw new Error('holder not created');
+  await run((ctx) =>
+    createTask(
+      ctx,
+      TaskCreate.parse({ title: 'Signed MoU', status: 'waiting_on', ownerId: holder.id }),
+    ),
+  );
+  await run((ctx) => removePerson(ctx, holder.id, holder.revision));
+  const section = (await run((ctx) => homeSummary(ctx))).sections.find(
+    (item) => item.key === 'waiting',
+  );
+  expect(section?.count).toBe(1);
+  expect(section?.items).toEqual([expect.objectContaining({ id: 'unassigned', count: 1 })]);
 });
 it('HOME-B10 waiting work that nobody holds is counted and reported as one last unassigned row', async () => {
   const unowned = (title: string, dueDate: string | null) =>

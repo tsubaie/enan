@@ -264,6 +264,8 @@ export async function reorderTasks(database: Database, orderedIds: string[], act
 // Embedded rows of a Home section, built in the database as a JSON array and parsed back; the
 // page validates each shape against its own schema.
 const jsonRows = (query: SQL) => embeddedRows(sql`coalesce((${query}), '[]')`);
+// HOME-B10: no active person holds it; an owner in the trash counts as none.
+const unowned = sql`(${tasks.ownerId} is null or ${tasks.ownerId} not in (select id from people where deleted_at is null))`;
 export async function selectHomeSummary(database: Database, today: string) {
   const active = and(
     isNull(tasks.deletedAt),
@@ -305,13 +307,13 @@ export async function selectHomeSummary(database: Database, today: string) {
   // HOME-B10: waiting is a chase list, so it aggregates by the person holding the work rather than
   // listing each task. One row per person, the people holding the most first.
   // Work waiting on nobody is still waiting: it is counted with the rest and reported as one
-  // further row, with the earliest due date among it, rather than dropped for having no owner.
-  columns['waitingUnowned'] =
-    sql`count(*) filter (where ${predicates.waiting} and ${tasks.ownerId} is null)`;
+  // further row, with the earliest due date among it, rather than dropped for having no owner. An
+  // owner in the trash keeps the task (TASKS-I06) but holds nothing the reader can chase.
+  columns['waitingUnowned'] = sql`count(*) filter (where ${predicates.waiting} and ${unowned})`;
   columns['waitingUnownedDate'] =
-    sql`min(${tasks.dueDate}) filter (where ${predicates.waiting} and ${tasks.ownerId} is null)`;
+    sql`min(${tasks.dueDate}) filter (where ${predicates.waiting} and ${unowned})`;
   columns['waitingUnownedLate'] =
-    sql`count(*) filter (where ${predicates.waiting} and ${tasks.ownerId} is null and ${tasks.dueDate} < ${today})`;
+    sql`count(*) filter (where ${predicates.waiting} and ${unowned} and ${tasks.dueDate} < ${today})`;
   columns['waitingPeople'] = jsonRows(
     sql`select json_group_array(json_object('id', item.id, 'title', item.title, 'count', item.count,
       'date', item.date, 'overdue', item.overdue))
