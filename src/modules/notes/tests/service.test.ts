@@ -4,7 +4,7 @@ import { db, closeDatabase } from '@/core/db/client';
 import { migrateDatabase } from '@/core/db/migrate';
 import { getSetting, writeSetting } from '@/core/db/settings-repo';
 import { dayAt, addDays } from '@/core/time/notes';
-import { removePerson } from '@/modules/people';
+import { removePerson, restorePerson } from '@/modules/people';
 import { completeTask, getTask, patchTask } from '@/modules/tasks/service';
 import { TaskPatch } from '@/modules/tasks/schema/validation';
 import { tasks } from '@/modules/tasks/schema/db';
@@ -142,6 +142,21 @@ it('NOTES-I04 NOTES-B07 NOTES-B08 participants deduplicate, replace as a set, an
   await expect(patch(created.id, { revision: 2, participantIds: [c.id] })).rejects.toMatchObject({
     code: 'not_found',
   });
+});
+it('NOTES-I04 a participant whose person is in trash survives an edit and returns on restore', async () => {
+  const [a, b, c] = await Promise.all([
+    person('Leila Haddad'),
+    person('Omar Nasser'),
+    person('Maya Faris'),
+  ]);
+  if (!a || !b || !c) throw new Error('people missing');
+  const created = await note('Steering', { participantIds: [a.id, b.id] });
+  const { opId } = await run((ctx) => removePerson(ctx, a.id, a.revision));
+  // The reader no longer sees Leila, so the edit sends only who is visible plus the new mention.
+  await patch(created.id, { revision: 1, participantIds: [b.id, c.id] });
+  await run((ctx) => restorePerson(ctx, a.id, opId));
+  const restored = await run((ctx) => service.getNote(ctx, created.id));
+  expect(restored.participants.map((row) => row.id).sort()).toEqual([a.id, b.id, c.id].sort());
 });
 it('NOTES-I05 TASKS-B16 NOTES-B09 attaches only open, top-level, unlinked tasks and detaches by null', async () => {
   const first = await note('Kickoff');

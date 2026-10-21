@@ -153,6 +153,32 @@ it('NOTES-B18 Apply Note Only updates content and selected tags without creating
   expect(updated.content).toBe(refinement.refined_content);
   expect(updated.tags).toContain('planning');
 });
+it('NOTES-B08 NOTES-B18 applying suggestions keeps a participant mentioned by display name', async () => {
+  const sam = await harness.person('Samuel Smith', { displayName: 'Sam' });
+  const note = await harness.note('Plan', {
+    content: 'Review the draft with @Sam.',
+    participantIds: [sam.id],
+  });
+  const job = await finishedJob(
+    db(),
+    actorId(),
+    'notes.refine',
+    note.id,
+    note.revision,
+    refinement,
+  );
+  await harness.run((ctx) =>
+    applyNoteAi(
+      ctx,
+      note.id,
+      { jobId: job.id, acceptContent: false, taskIndexes: [], tagIndexes: [0], taskTitles: [] },
+      'notes.refine',
+      vi.fn(),
+    ),
+  );
+  const updated = await harness.run((ctx) => getNote(ctx, note.id));
+  expect(updated.participants.map((row) => row.id)).toEqual([sam.id]);
+});
 it('NOTES-B26 refine jobs are admitted with prompt v3, which keeps checklist markers out of refined content, and older versions stay executable', async () => {
   const note = await harness.note('Plan', { content: 'Review the draft.' });
   const started = await harness.run((ctx) =>
