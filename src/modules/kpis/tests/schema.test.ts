@@ -81,6 +81,12 @@ it('KPIS-B01 KPIS-A03 a zero or opposite-signed target has no near band', () => 
   expect(status({ current: 0, target: 10, direction: 'higher' })).toBe('off_target');
   // Both negative: the ratio is meaningful again, so the bands apply.
   expect(status({ current: -99, target: -100, direction: 'higher' })).toBe('on_target');
+  // A worse reading never scores better: below a -100 target is off, above it is on (and the
+  // other way round for `lower`).
+  expect(status({ current: -120, target: -100, direction: 'higher' })).toBe('off_target');
+  expect(status({ current: -50, target: -100, direction: 'higher' })).toBe('on_target');
+  expect(status({ current: -120, target: -100, direction: 'lower' })).toBe('on_target');
+  expect(status({ current: -50, target: -100, direction: 'lower' })).toBe('off_target');
 });
 it('KPIS-B02 the effective target is this period, else the earliest one after it', () => {
   const period = { year: 2026, period: 3 };
