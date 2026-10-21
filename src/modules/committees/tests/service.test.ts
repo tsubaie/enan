@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
 import { db, closeDatabase } from '@/core/db/client';
+import { committees } from '../schema/db';
 import { migrateDatabase } from '@/core/db/migrate';
 import { countQueries } from '@/core/db/query-log';
 import { dayAt, addDays } from '@/core/time/tasks';
@@ -114,6 +115,22 @@ it('COMM-B03 COMM-A05 activity includes linked work and committee actions withou
   expect(entries.some((row) => row.entityId === task.id && row.action === 'create')).toBe(true);
   expect(entries.some((row) => row.entityId === item.id && row.action === 'archive')).toBe(true);
   expect(entries.some((row) => row.entityId === unrelated.id)).toBe(false);
+});
+it('COMM-B04 reordering some committees gives them the places they held, so the rest never move', async () => {
+  const [a, b, c, d] = [await create('A'), await create('B'), await create('C'), await create('D')];
+  // B and D are, say, archived or filtered out: the reader moved C above A.
+  await run((ctx) =>
+    service.reorderCommittees(ctx, {
+      items: [
+        { id: c.id, revision: 1 },
+        { id: a.id, revision: 1 },
+      ],
+    }),
+  );
+  const order = Object.fromEntries(
+    (await db().select().from(committees)).map((row) => [row.id, row.sortOrder]),
+  );
+  expect([order[c.id], order[b.id], order[a.id], order[d.id]]).toEqual([0, 1, 2, 3]);
 });
 it('COMM-B04 manual reordering is revision-fenced and persists', async () => {
   const one = await create('One');

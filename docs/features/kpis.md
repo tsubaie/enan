@@ -137,7 +137,8 @@ Charts via wrappers (TrendChart, Gauge). RTL: time axis right-to-left, readings 
 Objectives are managed from Administration (`/admin/objectives`), beside the other workspace
 vocabularies (note types, tags). They are read by every member — the KPI picker and the objective
 facet need them — and written by an administrator, which is why `GET /objectives` is session
-guarded and every objective write is admin guarded.
+guarded and every objective write is admin guarded. `PATCH /objectives/reorder` gives the objectives
+named the places they held, in the new order, as KPI reorder does.
 
 Status is carried by one scale of three colours, defined once in `src/ui/tokens.css` and used by the
 dot, the chip, the spark, the columns, the arc and the counts in the featured strip: green on
