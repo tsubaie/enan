@@ -16,7 +16,7 @@ Everything an administrator needs to run the installation from the browser: setu
 
 ## Users
 
-- ADMIN-B03 List, invite (create with a temporary password shown once), edit name and role, deactivate/reactivate, reset password (temporary, shown once), view sessions and revoke. Creating a user runs in the users service, which generates and hashes the temporary password and writes a `create` audit record naming the user's name, email and role, never a password or hash. Deactivation and password reset revoke all sessions of that user.
+- ADMIN-B03 List, invite (create with a temporary password shown once), edit name and role, deactivate/reactivate, reset password (temporary, shown once), view sessions and revoke. Creating a user runs in the users service, which generates and hashes the temporary password and writes a `create` audit record naming the user's name, email and role, never a password or hash. An address another account already holds (in any case) is refused as a field error on `email` (`email_taken`) and writes nothing. Deactivation and password reset revoke all sessions of that user.
 - ADMIN-B04 Last-admin protection: demoting or deactivating the last active admin → 422 `ADMIN-B04`.
 - ADMIN-B05 Each member manages their own profile: name, password, locale, timezone, theme, numerals; changing password revokes other sessions.
 - ADMIN-B06 Linking a user to a person (`people.user_id`) is done from the user page; one-to-one.

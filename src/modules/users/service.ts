@@ -112,6 +112,9 @@ export async function setup(input: z.infer<typeof Setup>, database: Database = d
 // audited like every other administrative change. Only the user's identity reaches the audit log.
 export const createUser = transactional(async function createUser(ctx: Context, input: UserCreate) {
   if (ctx.user.role !== 'admin') throw new AppError('forbidden');
+  // The unique index is the real guard; this answers a taken address on its field, not with a 500.
+  if (await userByEmail(ctx.db, input.email))
+    throw new AppError('validation_failed', { fieldErrors: { email: ['email_taken'] } });
   const temporaryPassword = token();
   const user = User.parse(
     await insertUser(ctx.db, {
