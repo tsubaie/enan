@@ -1,11 +1,14 @@
+import { availableParallelism } from 'node:os';
+
 // Lanes: the browser suite runs on several Playwright workers at once, and its tests change state
 // (tasks, notes, settings, the workspace itself), so every worker owns a lane — its own SQLite
 // file, its own standalone server on its own port, its own files and backups directories and its
 // own administrator — and only ever talks to that lane. One production build serves every lane.
-// E2E_WORKERS sets how many (default 2: measured on the CI host, two lanes halve the suite's wall
-// clock while more mostly starve each other). Inside a worker, E2E_LANE (set by
-// e2e/fixtures/test.ts) picks the lane every helper below defaults to; the audits that run after
-// the suite (a11y, perf) keep using lane 0, whose addresses are the historical ones.
+// E2E_WORKERS sets how many. The default is 2 on CI (CI is set): measured on its 4-core runners,
+// two lanes halve the suite's wall clock while more mostly starve each other. A workstation gets
+// about one lane per 3 cores, from 2 to 6 (22 cores: 6 lanes, 5.3 → 2.9 min). Inside a worker,
+// E2E_LANE (set by e2e/fixtures/test.ts) picks the lane every helper below defaults to; the audits
+// that run after the suite (a11y, perf) keep using lane 0, whose addresses are the historical ones.
 const DEFAULT_DATABASE = 'file:./tmp/executiveos_test.db';
 // E2E_FIRST_PORT moves every lane's port (default 3000), so a second checkout or agent can run the
 // suite beside one already serving on the historical ports; it also names the credentials files
@@ -17,8 +20,12 @@ const FIRST_PORT = (() => {
   return value;
 })();
 
+const DEFAULT_LANES = process.env.CI
+  ? 2
+  : Math.min(6, Math.max(2, Math.floor(availableParallelism() / 3)));
+
 export const lanes = (() => {
-  const value = Number(process.env.E2E_WORKERS ?? 2);
+  const value = Number(process.env.E2E_WORKERS ?? DEFAULT_LANES);
   if (!Number.isInteger(value) || value < 1 || value > 8)
     throw new Error(
       `E2E_WORKERS must be a whole number from 1 to 8, got ${process.env.E2E_WORKERS}`,

@@ -80,7 +80,7 @@ Collected, thresholds per file class: `service.ts` and `schema/validation.ts` �
 3. `pnpm knip`, `pnpm audit:structure`, `audit:i18n`, `audit:portability`, `audit:docs`, `audit:schema`, `audit:tests`, `gitleaks`
 4. `pnpm test` with `DATABASE_URL_TEST` pointing at a `file:` path under `tmp/` (includes core adversarial suite and audit self-tests); no service container
 5. `pnpm build`, `pnpm audit:bundle`
-6. `pnpm test:e2e` on two lanes (below), both locales, two workspace configurations
+6. `pnpm test:e2e` on several lanes (below), both locales, two workspace configurations
 7. `pnpm audit:openapi`, `pnpm audit:a11y`
 8. `pnpm test:mutate` on the listed critical functions (nightly, not per PR, if runtime exceeds 10 minutes)
 
@@ -94,7 +94,7 @@ Deployment is opt-in: the `deploy` job runs on a push to `main` only when the re
 
 ### Browser-test lanes
 
-The suite runs on two Playwright workers at once (`E2E_WORKERS`, 1–8). Its tests change state (tasks, notes, settings, the workspace), so each worker owns a **lane** (`e2e/lanes.ts`): its own SQLite file (`…_test.db`, `…-lane1_test.db`), its own standalone server on its own port (`3000`, `3001`, …), its own `FILES_DIR` and `BACKUP_DIR`, and its own administrator (`e2e/.auth/credentials.json`, `credentials-lane1.json`). One production build serves every lane. Every spec imports `test` from `e2e/fixtures/test.ts`, whose worker fixture sets `E2E_LANE` and `baseURL`, so `credentials()`, `loginAs()` and `laneBaseURL()` default to the worker's lane and the specs need not know lanes exist. The global setup resets and provisions every lane through the real first-run API. The audits that run after the suite (`audit:a11y`, `audit:perf`) use lane 0, whose addresses are the historical ones. `E2E_WORKERS=1` gives the old single-server run.
+The suite runs on several Playwright workers at once (`E2E_WORKERS`, 1–8): two on CI (`CI` is set; measured best on its 4-core runners) and, on a workstation, about one per 3 cores, from 2 to 6. Its tests change state (tasks, notes, settings, the workspace), so each worker owns a **lane** (`e2e/lanes.ts`): its own SQLite file (`…_test.db`, `…-lane1_test.db`), its own standalone server on its own port (`3000`, `3001`, …), its own `FILES_DIR` and `BACKUP_DIR`, and its own administrator (`e2e/.auth/credentials.json`, `credentials-lane1.json`). One production build serves every lane. Every spec imports `test` from `e2e/fixtures/test.ts`, whose worker fixture sets `E2E_LANE` and `baseURL`, so `credentials()`, `loginAs()` and `laneBaseURL()` default to the worker's lane and the specs need not know lanes exist. The global setup resets and provisions every lane through the real first-run API. The audits that run after the suite (`audit:a11y`, `audit:perf`) use lane 0, whose addresses are the historical ones. `E2E_WORKERS=1` gives the old single-server run.
 
 ## Hand-off requirement
 

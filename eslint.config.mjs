@@ -78,7 +78,7 @@ export default defineConfig([
   {
     // Toolchain configuration that runs before (or outside) the app: the build's worker count,
     // the browser suite's lanes and the scripts that prepare them read their own knobs
-    // (NEXT_BUILD_CPUS, E2E_WORKERS, E2E_LANE, E2E_CREDENTIALS_FILE) from the environment. The
+    // (NEXT_BUILD_CPUS, CI, E2E_WORKERS, E2E_LANE, E2E_CREDENTIALS_FILE) from the environment. The
     // app itself still goes through src/core/config/env.ts only.
     files: [
       'next.config.ts',
