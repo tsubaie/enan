@@ -77,9 +77,10 @@ export default defineConfig([
   },
   {
     // Toolchain configuration that runs before (or outside) the app: the build's worker count,
-    // the browser suite's lanes and the scripts that prepare them read their own knobs
-    // (NEXT_BUILD_CPUS, CI, E2E_WORKERS, E2E_LANE, E2E_CREDENTIALS_FILE) from the environment. The
-    // app itself still goes through src/core/config/env.ts only.
+    // the browser suite's lanes, the scripts that prepare them and the unit suite's per-worker
+    // database read their own knobs (NEXT_BUILD_CPUS, CI, E2E_WORKERS, E2E_LANE,
+    // E2E_CREDENTIALS_FILE, VITEST_POOL_ID) from the environment. The app itself still goes
+    // through src/core/config/env.ts only.
     files: [
       'next.config.ts',
       'playwright.config.ts',
@@ -87,6 +88,7 @@ export default defineConfig([
       'e2e/fixtures/test.ts',
       'e2e/global-setup.ts',
       'scripts/db/e2e-account.ts',
+      'tests/setup/worker-database.ts',
     ],
     rules: { 'eos/environment': 'off' },
   },

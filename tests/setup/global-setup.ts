@@ -1,7 +1,7 @@
 import { env } from '@/core/config/env';
 import { ensureTestDatabase } from '@/core/db/test-database';
-// Vitest runs this once before any suite. Integration suites share one *_test.db file, run one
-// file at a time (vitest.config.ts fileParallelism: false); this creates its directory.
+// Vitest runs this once before any suite. Each worker derives its own *_test.db file beside the
+// configured one (tests/setup/worker-database.ts); this creates their shared directory.
 export default async function setup() {
   let url: string;
   try {

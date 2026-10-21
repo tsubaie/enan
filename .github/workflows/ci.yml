@@ -81,29 +81,16 @@ jobs:
           echo "$RUNNER_TEMP/gitleaks" >> "$GITHUB_PATH"
       - run: pnpm audit:static
 
-  # `pnpm audit:data` split across runners: the test files run one at a time against one SQLite
-  # file, so Vitest's shards (each on its own runner, with its own file) divide the wall clock.
-  # The schema audit runs once, in the first shard.
+  # `pnpm audit:data` on one runner: Vitest runs the test files in parallel, each worker on its
+  # own SQLite file (tests/setup/worker-database.ts), so the runner's cores divide the wall clock.
   test:
-    name: Unit and integration (${{ matrix.shard }}/${{ matrix.of }})
+    name: Unit and integration
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-latest"') }}
     timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { shard: 1, of: 4, schema: true }
-          - { shard: 2, of: 4, schema: false }
-          - { shard: 3, of: 4, schema: false }
-          - { shard: 4, of: 4, schema: false }
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
-      - name: Schema audit
-        if: matrix.schema
-        run: pnpm audit:schema
-      - name: Unit and integration tests (${{ matrix.shard }}/${{ matrix.of }})
-        run: pnpm test --shard ${{ matrix.shard }}/${{ matrix.of }}
+      - run: pnpm audit:data
 
   # The suite is split across runners, each in its own container: the desktop project in six
   # Playwright shards and the mobile project in five. Each job builds once (from the restored Next
