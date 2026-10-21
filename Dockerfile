@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1.10
 FROM ghcr.io/gitleaks/gitleaks:v8.30.1 AS gitleaks
 FROM node:22-bookworm-slim AS base
 WORKDIR /app
@@ -9,12 +9,6 @@ COPY --from=gitleaks /usr/bin/gitleaks /usr/local/bin/gitleaks
 FROM base AS deps
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
-
-# The runtime image ships production packages only. tsx is one of them: the container runs
-# db:migrate and backup:create/restore through it, from src and scripts.
-FROM base AS prod-deps
-COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --prod --frozen-lockfile
 
 FROM deps AS development
 COPY . .
@@ -38,18 +32,12 @@ RUN groupadd --gid 1001 executiveos && useradd --uid 1001 --gid executiveos --cr
 COPY --from=base /opt/corepack /opt/corepack
 RUN ln -s ../lib/node_modules/corepack/dist/pnpm.js /usr/local/bin/pnpm
 WORKDIR /app
-# node_modules changes only with the lockfile, so it comes before the layers every push changes:
-# Docker reuses a layer only when nothing above it changed. The standalone output's own traced
-# node_modules lands on top of it, file for file the same packages.
-COPY --from=prod-deps --chown=executiveos:executiveos /app/node_modules ./node_modules
-COPY --from=builder --chown=executiveos:executiveos /app/.next/standalone ./
-COPY --from=builder --chown=executiveos:executiveos /app/.next/static ./.next/static
-COPY --from=builder --chown=executiveos:executiveos /app/public ./public
-COPY --from=builder --chown=executiveos:executiveos /app/src ./src
-COPY --from=builder --chown=executiveos:executiveos /app/scripts ./scripts
-COPY --from=builder --chown=executiveos:executiveos /app/tests/fixtures ./tests/fixtures
-COPY --from=builder --chown=executiveos:executiveos /app/drizzle ./drizzle
-COPY --from=builder --chown=executiveos:executiveos /app/tsconfig.json /app/package.json /app/pnpm-lock.yaml ./
+# Only Next's standalone output: the server, the packages its build traced, static files,
+# public, drizzle and the bundled commands (scripts/build/assemble-standalone.ts). Its traced
+# node_modules changes only with the lockfile, so it is its own layer, before the files every push
+# changes: Docker reuses a layer only when nothing above it changed.
+COPY --from=builder --chown=executiveos:executiveos /app/.next/standalone/node_modules ./node_modules
+COPY --from=builder --chown=executiveos:executiveos --exclude=node_modules /app/.next/standalone ./
 RUN mkdir -p /var/lib/executiveos/data /var/lib/executiveos/files /var/lib/executiveos/backups && chown -R executiveos:executiveos /var/lib/executiveos
 USER executiveos
 ENV NODE_ENV=production HOSTNAME=0.0.0.0 PORT=3000 COREPACK_HOME=/opt/corepack NEXT_MANUAL_SIG_HANDLE=true

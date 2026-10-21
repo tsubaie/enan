@@ -58,6 +58,9 @@ jobs:
               - 'pnpm-lock.yaml'
               - 'docker-compose*.yml'
               - 'next.config.ts'
+              - 'scripts/build/**'
+              - 'scripts/db/migrate.ts'
+              - 'scripts/backup/**'
               - '.github/workflows/ci.yml'
 
   static:
@@ -242,6 +245,9 @@ jobs:
             NEXT_BUILD_CPUS=${{ env.NEXT_BUILD_CPUS }}
           cache-from: type=gha,scope=runtime
           push: false
+          # Loaded into the runner's Docker so the smoke test below runs it too.
+          load: true
+          tags: executiveos-ci:pr
       - if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         uses: docker/login-action@v3
         with:
@@ -266,31 +272,47 @@ jobs:
           push: true
           # No attestation manifests: they show up as untagged package versions.
           provenance: false
+      # The image serves, migrates on start, and runs the commands the container is used for
+      # (README § Backups): db:migrate, backup:create, backup:restore.
       - name: Smoke-test the production image
-        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         env:
-          IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }}
+          IMAGE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && format('ghcr.io/{0}:{1}', github.repository, github.sha) || 'executiveos-ci:pr' }}
         run: |
           set -eu
           name=ci-exos-smoke-run${{ github.run_number }}-${{ github.run_attempt }}
-          volume=$name-data
-          cleanup() { docker rm -f "$name" >/dev/null 2>&1 || true; docker volume rm -f "$volume" >/dev/null 2>&1 || true; }
+          cleanup() {
+            docker rm -f "$name" >/dev/null 2>&1 || true
+            for v in data files backups; do docker volume rm -f "$name-$v" >/dev/null 2>&1 || true; done
+          }
           trap cleanup EXIT
-          docker volume create "$volume" >/dev/null
+          for v in data files backups; do docker volume create "$name-$v" >/dev/null; done
           docker run -d --name "$name" --platform linux/amd64 -p 127.0.0.1::3000 \
-            -v "$volume:/var/lib/executiveos/data" \
+            -v "$name-data:/var/lib/executiveos/data" \
+            -v "$name-files:/var/lib/executiveos/files" \
+            -v "$name-backups:/var/lib/executiveos/backups" \
             -e DATABASE_URL=file:/var/lib/executiveos/data/executiveos.db \
+            -e FILES_DIR=/var/lib/executiveos/files -e BACKUP_DIR=/var/lib/executiveos/backups \
             -e SESSION_SECRET=ci-smoke-only-session-secret-0123456789abcdef \
             -e APP_URL=http://localhost:3000 -e JOBS_ENABLED=false "$IMAGE"
           port=$(docker port "$name" 3000/tcp | head -n 1 | sed 's/.*://')
-          for attempt in $(seq 1 60); do
-            body=$(curl -sf "http://127.0.0.1:$port/api/v1/health" || true)
-            case "$body" in *'"db":true'*) echo "healthy: $body"; exit 0;; esac
-            sleep 3
-          done
-          docker logs "$name" | tail -50
-          echo "::error::the production image did not become healthy"
-          exit 1
+          healthy() {
+            for attempt in $(seq 1 60); do
+              body=$(curl -sf "http://127.0.0.1:$port/api/v1/health" || true)
+              case "$body" in *'"db":true'*) echo "healthy: $body"; return 0;; esac
+              sleep 3
+            done
+            docker logs "$name" | tail -50
+            echo "::error::the production image did not become healthy"
+            return 1
+          }
+          healthy
+          docker exec "$name" pnpm db:migrate
+          docker exec "$name" pnpm backup:create
+          backup=$(docker exec "$name" ls /var/lib/executiveos/backups | head -n 1)
+          test -n "$backup" || { echo "::error::backup:create wrote no backup"; exit 1; }
+          docker exec "$name" pnpm backup:restore "/var/lib/executiveos/backups/$backup" --confirm
+          healthy
+          docker image inspect "$IMAGE" --format 'image size: {{.Size}} bytes'
 
   # One status to require on the branch: it fails if any group above failed or was skipped. The
   # image may be skipped only on a pull request whose changes do not shape it.
