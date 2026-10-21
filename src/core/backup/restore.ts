@@ -2,11 +2,9 @@ import 'server-only';
 import { mkdir, rm } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { env } from '@/core/config/env';
-import { defaults } from '@/core/config/defaults';
-import { withSessionLock } from '@/core/db/locks';
 import { activateDatabase, databaseFile, stageDatabase } from './database';
 import { verifyBackup } from './manifest';
-import { isRestoring, maintenanceFile } from './maintenance';
+import { isRestoring, maintenanceFile, withBackupLock } from './maintenance';
 import { extractBounded } from './extract';
 import { clearStaleStaging, stagingPrefix, swapInto } from './swap';
 // Resource limits for a restore (docs/02-architecture.md § Resource limits). Expanded bytes are
@@ -23,7 +21,8 @@ export type RestoreOptions = {
  * except two: when the database has been swapped but the files could not be moved into place,
  * and when the marker was already on because an earlier restore did not finish. Both stay in
  * maintenance until a restore succeeds, so the app never serves a database and files from
- * different backups. Restores are serialized, so one never clears another's staging or marker.
+ * different backups. A restore holds the backup lock, so no other restore clears its staging or
+ * marker and no backup is written while it runs.
  * ADMIN-B32 the archive's declared sizes are verified and extraction is bounded.
  * ADMIN-B33 every phase before the database swap observes the caller's signal and the deadline.
  */
@@ -36,10 +35,11 @@ export async function restoreBackup(directory: string, options: RestoreOptions) 
   ]);
   const source = resolve(directory);
   const manifest = await verifyBackup(source, signal);
-  const lock = await withSessionLock(defaults.restoreLock, () =>
+  const lock = await withBackupLock(() =>
     activate(source, manifest.files['files.tar'].bytes, limits, signal),
   );
-  if (!lock.acquired) throw new Error('Another restore is already running.');
+  if (!lock.acquired)
+    throw new Error('A restore or a backup is already running. Try again shortly.');
 }
 // The file swap retires every live entry of FILES_DIR; a database kept inside it would go too.
 function assertDatabaseOutside(root: string) {

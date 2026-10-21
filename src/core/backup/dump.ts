@@ -16,6 +16,7 @@ import {
 } from './manifest';
 import { snapshotDatabase } from './database';
 import { isRestoreWorkspace } from './swap';
+import { withBackupLock } from './maintenance';
 import { appVersion } from '@/core/config/version';
 // A restore in progress keeps its staging and retired directories inside FILES_DIR; they are
 // never part of a backup.
@@ -53,7 +54,13 @@ async function writeBackup(backupId: string, staging: string, signal: AbortSigna
 }
 // ADMIN-B33: every phase observes the signal, and a backup that does not finish leaves no
 // staging directory behind.
+// ADMIN-B31: under the backup lock, so no restore swaps the database or files while they are copied.
 export async function createBackup(backupId: string, signal = new AbortController().signal) {
+  const lock = await withBackupLock(() => writeOnce(backupId, signal));
+  if (!lock.acquired) throw new Error('A restore or another backup is running');
+  return lock.value;
+}
+async function writeOnce(backupId: string, signal: AbortSignal) {
   const root = env().BACKUP_DIR;
   const directory = resolveInside(root, backupId);
   await mkdir(root, { recursive: true });

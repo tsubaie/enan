@@ -181,6 +181,14 @@ describe('restore sequence', () => {
     await maintenanceFile(false);
     await expectUntouched();
   });
+  it('ADMIN-B31 a restore is refused while a backup or another restore holds the lock, and changes nothing', async () => {
+    await makeBackup(source(), good());
+    // Held by a live process other than this one: the server writing a backup, say.
+    await writeTree(space.backups, { '.lock': String(process.ppid) });
+    await expect(restoreBackup(source(), { confirmed: true })).rejects.toThrow('already running');
+    expect(await isRestoring()).toBe(false);
+    await expectUntouched();
+  });
   it('ADMIN-B31 refuses a backup from before ADR 0029 by name', async () => {
     await makeLegacyBackup(source());
     await expect(restoreBackup(source(), { confirmed: true })).rejects.toThrow('db.dump');
