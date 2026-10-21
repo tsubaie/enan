@@ -4,7 +4,8 @@ import { cookies } from 'next/headers';
 import { defineHandler, authenticated } from '@/core/http/handler';
 import { Login, User, Recovery } from './validation';
 import { login, recover } from './login';
-import { setSessionCookie } from './session';
+import { setLocaleCookie, setSessionCookie } from './session';
+import { getSetting, hasSetting } from '@/core/db/settings-repo';
 import { revokeSession } from '@/core/db/auth-repo';
 import { digest } from './password';
 import { defaults } from '@/core/config/defaults';
@@ -16,6 +17,10 @@ export const loginApi = defineHandler({
   handler: async (input, context, _params, request) => {
     const result = await login(context.db, input, clientIp(request));
     await setSessionCookie(result.token);
+    // ACCT-B04: a language the reader chose follows them to this browser, over whatever cookie it
+    // kept from before. Without a choice, the cookie (perhaps set on the sign-in page) stands.
+    if (await hasSetting(context.db, 'user.locale', result.user.id))
+      await setLocaleCookie(await getSetting(context.db, 'user.locale', result.user.id));
     return { data: result.user };
   },
 });

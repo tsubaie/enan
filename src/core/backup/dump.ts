@@ -6,7 +6,14 @@ import { pipeline } from 'node:stream/promises';
 import { create } from 'tar';
 import { env } from '@/core/config/env';
 import { resolveInside } from '@/core/files/storage';
-import { checksum, Manifest, manifestFiles, manifestSchemaVersion, verifyBackup } from './manifest';
+import {
+  checksum,
+  Manifest,
+  manifestFiles,
+  manifestSchemaVersion,
+  readBackup,
+  verifyBackup,
+} from './manifest';
 import { snapshotDatabase } from './database';
 import { isRestoreWorkspace } from './swap';
 import { appVersion } from '@/core/config/version';
@@ -74,7 +81,8 @@ export async function listBackups() {
   for (const entry of await readdir(root, { withFileTypes: true })) {
     if (entry.isDirectory() && !entry.name.startsWith('.')) {
       try {
-        result.push(await verifyBackup(resolveInside(root, entry.name)));
+        // The page polls this list, so it reads manifests and sizes, never the checksums.
+        result.push(await readBackup(resolveInside(root, entry.name)));
       } catch (error) {
         if (!(error instanceof Error)) throw error;
       }

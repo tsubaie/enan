@@ -67,6 +67,11 @@ No new tables. The account is a view over two that exist:
   radio group named "Language" holding two flags (UK for English, Saudi for Arabic), each named in
   its own language; choosing the other language saves it and reloads, choosing the current one does
   nothing, and a refused save is shown beside the toggle.
+  A saved theme or language takes effect at once (the page reloads) and on every device: the theme
+  is read on the server for every page, dark until the reader chooses; the language comes from the
+  `eos_locale` cookie, which a change on the Account page sets to what the reader now sees and
+  signing in sets to the reader's chosen language (a reader with no choice keeps the cookie), and
+  with no cookie from the reader's choice, then `workspace.default_locale`.
 - ACCT-B05 **The linked person** is shown, not edited: name, organisation, role title, with a link
   to the People record. A reader whose account has no linked person is told so, because it is why
   work cannot be assigned to them.

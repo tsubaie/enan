@@ -4220,8 +4220,15 @@
               },
               "defaultView": {
                 "enum": [
+                  "all",
                   "today",
-                  "next"
+                  "overdue",
+                  "upcoming",
+                  "next",
+                  "waiting",
+                  "inbox",
+                  "someday",
+                  "completed"
                 ],
                 "type": "string"
               },

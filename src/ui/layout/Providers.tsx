@@ -6,9 +6,12 @@ import { ToastHost } from './toast/ToastHost';
 export function Providers({
   children,
   nonce,
+  theme,
 }: {
   children: ReactNode;
   nonce?: string | undefined;
+  // ACCT-B04: the reader's saved theme, read on the server, so no device keeps a stale choice.
+  theme?: 'dark' | 'light' | undefined;
 }) {
   const [client] = useState(
     () =>
@@ -27,6 +30,7 @@ export function Providers({
     <ThemeProvider
       attribute="class"
       defaultTheme="dark"
+      forcedTheme={theme}
       enableSystem={false}
       {...(nonce ? { nonce } : {})}
     >

@@ -3,6 +3,7 @@ import { sql } from 'drizzle-orm';
 import { db, closeDatabase } from '@/core/db/client';
 import { migrateDatabase } from '@/core/db/migrate';
 import { countQueries } from '@/core/db/query-log';
+import { writeSetting } from '@/core/db/settings-repo';
 import { addDays } from '@/core/time/tasks';
 import { normalize } from '@/core/search/normalize';
 import { personNameSql } from '@/modules/people';
@@ -343,8 +344,8 @@ it('TASKS-B04 TASKS-B07 the list and the detail golden paths stay inside the six
   const listed = await countQueries(() =>
     harness.run((ctx) => service.listTasks(ctx, TaskListQuery.parse({ view: 'today' }))),
   );
-  // The workspace timezone, the page and the counts: three statements, and never more than six.
-  expect(listed.queries).toBe(3);
+  // The workspace timezone, the default view, the counts and the page: four, never more than six.
+  expect(listed.queries).toBe(4);
   expect(listed.result.data).toHaveLength(2);
   const first = listed.result.data[0];
   if (!first) throw new Error('expected a row');
@@ -352,7 +353,7 @@ it('TASKS-B04 TASKS-B07 the list and the detail golden paths stay inside the six
   expect(detail.queries).toBeLessThanOrEqual(6);
   expect(detail.result.subtasks).toHaveLength(1);
 });
-it('TASKS-B18 view=default answers with the default view in one request, at the same statement budget', async () => {
+it('TASKS-B18 view=default answers with the default view in one request, inside the statement budget', async () => {
   await seed();
   const today = await harness.run((ctx) =>
     service.listTasks(ctx, TaskListQuery.parse({ view: 'today' })),
@@ -360,8 +361,23 @@ it('TASKS-B18 view=default answers with the default view in one request, at the 
   const resolved = await countQueries(() =>
     harness.run((ctx) => service.listTasks(ctx, TaskListQuery.parse({ view: 'default' }))),
   );
-  expect(resolved.queries).toBe(3);
+  expect(resolved.queries).toBe(4);
   expect(resolved.result.meta.defaultView).toBe('today');
   expect(resolved.result.data.map((row) => row.id)).toEqual(today.data.map((row) => row.id));
   expect(resolved.result.meta.counts).toEqual(today.meta.counts);
+});
+it('TASKS-B18 ADMIN-B07 the default view is the one the administrator chose; Today alone falls back to Next', async () => {
+  await seed();
+  const actor = harness.user?.id ?? '';
+  await writeSetting(db(), 'tasks.default_view', 'all', actor);
+  const all = await harness.run((ctx) =>
+    service.listTasks(ctx, TaskListQuery.parse({ view: 'default' })),
+  );
+  expect(all.meta.defaultView).toBe('all');
+  expect(all.data).toHaveLength(all.meta.counts.all ?? -1);
+  await writeSetting(db(), 'tasks.default_view', 'trash', actor);
+  const refused = await harness.run((ctx) =>
+    service.listTasks(ctx, TaskListQuery.parse({ view: 'default' })),
+  );
+  expect(refused.meta.defaultView).toBe('today');
 });

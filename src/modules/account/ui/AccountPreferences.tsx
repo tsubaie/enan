@@ -18,6 +18,9 @@ export function AccountPreferences({ account }: { account: Account }) {
   // option and the key's own union for the rest, which is what the control is then checked against.
   const option = <V extends string>(value: V, label: string) => ({ value, label, text: label });
   const inherit = () => option('', t('workspaceDefault'));
+  // Theme and language are drawn on the server, so the page is reloaded once they are saved, as the
+  // language toggle does.
+  const reload = () => location.reload();
   return (
     <div className="grid gap-4">
       <Field label={t('theme')}>
@@ -26,7 +29,7 @@ export function AccountPreferences({ account }: { account: Account }) {
             label={t('theme')}
             value={set.includes('theme') ? account.preferences.theme : ''}
             items={[inherit(), option('dark', t('dark')), option('light', t('light'))]}
-            onChange={(theme) => patch.mutate({ revision, theme })}
+            onChange={(theme) => patch.mutate({ revision, theme }, { onSuccess: reload })}
           />
         )}
       </Field>
@@ -36,7 +39,7 @@ export function AccountPreferences({ account }: { account: Account }) {
             label={t('locale')}
             value={set.includes('locale') ? account.preferences.locale : ''}
             items={[inherit(), option('en', t('english')), option('ar', t('arabic'))]}
-            onChange={(locale) => patch.mutate({ revision, locale })}
+            onChange={(locale) => patch.mutate({ revision, locale }, { onSuccess: reload })}
           />
         )}
       </Field>

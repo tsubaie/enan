@@ -5,7 +5,8 @@ import { migrateDatabase } from '@/core/db/migrate';
 import { env } from '@/core/config/env';
 import { id } from '@/core/db/ids';
 import { auditLog, jobs, sessions, users } from '@/core/db/system-schema';
-import { getSetting } from '@/core/db/settings-repo';
+import { getSetting, writeSetting } from '@/core/db/settings-repo';
+import { hashPassword } from '@/core/auth/password';
 import { User } from '@/core/http/user-schema';
 import { createBackup, listBackups } from '@/core/backup/dump';
 import * as api from '../api';
@@ -16,12 +17,17 @@ import { update as updateSetting } from '@/modules/settings/api';
 import { addSession, addUser, harness } from './fixtures';
 // The session is the only thing the handlers read from the request environment; the rest of the
 // auth module stays real so setup can still mint a session row and the login route still verifies.
-const session = vi.hoisted(() => ({ user: null as User | null }));
+const session = vi.hoisted(() => ({
+  user: null as User | null,
+  localeCookie: null as string | null,
+}));
 vi.mock('@/core/auth/session', async (original) => ({
   ...(await original<typeof import('@/core/auth/session')>()),
   currentUser: async () => session.user,
   setSessionCookie: async () => {},
-  setLocaleCookie: async () => {},
+  setLocaleCookie: async (locale: string) => {
+    session.localeCookie = locale;
+  },
 }));
 // Recovery is throttled per client address only (ADMIN-B22); a test that needs a bucket sets one.
 const address = vi.hoisted(() => ({ ip: null as string | null }));
@@ -351,6 +357,29 @@ it('ADMIN-B02 ADMIN-A06 recovery resets a chosen administrator once; the second 
     sql`select count(*) as count from recovery_token_uses`,
   );
   expect(used?.count).toBe(1);
+});
+it('ACCT-B04 signing in sets the language the reader chose, and leaves the cookie alone without one', async () => {
+  session.user = null;
+  const reader = await addUser('member', 'reader@example.test');
+  await db()
+    .update(users)
+    .set({ passwordHash: await hashPassword('a-long-enough-password') })
+    .where(eq(users.id, reader.id));
+  const signIn = () =>
+    loginApi(
+      request(
+        'POST',
+        '/login',
+        { email: reader.email, password: 'a-long-enough-password' },
+        { key: null },
+      ),
+    );
+  session.localeCookie = null;
+  expect((await signIn()).status).toBe(200);
+  expect(session.localeCookie).toBeNull();
+  await writeSetting(db(), 'user.locale', 'ar', reader.id, reader.id);
+  expect((await signIn()).status).toBe(200);
+  expect(session.localeCookie).toBe('ar');
 });
 it('ADMIN-B20 failed logins over HTTP are recorded, so the sixth attempt is throttled', async () => {
   session.user = null;

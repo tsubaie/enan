@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { defineHandler, authenticated } from '@/core/http/handler';
+import { setLocaleCookie } from '@/core/auth/session';
 import { Account, AccountPatch, EmailChange, PasswordChange } from './schema/validation';
 import * as service from './service';
 // ACCT-I01: no handler here takes a user id. The subject is always `ctx.user`, which is what makes
@@ -16,7 +17,14 @@ export const patch = defineHandler({
   input: AccountPatch,
   response,
   idempotent: true,
-  handler: async (input, ctx) => ({ data: await service.patchAccount(authenticated(ctx), input) }),
+  // ACCT-B04: pages take their language from the cookie, so a language change sets it to what the
+  // reader now sees (their choice, or the workspace default when the choice was cleared).
+  handler: async (input, ctx) => {
+    const account = await service.patchAccount(authenticated(ctx), input);
+    if (input.locale !== undefined)
+      await setLocaleCookie(await service.readerLocale(authenticated(ctx)));
+    return { data: account };
+  },
 });
 export const email = defineHandler({
   guard: 'session',

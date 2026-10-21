@@ -8,7 +8,8 @@ import { db } from '@/core/db/client';
 import { getSetting, hasSetting } from '@/core/db/settings-repo';
 import en from './messages/en.json';
 import ar from './messages/ar.json';
-// Locale from the cookie; timezone and numerals from user settings, then workspace settings.
+// Locale from the cookie, else the reader's choice, else the workspace default (docs/05); timezone
+// and numerals from user settings, then workspace settings.
 type Numerals = 'arab' | 'latn';
 async function preferences(): Promise<{ timeZone: string; numberingSystem: Numerals }> {
   try {
@@ -27,9 +28,20 @@ async function preferences(): Promise<{ timeZone: string; numberingSystem: Numer
     return { timeZone: defaults.timezone, numberingSystem: 'latn' };
   }
 }
+async function storedLocale() {
+  try {
+    const database = db();
+    const user = await currentUser();
+    if (user && (await hasSetting(database, 'user.locale', user.id)))
+      return await getSetting(database, 'user.locale', user.id);
+    return await getSetting(database, 'workspace.default_locale');
+  } catch {
+    return defaults.locale;
+  }
+}
 export default getRequestConfig(async () => {
   const candidate = Locale.safeParse((await cookies()).get('eos_locale')?.value);
-  const locale = candidate.success ? candidate.data : defaults.locale;
+  const locale = candidate.success ? candidate.data : await storedLocale();
   const { timeZone, numberingSystem } = await preferences();
   const monthYear: DateTimeFormatOptions = {
     calendar: 'gregory',
