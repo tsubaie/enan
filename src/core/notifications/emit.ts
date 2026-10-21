@@ -2,6 +2,7 @@ import 'server-only';
 import type { Context } from '@/core/auth/session';
 import type { Json } from '@/core/db/audit-repo';
 import { insertNotifications, type Emission } from '@/core/db/notifications-repo';
+import type { Database } from '@/core/db/client';
 // ADR 0022 puts the rows in core, and the write side has to be in core too. An emitting module
 // calls this from inside its own service; if it reached for the notifications module instead, the
 // import would run back through the registry to the module that started it -- tasks emits, the
@@ -32,4 +33,14 @@ export async function emit(ctx: Context, event: Emit) {
     actorId: ctx.user.id,
   }));
   return insertNotifications(ctx.db, rows);
+}
+// NOTIF-B04/B05: the kinds the clock or a job emits have no actor, so nobody is left out by
+// NOTIF-B02; they are written on the handle of the transaction that decided them.
+export async function emitUnattended(database: Database, events: readonly Omit<Emit, 'payload'>[]) {
+  return insertNotifications(
+    database,
+    events.flatMap(({ to, kind, subjectType, subjectId }) =>
+      to.map((userId) => ({ userId, kind, subjectType, subjectId, payload: {}, actorId: null })),
+    ),
+  );
 }
