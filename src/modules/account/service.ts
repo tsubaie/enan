@@ -1,6 +1,7 @@
 import 'server-only';
 import { transactional } from '@/core/db/transaction';
-import { currentSessionHash, type Context } from '@/core/auth/session';
+import { currentSessionHash, currentUser, type Context } from '@/core/auth/session';
+import { db } from '@/core/db/client';
 import { AppError } from '@/core/http/errors';
 import { hashPassword, verifyPassword } from '@/core/auth/password';
 import {
@@ -183,3 +184,19 @@ export const revokeSessionById = transactional(async function revokeSessionById(
   if (!done) throw new AppError('not_found');
   return { id: sessionId };
 });
+// ACCT-B04: the theme the page is drawn in. Read on the server for every render, so it holds on
+// every device the reader signs in on; dark before sign-in and while the reader has not chosen.
+export async function readerTheme() {
+  try {
+    const user = await currentUser();
+    return user ? await getSetting(db(), 'user.theme', user.id) : 'dark';
+  } catch {
+    return 'dark';
+  }
+}
+// ACCT-B04: the language the reader sees: their own choice, else the workspace default.
+export async function readerLocale(ctx: Context) {
+  return (await hasSetting(ctx.db, 'user.locale', ctx.user.id))
+    ? getSetting(ctx.db, 'user.locale', ctx.user.id)
+    : getSetting(ctx.db, 'workspace.default_locale');
+}

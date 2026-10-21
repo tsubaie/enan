@@ -6,6 +6,7 @@ import { headers } from 'next/headers';
 import { Providers } from '@/ui/layout/Providers';
 import { Locale } from '@/core/config/defaults';
 import { workspaceWallpaper } from '@/modules/settings';
+import { readerTheme } from '@/modules/account';
 import { accentProperties } from '@/core/config/wallpaper-accent';
 import '@/ui/tokens.css';
 const latin = Inter({ subsets: ['latin'], variable: '--font-inter' });
@@ -31,6 +32,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   // accent (ADR 0037) and an uploaded image's address are workspace data, not values the stylesheet
   // can know, so they ride on <html> as custom properties that tokens.css applies per theme.
   const wallpaper = await workspaceWallpaper();
+  const theme = await readerTheme();
   const wallpaperStyle: Record<string, string> = {
     ...(wallpaper.accent ? accentProperties(wallpaper.accent) : {}),
     ...(wallpaper.image ? { '--wallpaper-image': `url('${wallpaper.image}')` } : {}),
@@ -47,7 +49,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     >
       <body>
         <NextIntlClientProvider>
-          <Providers nonce={nonce}>
+          <Providers nonce={nonce} theme={theme}>
             <a
               href="#content"
               className="fixed start-4 top-4 z-50 -translate-y-32 rounded-lg bg-accent px-4 py-3 text-on-accent focus:translate-y-0"

@@ -142,7 +142,10 @@ describe('ACCT-B04 ACCT-I03 each preference is a choice between its values and f
     expect(options).toEqual([en.account.workspaceDefault, en.account.english, en.account.arabic]);
     pick(en.account.arabic);
     expect(state.patch.mutate).toHaveBeenCalledTimes(1);
-    expect(state.patch.mutate).toHaveBeenCalledWith({ revision: 3, locale: 'ar' });
+    expect(state.patch.mutate).toHaveBeenCalledWith(
+      { revision: 3, locale: 'ar' },
+      expect.anything(),
+    );
   });
   it('ACCT-I03 ACCT-A03 choosing the workspace default sends "" so the row is cleared rather than copied', () => {
     mount(
@@ -160,7 +163,7 @@ describe('ACCT-B04 ACCT-I03 each preference is a choice between its values and f
     );
     fireEvent.click(combo(en.account.locale));
     pick(en.account.workspaceDefault);
-    expect(state.patch.mutate).toHaveBeenCalledWith({ revision: 3, locale: '' });
+    expect(state.patch.mutate).toHaveBeenCalledWith({ revision: 3, locale: '' }, expect.anything());
     // Choosing what is already chosen writes nothing.
     fireEvent.click(combo(en.account.theme));
     pick(en.account.workspaceDefault);
@@ -175,7 +178,10 @@ describe('ACCT-B04 ACCT-I03 each preference is a choice between its values and f
       en.account.light,
     ]);
     pick(en.account.dark);
-    expect(state.patch.mutate).toHaveBeenLastCalledWith({ revision: 3, theme: 'dark' });
+    expect(state.patch.mutate).toHaveBeenLastCalledWith(
+      { revision: 3, theme: 'dark' },
+      expect.anything(),
+    );
     fireEvent.click(combo(en.account.numerals));
     expect(
       list()

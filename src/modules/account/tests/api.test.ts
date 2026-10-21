@@ -11,14 +11,22 @@ import { hashPassword } from '@/core/auth/password';
 import { User } from '@/core/http/user-schema';
 import { id } from '@/core/db/ids';
 import * as api from '../api';
+import { readerTheme } from '../service';
 // The handlers are exercised as the route files export them, with a real Request and the real
 // database. The session is the one seam that is replaced: the cookie is what a request knows about
 // itself, so the scenarios say which account and which device the request arrives from.
-const session = vi.hoisted(() => ({ user: null as User | null, hash: 'hash-holder-current' }));
+const session = vi.hoisted(() => ({
+  user: null as User | null,
+  hash: 'hash-holder-current',
+  localeCookie: null as string | null,
+}));
 vi.mock('@/core/auth/session', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/core/auth/session')>()),
   currentUser: async () => session.user,
   currentSessionHash: async () => session.hash,
+  setLocaleCookie: async (locale: string) => {
+    session.localeCookie = locale;
+  },
 }));
 vi.mock('next-intl/server', () => ({ getTranslations: async () => (key: string) => key }));
 type Meta = { guard: string; status: number; idempotent: boolean };
@@ -319,8 +327,11 @@ it('ACCT-B04 ACCT-I03 preferences are written per reader and "" clears the row s
     ['user.locale', 'user', 'en'],
     ['user.theme', 'user', 'light'],
   ]);
+  // The pages read the language from a cookie, so the patch sets it to what the reader now sees.
+  expect(session.localeCookie).toBe('en');
   const cleared = await call(api.patch, 'PATCH', '', { revision: 1, locale: '' });
   expect(cleared.status).toBe(200);
+  expect(session.localeCookie).toBe('ar');
   expect(cleared.body.data.preferences.explicit).toEqual(['theme']);
   const left = await db().select().from(settings).where(eq(settings.userId, holder.id));
   expect(left.map((row) => row.key)).toEqual(['user.theme']);
@@ -329,6 +340,14 @@ it('ACCT-B04 ACCT-I03 preferences are written per reader and "" clears the row s
   session.hash = 'hash-member';
   const theirs = await call(api.detail, 'GET');
   expect(theirs.body.data.preferences.explicit).toEqual([]);
+});
+
+it('ACCT-B04 the saved theme is the one pages are drawn in, and dark before sign-in', async () => {
+  expect(await readerTheme()).toBe('dark');
+  await call(api.patch, 'PATCH', '', { revision: 1, theme: 'light' });
+  expect(await readerTheme()).toBe('light');
+  session.user = null;
+  expect(await readerTheme()).toBe('dark');
 });
 
 it('ACCT-B01 ACCT-B06 a retried write replays its answer and a different body under the same key is a 409', async () => {
