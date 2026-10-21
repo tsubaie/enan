@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { and, eq, isNull, sql } from 'drizzle-orm';
-import { closeDatabase, db } from '@/core/db/client';
+import { closeDatabase, db, withTransaction } from '@/core/db/client';
+import { enqueue } from '@/core/db/jobs-repo';
 import { migrateDatabase } from '@/core/db/migrate';
 import { env } from '@/core/config/env';
 import { id } from '@/core/db/ids';
@@ -439,6 +440,22 @@ it('ADMIN-B12 an administrator deletes a backup for good, the deletion is audite
   expect((await remove(backupId)).status).toBe(404);
   expect((await remove('..')).status).toBe(404);
   expect(await db().select().from(auditLog).where(eq(auditLog.entityId, backupId))).toHaveLength(1);
+});
+it('ADMIN-B15 a failed system job can be retried; a failed AI job cannot, so the budget is never skipped', async () => {
+  const failed = async (kind: string) => {
+    const job = await withTransaction(db(), (database) => enqueue(database, kind, {}, null));
+    await db().update(jobs).set({ status: 'failed' }).where(eq(jobs.id, job.id));
+    return job.id;
+  };
+  const retry = (jobId: string) =>
+    admin.jobAction(request('POST', `/admin/jobs/${jobId}`, { action: 'retry' }), params(jobId));
+  expect((await retry(await failed('system.prune'))).status).toBe(200);
+  const refused = await retry(await failed('ai.tasks.breakdown'));
+  expect(refused.status).toBe(422);
+  expect(await refused.json()).toMatchObject({
+    error: { code: 'rule_violation', details: { rule: 'ADMIN-B15' } },
+  });
+  expect(await db().select().from(jobs).where(eq(jobs.kind, 'ai.tasks.breakdown'))).toHaveLength(1);
 });
 it('ADMIN-B12 ADMIN-B15 ADMIN-B16 Create now enqueues one backup, the jobs page lists it, and the audit page shows the change without secrets', async () => {
   const created = await admin.backupCreate(request('POST', '/admin/backups', {}));

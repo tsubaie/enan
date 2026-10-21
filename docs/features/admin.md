@@ -85,7 +85,7 @@ Everything an administrator needs to run the installation from the browser: setu
 
 ## Jobs and audit
 
-- ADMIN-B15 Jobs page: queued, running, failed in the last 7 days; details with attempts and errors; Retry (creates a new job with the same payload), Cancel; per-kind concurrency shown.
+- ADMIN-B15 Jobs page: queued, running, failed in the last 7 days; details with attempts and errors; Retry (creates a new job with the same payload; system jobs only, an AI job is refused with `rule_violation` because it is asked for again from its note or task, where the budget and rate limits apply), Cancel; per-kind concurrency shown.
 - ADMIN-B16 Audit log page: filter by actor, entity type, date; diff view; private tables never appear.
 
 ## API (all admin-guarded unless noted)
