@@ -61,6 +61,9 @@ jobs:
               - 'scripts/build/**'
               - 'scripts/db/migrate.ts'
               - 'scripts/backup/**'
+              - 'src/core/backup/**'
+              - 'src/core/db/**'
+              - 'drizzle/**'
               - '.github/workflows/ci.yml'
 
   static:
