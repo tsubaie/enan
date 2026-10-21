@@ -48,3 +48,12 @@ export function useAdminAction(path: string) {
     onSuccess: () => client.invalidateQueries({ queryKey: ['admin'] }),
   });
 }
+// ADMIN-B12: the list refreshes once the backup is gone.
+export function useDeleteBackup() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      request(`/admin/backups/${id}`, z.object({ data: z.null() }), { method: 'DELETE', body: {} }),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['admin'] }),
+  });
+}

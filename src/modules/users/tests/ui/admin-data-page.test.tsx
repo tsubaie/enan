@@ -35,8 +35,10 @@ const state = vi.hoisted(() => {
       isSuccess: false,
       error: null as Error | null,
     },
+    remove: { mutate: vi.fn(), isPending: false, error: null as Error | null, reset: vi.fn() },
     reset() {
       state.resource = query([]);
+      state.remove = { mutate: vi.fn(), isPending: false, error: null, reset: vi.fn() };
       state.action = { mutate: vi.fn(), isPending: false, isSuccess: false, error: null };
       state.saveControls = { mutate: vi.fn(), isPending: false, isSuccess: false, error: null };
     },
@@ -45,6 +47,7 @@ const state = vi.hoisted(() => {
 vi.mock('../../ui/queries', () => ({
   useAdminResource: () => state.resource,
   useAdminAction: () => state.action,
+  useDeleteBackup: () => state.remove,
 }));
 vi.mock('../../ui/ai-queries', () => ({
   useAiCredentials: () => state.credentials,
@@ -77,6 +80,40 @@ it('ADMIN-B12 the backups page offers Create now and lists each backup with its 
   expect(screen.getByText(/^Backup of Sep 10, 2026/u)).toBeTruthy();
   expect(screen.getByRole('status').textContent).toBe(en.admin.backupFinished);
   expect(screen.queryByText(en.admin.noBackups)).toBeNull();
+});
+it('ADMIN-B12 a backup is deleted only after the confirmation, and Keep deletes nothing', () => {
+  state.resource.data = {
+    data: [{ id: 'backup-2026-09-10', createdAt: '2026-09-10T08:00:00.000Z' }],
+    meta: { runner: true, job: null },
+  };
+  mount(<AdminDataPage resource="backups" />);
+  const remove = () => screen.getByRole('button', { name: /^Delete the backup of Sep 10, 2026/u });
+  fireEvent.click(remove());
+  fireEvent.click(screen.getByRole('button', { name: en.admin.backupKeep }));
+  expect(state.remove.mutate).not.toHaveBeenCalled();
+  fireEvent.click(remove());
+  expect(screen.getByText(en.admin.backupDeleteConfirm)).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: en.admin.backupDeleteAction }));
+  expect(state.remove.mutate).toHaveBeenCalledWith('backup-2026-09-10', expect.anything());
+});
+it('ADMIN-B12 ADMIN-B46 a backup made here and then deleted is not reported as started again', () => {
+  state.resource.data = {
+    data: [],
+    meta: {
+      runner: true,
+      job: {
+        id: 'backup-1',
+        kind: 'system.backup',
+        status: 'succeeded',
+        createdAt: '2026-09-10T08:00:00.000Z',
+        lastError: null,
+      },
+    },
+  };
+  Object.assign(state.action, { isSuccess: true, data: { data: { id: 'backup-1' } } });
+  mount(<AdminDataPage resource="backups" />);
+  expect(screen.queryByText(en.admin.backupStarted)).toBeNull();
+  expect(screen.queryByRole('status')).toBeNull();
 });
 it('ADMIN-B15 ADMIN-B16 jobs show kind, status and last error; audit rows show what was done', () => {
   state.resource.data = {
