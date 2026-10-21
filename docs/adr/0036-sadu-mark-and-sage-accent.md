@@ -1,6 +1,6 @@
 # ADR 0036 — The Sadu mark, and a sage accent in the night theme
 
-**Status:** accepted (2026-10-18); its fixed accent is superseded by ADR 0037, which keeps sage as the fallback. Supersedes the night accent of ADR 0031 (light indigo `#c4c2ff` over an indigo tint); the rest of ADR 0031 stands.
+**Status:** accepted (2026-10-18); its fixed accent is superseded by ADR 0037, which keeps sage as the fallback, and its mark by ADR 0046. Supersedes the night accent of ADR 0031 (light indigo `#c4c2ff` over an indigo tint); the rest of ADR 0031 stands.
 
 ## Context
 
