@@ -1,9 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
 import { withBackupLock } from '../maintenance';
 import { createBackup } from '../dump';
-import { workspace } from './fixtures/archive';
+import { workspace, writeTree } from './fixtures/archive';
 const config = vi.hoisted(() => ({ BACKUP_DIR: '', FILES_DIR: '' }));
 vi.mock('@/core/config/env', () => ({ env: () => config }));
 let space: Awaited<ReturnType<typeof workspace>>;
@@ -12,10 +10,7 @@ beforeEach(async () => {
   Object.assign(config, { BACKUP_DIR: space.backups, FILES_DIR: space.files });
 });
 afterEach(() => space.dispose());
-const leftBy = async (pid: number) => {
-  await mkdir(space.backups, { recursive: true });
-  await writeFile(join(space.backups, '.lock'), String(pid));
-};
+const leftBy = (pid: number) => writeTree(space.backups, { '.lock': String(pid) });
 it('ADMIN-B31 one backup or restore at a time: a second is refused while the first runs, then admitted', async () => {
   const inner = await withBackupLock(async () => withBackupLock(async () => 'second'));
   expect(inner).toEqual({ acquired: true, value: { acquired: false } });
