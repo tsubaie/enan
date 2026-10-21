@@ -97,9 +97,6 @@ importers:
       tar:
         specifier: 7.5.22
         version: 7.5.22
-      tsx:
-        specifier: 4.23.15
-        version: 4.23.15
       uuid:
         specifier: 14.0.2
         version: 14.0.2
@@ -143,6 +140,9 @@ importers:
       drizzle-kit:
         specifier: 0.31.11
         version: 0.31.11
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
       jscpd:
         specifier: 5.3.3
         version: 5.3.3
@@ -161,6 +161,9 @@ importers:
       tailwindcss:
         specifier: 4.3.3
         version: 4.3.3
+      tsx:
+        specifier: 4.23.15
+        version: 4.23.15
       typescript:
         specifier: 7.0.2
         version: 7.0.2
