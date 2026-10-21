@@ -10,6 +10,12 @@ FROM base AS deps
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 
+# The runtime image ships production packages only. tsx is one of them: the container runs
+# db:migrate and backup:create/restore through it, from src and scripts.
+FROM base AS prod-deps
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --prod --frozen-lockfile
+
 FROM deps AS development
 COPY . .
 RUN mkdir -p .next /var/lib/executiveos/data /var/lib/executiveos/files /var/lib/executiveos/backups && chown -R node:node .next /var/lib/executiveos
@@ -35,7 +41,7 @@ WORKDIR /app
 # node_modules changes only with the lockfile, so it comes before the layers every push changes:
 # Docker reuses a layer only when nothing above it changed. The standalone output's own traced
 # node_modules lands on top of it, file for file the same packages.
-COPY --from=deps --chown=executiveos:executiveos /app/node_modules ./node_modules
+COPY --from=prod-deps --chown=executiveos:executiveos /app/node_modules ./node_modules
 COPY --from=builder --chown=executiveos:executiveos /app/.next/standalone ./
 COPY --from=builder --chown=executiveos:executiveos /app/.next/static ./.next/static
 COPY --from=builder --chown=executiveos:executiveos /app/public ./public
