@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.10
+# syntax=docker/dockerfile:1.7
 FROM ghcr.io/gitleaks/gitleaks:v8.30.1 AS gitleaks
 FROM node:22-bookworm-slim AS base
 WORKDIR /app
@@ -22,8 +22,9 @@ ARG NEXT_BUILD_CPUS=
 ENV NEXT_BUILD_CPUS=$NEXT_BUILD_CPUS
 COPY . .
 # .next/cache is never reused inside Docker (.next is in .dockerignore), and keeping it would make
-# the CI layer cache save a layer that changes on every push.
-RUN pnpm build && rm -rf .next/cache
+# the CI layer cache save a layer that changes on every push. The standalone output's node_modules
+# moves beside it, so the runtime stage can copy it as a layer of its own.
+RUN pnpm build && rm -rf .next/cache && mv .next/standalone/node_modules .next/standalone-node_modules
 
 # ADR 0029: the database is one SQLite file on the data volume, so the runtime image is plain
 # Node with no database client of any kind.
@@ -36,8 +37,8 @@ WORKDIR /app
 # public, drizzle and the bundled commands (scripts/build/assemble-standalone.ts). Its traced
 # node_modules changes only with the lockfile, so it is its own layer, before the files every push
 # changes: Docker reuses a layer only when nothing above it changed.
-COPY --from=builder --chown=executiveos:executiveos /app/.next/standalone/node_modules ./node_modules
-COPY --from=builder --chown=executiveos:executiveos --exclude=node_modules /app/.next/standalone ./
+COPY --from=builder --chown=executiveos:executiveos /app/.next/standalone-node_modules ./node_modules
+COPY --from=builder --chown=executiveos:executiveos /app/.next/standalone ./
 RUN mkdir -p /var/lib/executiveos/data /var/lib/executiveos/files /var/lib/executiveos/backups && chown -R executiveos:executiveos /var/lib/executiveos
 USER executiveos
 ENV NODE_ENV=production HOSTNAME=0.0.0.0 PORT=3000 COREPACK_HOME=/opt/corepack NEXT_MANUAL_SIG_HANDLE=true
