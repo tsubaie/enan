@@ -8,7 +8,12 @@ beforeAll(() => resetDatabase());
 afterAll(() => closeDatabase());
 it('ADMIN-B12 NOTIF-B10 a migrated database schedules the backup, prune and notification purge', async () => {
   const kinds = (await dueSchedules(db())).map((row) => row.kind).sort();
-  expect(kinds).toEqual(['system.backup', 'system.notifications_purge', 'system.prune']);
+  expect(kinds).toEqual([
+    'system.backup',
+    'system.notifications_purge',
+    'system.prune',
+    'tasks.reminders',
+  ]);
   await scheduleDue(new Date('2026-10-21T12:00:00Z'));
   // The purge publishes through the transaction it is given; a write on the pool would deadlock.
   const purge = await claim('test-owner', 'system.notifications_purge', 1, 1);
