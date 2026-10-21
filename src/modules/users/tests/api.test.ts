@@ -391,7 +391,7 @@ it('ADMIN-B12 an administrator deletes a backup for good, the deletion is audite
   await createBackup(backupId);
   const remove = (value: string) =>
     admin.backupDelete(request('DELETE', `/admin/backups/${value}`, {}), params(value));
-  session.user = { ...harness.user, role: 'member' };
+  session.user = User.parse({ ...harness.user, role: 'member' });
   expect((await remove(backupId)).status).toBe(403);
   session.user = harness.user;
   const removed = await remove(backupId);
