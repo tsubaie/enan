@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/enan-mark.svg" width="72" height="72" alt="Enan mark: a Sadu diamond between two chevrons">
+  <img src="docs/enan-mark.svg" width="72" height="72" alt="Enan mark: the letter ع shaped as an Arabian horse">
 </p>
 
 <h1 align="center">Enan · عِنان</h1>

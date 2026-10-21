@@ -39,7 +39,7 @@ One decision per file. Format: **Status**, **Context**, **Decision**, **Conseque
 | 0033 | The monthly AI limit is in US dollars | accepted |
 | 0034 | Meeting files are archived, never deleted | accepted |
 | 0035 | A retention setting of 0 means never | accepted |
-| 0036 | The Sadu mark, and a sage accent in the night theme | accepted, fixed accent superseded by 0037 (sage kept as fallback) |
+| 0036 | The Sadu mark, and a sage accent in the night theme | accepted, fixed accent superseded by 0037 (sage kept as fallback), mark superseded by 0046 |
 | 0037 | Uploaded wallpapers, and the accent follows the wallpaper | accepted |
 | 0038 | The route bundle budget is 300 KB | accepted |
 | 0039 | A push to main deploys to the server | accepted, amended by 0040 |
@@ -49,5 +49,6 @@ One decision per file. Format: **Status**, **Context**, **Decision**, **Conseque
 | 0043 | TypeScript 7, and dependency-cruiser parses with swc | accepted |
 | 0044 | The runtime image is the standalone output | accepted |
 | 0045 | Slow read-only handlers run outside the write lock | accepted |
+| 0046 | The ع-horse mark | accepted |
 
 Open decisions awaiting an ADR: license (see roadmap); chart library confirmation (`recharts`).
