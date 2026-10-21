@@ -398,7 +398,7 @@ jobs:
             docker logout ghcr.io
             app=$($compose ps -q app)
             # The way back: a verified backup from the running version, before migrations touch it.
-            docker exec -w /app "$app" node --conditions=react-server --import tsx scripts/backup/create.ts
+            docker exec "$app" pnpm backup:create
             sed -i "s#^\( *image: *\).*#\1$IMAGE#" "$overlay"
             $compose up -d
             app=$($compose ps -q app)
