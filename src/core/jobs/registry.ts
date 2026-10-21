@@ -26,8 +26,9 @@ const system: Record<string, JobHandler> = {
     concurrency: 1,
     schema: z.strictObject({}),
     run: async () => ({ completed: true }),
-    publish: async () => {
-      await purgeExpired(db());
+    // The publish transaction's handle: a write on the pool here would wait on this very lock.
+    publish: async (database) => {
+      await purgeExpired(database);
     },
   },
   'system.backup': {

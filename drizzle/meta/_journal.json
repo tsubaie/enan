@@ -29,6 +29,13 @@
       "when": 1792344101675,
       "tag": "0003_wallpaper_thumbnails",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1792578639234,
+      "tag": "0004_seed_schedules",
+      "breakpoints": true
     }
   ]
 }
