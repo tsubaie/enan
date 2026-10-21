@@ -15,6 +15,9 @@ import {
 } from '@/core/db/jobs-repo';
 import { handlerFor, jobKinds } from './registry';
 import { scheduleDue } from './scheduler';
+import { AiPayload } from '@/core/ai/job-schema';
+import { emitUnattended } from '@/core/notifications/emit';
+import type { Database } from '@/core/db/client';
 import { isRestoring } from '@/core/backup/maintenance';
 function startHeartbeat(job: Claimed, controller: AbortController) {
   return setInterval(() => {
@@ -61,6 +64,18 @@ function failure(
     ];
   return [error instanceof Error ? error.message : String(error), true, retryAfterMs];
 }
+// NOTIF-B04 `job.finished`: whoever asked for an AI result hears that it is ready, or that it failed,
+// about the note or task it ran on. System and scheduled jobs have nobody waiting on them.
+function finished(job: Claimed) {
+  const payload = AiPayload.safeParse(job.payload);
+  return async (database: Database) => {
+    if (!job.createdBy || !payload.success) return;
+    const [subjectType = ''] = payload.data.capability.split('.');
+    await emitUnattended(database, [
+      { kind: 'job.finished', subjectType, subjectId: payload.data.entityId, to: [job.createdBy] },
+    ]);
+  };
+}
 async function runJob(job: Claimed, active: Map<string, AbortController>) {
   const controller = new AbortController();
   active.set(job.id, controller);
@@ -70,9 +85,12 @@ async function runJob(job: Claimed, active: Map<string, AbortController>) {
     handler.schema.parse(job.payload);
     const result = await handler.run(job, controller.signal);
     controller.signal.throwIfAborted();
-    await publish(job, result, (database) => handler.publish(database, job, result));
+    await publish(job, result, async (database) => {
+      await handler.publish(database, job, result);
+      await finished(job)(database);
+    });
   } catch (error) {
-    await fail(job, ...failure(job, error, controller.signal));
+    await fail(job, ...failure(job, error, controller.signal), finished(job));
   } finally {
     clearInterval(heartbeat);
     active.delete(job.id);

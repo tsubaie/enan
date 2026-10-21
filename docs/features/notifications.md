@@ -62,13 +62,17 @@ Indexes: `(user_id, read_at, created_at desc)` for the feed; a unique partial in
   - `task.assigned` — a task's owner becomes a person with an account, and the actor is someone
     else. Payload: the task title at the time.
   - `task.due_today` — scheduled; a task the reader owns is due today and not completed.
-  - `task.overdue` — scheduled; a task the reader owns passed its due date.
+  - `task.overdue` — scheduled; a task the reader owns passed its due date yesterday and is not
+    completed. Once per task, on the first day it is late, not every morning it stays late.
   - `note.mentioned` — the reader's person is added to a note's participants (NOTES/ADR 0014).
-  - `kpi.off_target` — a reading lands a KPI the reader owns off target, where it was not before.
-  - `job.finished` — a job the reader started reached `succeeded` or `failed` (ADR 0010).
+  - `kpi.off_target` — a reading lands a KPI the reader owns off target, where it was not before:
+    recording, overwriting or editing a reading, compared before and after in its transaction.
+  - `job.finished` — an AI job the reader asked for reached `succeeded` or, its attempts spent,
+    `failed` (ADR 0010). Its subject is the note or task the job ran on. System and scheduled jobs
+    have nobody waiting and emit nothing.
 - NOTIF-B05 **Time-derived kinds come from the scheduler**, never from a request, and are keyed so
   a re-run on the same day writes nothing new (ADR 0010 dedup keys). `task.due_today` and
-  `task.overdue` are the two.
+  `task.overdue` are the two, from the `tasks.reminders` job at 04:00 UTC each day.
 - NOTIF-B06 **The feed resolves subjects at read time** through the owning module. A notification
   whose subject is deleted, trashed or no longer visible to that reader is omitted from the feed
   and counted in neither total. It is not deleted: the subject may be restored.

@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { startRunner } from '../runner';
 import { shutdownHandler } from '../shutdown';
 import { DatabaseBusyError } from '@/core/db/client';
+import { AiPayload } from '@/core/ai/job-schema';
+import { fixtureModel } from '../../../../tests/fixtures/ai/jobs';
 const repo = vi.hoisted(() => ({
   claim: vi.fn(),
   renew: vi.fn(),
@@ -21,6 +23,8 @@ vi.mock('../scheduler', () => ({ scheduleDue: vi.fn(async () => {}) }));
 const maintenance = vi.hoisted(() => ({ restoring: false }));
 vi.mock('@/core/backup/maintenance', () => ({ isRestoring: async () => maintenance.restoring }));
 vi.mock('@/core/db/ids', () => ({ id: () => 'owner' }));
+const notify = vi.hoisted(() => ({ emitUnattended: vi.fn(async () => 1) }));
+vi.mock('@/core/notifications/emit', () => notify);
 vi.mock('@/core/config/env', () => ({
   env: () => ({ JOBS_CONCURRENCY: 4, JOBS_DRAIN_SECONDS: 2 }),
 }));
@@ -84,7 +88,13 @@ describe('runner drain', () => {
       expect(repo.fail).not.toHaveBeenCalled();
       await vi.advanceTimersByTimeAsync(1);
       await stopped;
-      expect(repo.fail).toHaveBeenCalledWith(running, 'shutdown', true, undefined);
+      expect(repo.fail).toHaveBeenCalledWith(
+        running,
+        'shutdown',
+        true,
+        undefined,
+        expect.any(Function),
+      );
       expect(repo.publish).not.toHaveBeenCalled();
     },
   );
@@ -98,7 +108,13 @@ describe('runner drain', () => {
     handler.run.mockImplementation(abortable);
     const stop = startRunner();
     await vi.advanceTimersByTimeAsync(2000);
-    expect(repo.fail).toHaveBeenCalledWith(running, 'provider', false, undefined);
+    expect(repo.fail).toHaveBeenCalledWith(
+      running,
+      'provider',
+      false,
+      undefined,
+      expect.any(Function),
+    );
     await stop();
   });
   it('ADR 0029 a heartbeat that waited out the write lock keeps the job; a lost lease aborts it', async () => {
@@ -127,6 +143,48 @@ describe('runner drain', () => {
     await vi.advanceTimersByTimeAsync(1000);
     expect(repo.claim).toHaveBeenCalled();
     await stop();
+  });
+  it('NOTIF-B04 an AI job tells whoever asked when it succeeds or fails; a system job tells no one', async () => {
+    const entityId = '00000000-0000-7000-8000-000000000009';
+    const asked = {
+      ...job,
+      kind: 'ai.notes.refine',
+      createdBy: 'reader-1',
+      payload: AiPayload.parse({
+        capability: 'notes.refine',
+        entityId,
+        revision: 1,
+        input: {},
+        model: fixtureModel,
+        locale: 'en',
+        capabilityVersion: 1,
+        promptVersion: 1,
+        contentHash: 'fixture',
+        maxOutputTokens: 4096,
+        reservedTokens: 10000,
+      }),
+    };
+    const effectOf = async (claimed: object, outcome: 'publish' | 'fail') => {
+      repo.claim.mockReset().mockResolvedValueOnce(claimed).mockResolvedValue(null);
+      handler.run.mockReset();
+      if (outcome === 'publish') handler.run.mockResolvedValue({ completed: true });
+      else handler.run.mockRejectedValue(new Error('provider down'));
+      const stop = startRunner();
+      await vi.advanceTimersByTimeAsync(1000);
+      await stop();
+      const calls = outcome === 'publish' ? repo.publish.mock.calls : repo.fail.mock.calls;
+      const effect = calls.at(-1)?.at(-1);
+      if (typeof effect !== 'function') throw new Error('no effect handed to the repository');
+      notify.emitUnattended.mockClear();
+      await effect({});
+      return notify.emitUnattended.mock.calls;
+    };
+    const told = [
+      [{}, [{ kind: 'job.finished', subjectType: 'notes', subjectId: entityId, to: ['reader-1'] }]],
+    ];
+    expect(await effectOf(asked, 'publish')).toEqual(told);
+    expect(await effectOf(asked, 'fail')).toEqual(told);
+    expect(await effectOf({ ...job, createdBy: 'admin-1' }, 'fail')).toEqual([]);
   });
   it('ADMIN-B33 stopping twice drains once', async () => {
     handler.run.mockResolvedValue({ completed: true });

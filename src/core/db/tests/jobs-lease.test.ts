@@ -5,7 +5,7 @@ import { migrateDatabase } from '../migrate';
 import { clearDatabase } from '../reset';
 import { jobs, jobAttempts } from '../system-schema';
 import { busyTimeoutMs } from '../client';
-import { claim, enqueue, renew } from '../jobs-repo';
+import { claim, enqueue, fail, renew } from '../jobs-repo';
 beforeAll(() => migrateDatabase());
 beforeEach(() => clearDatabase());
 afterAll(() => closeDatabase());
@@ -86,4 +86,25 @@ it('ADR 0029 a heartbeat during a long write transaction waits its turn instead 
   await inside;
   await expect(renew(job)).resolves.toBe(true);
   await holder;
+});
+it('NOTIF-B04 a failure effect runs once, when the job has failed for good, not on an attempt that will retry', async () => {
+  const job = await enqueueWith('finishing');
+  await db().update(jobs).set({ maxAttempts: 2 }).where(eq(jobs.id, job.id));
+  const finals: string[] = [];
+  const effect = async () => {
+    finals.push('told');
+  };
+  const first = await claim('runner', kind, 1, 4);
+  if (!first) throw new Error('not claimed');
+  await fail(first, 'boom', true, undefined, effect);
+  expect(finals).toEqual([]);
+  await db()
+    .update(jobs)
+    .set({ runAfter: new Date(0) })
+    .where(eq(jobs.id, job.id));
+  const second = await claim('runner', kind, 1, 4);
+  if (!second) throw new Error('not claimed again');
+  await fail(second, 'boom', true, undefined, effect);
+  expect(finals).toEqual(['told']);
+  expect((await stored(job.id))?.status).toBe('failed');
 });

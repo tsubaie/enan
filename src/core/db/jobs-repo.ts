@@ -231,7 +231,14 @@ export async function publish(
       .where(and(eq(jobAttempts.jobId, job.id), eq(jobAttempts.attempt, job.attempt)));
   });
 }
-export async function fail(job: Claimed, error: string, retry = true, retryAfterMs?: number) {
+// `effect` runs in the same transaction, once, when the job has failed for good.
+export async function fail(
+  job: Claimed,
+  error: string,
+  retry = true,
+  retryAfterMs?: number,
+  effect: (database: Database) => Promise<void> = async () => {},
+) {
   await withTransaction(db(), async (database) => {
     const [current] = await database.select().from(jobs).where(fence(job));
     if (!current) return;
@@ -255,11 +262,12 @@ export async function fail(job: Claimed, error: string, retry = true, retryAfter
       })
       .where(fence(job))
       .returning();
-    if (rows.length)
-      await database
-        .update(jobAttempts)
-        .set({ status: 'failed', error, finishedAt: new Date() })
-        .where(and(eq(jobAttempts.jobId, job.id), eq(jobAttempts.attempt, job.attempt)));
+    if (!rows.length) return;
+    await database
+      .update(jobAttempts)
+      .set({ status: 'failed', error, finishedAt: new Date() })
+      .where(and(eq(jobAttempts.jobId, job.id), eq(jobAttempts.attempt, job.attempt)));
+    if (status === 'failed') await effect(database);
   });
 }
 export function listJobs(database: Database) {
