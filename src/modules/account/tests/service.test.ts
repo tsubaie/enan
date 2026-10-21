@@ -61,14 +61,24 @@ it('ACCT-B01 rejects an address another account already holds, on that field', a
     role: 'member',
   });
   await expect(
-    run((ctx) => service.changeEmail(ctx, 1, 'taken@example.test')),
+    run((ctx) => service.changeEmail(ctx, 1, 'taken@example.test', 'correct horse battery')),
   ).rejects.toMatchObject({ details: { fieldErrors: { email: ['email_taken'] } } });
 });
 
 it('ACCT-B01 lowercases a changed address', async () => {
-  await run((ctx) => service.changeEmail(ctx, 1, 'Holder.New@Example.Test'.toLowerCase()));
+  await run((ctx) =>
+    service.changeEmail(ctx, 1, 'Holder.New@Example.Test'.toLowerCase(), 'correct horse battery'),
+  );
   const [row] = await db().select().from(users).where(eq(users.id, actor.id));
   expect(row?.email).toBe('holder.new@example.test');
+});
+
+it('ACCT-B01 refuses an email change with a wrong current password and changes nothing', async () => {
+  await expect(
+    run((ctx) => service.changeEmail(ctx, 1, 'thief@example.test', 'not the password')),
+  ).rejects.toMatchObject({ details: { fieldErrors: { current: ['password_incorrect'] } } });
+  const [row] = await db().select().from(users).where(eq(users.id, actor.id));
+  expect(row?.email).not.toBe('thief@example.test');
 });
 
 it('ACCT-B02 refuses a wrong current password and changes nothing', async () => {

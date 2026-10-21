@@ -104,15 +104,19 @@ export const patchAccount = transactional(async function patchAccount(
   return getAccount(ctx);
 });
 // ACCT-B01: the address is lowercased by the schema and the unique index is the real guard; this
-// check exists so the reader gets a field error instead of a constraint violation.
+// check exists so the reader gets a field error instead of a constraint violation. The email is
+// half of the sign-in credentials, so changing it needs the current password, as ACCT-B02 does.
 export const changeEmail = transactional(async function changeEmail(
   ctx: Context,
   revision: number,
   email: string,
+  current: string,
 ) {
   const user = await userById(ctx.db, ctx.user.id);
   if (!user) throw new AppError('not_found');
   checkRevision(user.revision, revision);
+  if (!(await verifyPassword(user.passwordHash, current)))
+    throw new AppError('validation_failed', { fieldErrors: { current: ['password_incorrect'] } });
   if (email === user.email) return getAccount(ctx);
   const taken = await userByEmail(ctx.db, email);
   if (taken) throw new AppError('validation_failed', { fieldErrors: { email: ['email_taken'] } });

@@ -51,7 +51,9 @@ No new tables. The account is a view over two that exist:
 
 - ACCT-B01 **Name and email.** Both editable. Email is lowercased (the `users_email_lower_check`
   constraint) and must stay unique; taking an address another account holds fails with a field
-  error on `email`. Changing an email does not re-verify it: there is no mail transport (`01`).
+  error on `email`. Changing the email requires the current password, because the email is half
+  of the sign-in credentials; a wrong one fails with a field error on `current` and changes
+  nothing. Changing an email does not re-verify it: there is no mail transport (`01`).
 - ACCT-B02 **Password.** Changing it requires the current password, and the new one is validated by
   the same `Password` schema registration uses. On success every **other** session is revoked and
   the current one is kept, and `password_changed_at` is set. A reader changing their password

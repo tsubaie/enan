@@ -21,6 +21,7 @@ function EmailForm({ account }: { account: Account }) {
   const t = useTranslations('account');
   const c = useTranslations('common');
   const [email, setEmail] = useState(account.user.email);
+  const [current, setCurrent] = useState('');
   const change = useChangeEmail();
   const dirty = email.trim().toLowerCase() !== account.user.email;
   return (
@@ -28,7 +29,10 @@ function EmailForm({ account }: { account: Account }) {
       className="grid gap-2"
       onSubmit={(event) => {
         event.preventDefault();
-        change.mutate({ revision: account.user.revision, email: email.trim() });
+        change.mutate(
+          { revision: account.user.revision, email: email.trim(), current },
+          { onSuccess: () => setCurrent('') },
+        );
       }}
     >
       <Field label={t('email')} hint={t('emailHint')}>
@@ -44,12 +48,25 @@ function EmailForm({ account }: { account: Account }) {
               value={email}
               onChange={(event) => setEmail(event.target.value)}
             />
-            <Button type="submit" disabled={!dirty || change.isPending}>
+            <Button type="submit" disabled={!dirty || !current || change.isPending}>
               {change.isPending ? c('saving') : c('save')}
             </Button>
           </div>
         )}
       </Field>
+      {dirty && (
+        <Field label={t('currentPassword')}>
+          {(control) => (
+            <Input
+              {...control}
+              type="password"
+              autoComplete="current-password"
+              value={current}
+              onChange={(event) => setCurrent(event.target.value)}
+            />
+          )}
+        </Field>
+      )}
       {change.error && <ErrorPanel error={change.error} />}
     </form>
   );

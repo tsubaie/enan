@@ -30,7 +30,7 @@ beforeEach(() => {
 });
 const button = (name: string) => screen.getByRole('button', { name }) as HTMLButtonElement;
 describe('ACCT-B01 ACCT-B06 the address is a form of its own', () => {
-  it('ACCT-B06 the address submits as a form and only once it differs from the stored one', () => {
+  it('ACCT-B01 ACCT-B06 the address submits as a form once it differs and the current password is given', () => {
     mount(<AccountSignIn account={account()} />);
     const input = screen.getByLabelText(en.account.email) as HTMLInputElement;
     expect(input.value).toBe('leila@example.test');
@@ -41,12 +41,16 @@ describe('ACCT-B01 ACCT-B06 the address is a form of its own', () => {
     fireEvent.change(input, { target: { value: 'LEILA@example.test' } });
     expect(save.disabled).toBe(true);
     fireEvent.change(input, { target: { value: ' Leila.New@example.test ' } });
+    expect(save.disabled).toBe(true);
+    // The email form's password field comes first; the password form below has its own.
+    const [current] = screen.getAllByLabelText(en.account.currentPassword);
+    fireEvent.change(current as HTMLInputElement, { target: { value: 'my password' } });
     expect(save.disabled).toBe(false);
     fireEvent.submit(save.closest('form') as HTMLFormElement);
-    expect(state.email.mutate).toHaveBeenCalledWith({
-      revision: 3,
-      email: 'Leila.New@example.test',
-    });
+    expect(state.email.mutate).toHaveBeenCalledWith(
+      { revision: 3, email: 'Leila.New@example.test', current: 'my password' },
+      expect.anything(),
+    );
   });
   it('ACCT-B01 a taken address is reported beside the form', () => {
     state.email.error = new ApiError(
