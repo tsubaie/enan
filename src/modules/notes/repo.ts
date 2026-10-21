@@ -240,11 +240,19 @@ export async function updateNote(
 export function restoreNote(database: Database, noteId: string, opId: string, actorId: string) {
   return restoreEntity<typeof notes.$inferSelect>(database, notes, noteId, opId, actorId);
 }
+// NOTES-I04: a participant whose person is in trash is hidden, not gone. The reader cannot see or
+// send that id, so it is left out here and a replace never removes it.
 export async function activeParticipantIds(database: Database, noteId: string) {
   const rows = await database
     .select({ personId: notePeople.personId })
     .from(notePeople)
-    .where(and(eq(notePeople.noteId, noteId), isNull(notePeople.deletedAt)));
+    .where(
+      and(
+        eq(notePeople.noteId, noteId),
+        isNull(notePeople.deletedAt),
+        sql`${notePeople.personId} in (select id from people where deleted_at is null)`,
+      ),
+    );
   return rows.map((row) => row.personId);
 }
 export async function insertParticipants(
