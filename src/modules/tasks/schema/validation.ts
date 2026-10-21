@@ -15,6 +15,8 @@ export const View = z.enum([
   'completed',
   'trash',
 ]);
+// The views a list can open on; the trash is never one.
+export const DefaultView = View.exclude(['trash']);
 export const Sort = z.enum([
   'default',
   'due_date',
@@ -116,7 +118,7 @@ export const TaskList = z.object({
     nextCursor: z.string().nullable(),
     today: z.iso.date(),
     timezone: z.string(),
-    defaultView: z.enum(['today', 'next']),
+    defaultView: DefaultView,
   }),
 });
 export const Revision = z.strictObject({ revision: z.number().int().positive() });

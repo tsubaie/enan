@@ -17,6 +17,7 @@ import { dayAt, addDays, bandOf } from '@/core/time/tasks';
 import { aiPeople, getPerson, personNameSql } from '@/modules/people';
 import { getNote } from '@/modules/notes';
 import {
+  DefaultView,
   TaskDetail,
   View,
   type TaskCreate,
@@ -55,7 +56,10 @@ export async function listTasks(ctx: Context, query: TaskListQuery) {
   const counts = z
     .record(View, z.number())
     .parse(await repo.countTasks(ctx.db, { ...query, view: 'all' }, View.options, dates));
-  const defaultView = z.enum(['today', 'next']).parse(counts.today > 0 ? 'today' : 'next');
+  // TASKS-B18: the administrator's choice (`tasks.default_view`, ADMIN settings). Today falls back
+  // to Next when nothing is due today or overdue; a stored value that names no view reads as Today.
+  const chosen = DefaultView.catch('today').parse(await getSetting(ctx.db, 'tasks.default_view'));
+  const defaultView = chosen === 'today' && counts.today === 0 ? 'next' : chosen;
   const view = query.view === 'default' ? defaultView : query.view;
   const resolved = { ...query, view };
   const { cursor, withTotal, limit, ...filters } = resolved;
