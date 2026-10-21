@@ -162,7 +162,8 @@ it('NOTIF-B03 NOTIF-B08 the feed pages newest first and a cursor continues stric
     'Second',
   ]);
   expect(first.body.data.unread).toBe(3);
-  expect(first.body.data.nextCursor).toBe(first.body.data.items[1].createdAt);
+  const end = first.body.data.items[1];
+  expect(first.body.data.nextCursor).toBe(`${end.createdAt}_${end.id}`);
   const rest = await feedAs(
     member,
     `?limit=2&cursor=${encodeURIComponent(first.body.data.nextCursor)}`,
@@ -230,6 +231,21 @@ it('NOTIF-B07 mark all as read marks exactly the rows the reader could see and r
   const page = await feedAs(member);
   expect(page.body.data.unread).toBe(0);
   expect(page.body.data.items).toHaveLength(1);
+});
+it('NOTIF-B07 NOTIF-B08 a vanished subject past the first page is not counted, and mark all reaches past it', async () => {
+  const { member } = users();
+  const { person, task: oldest } = await assigned('Oldest');
+  for (let index = 0; index < 22; index++)
+    await harness.task(`Newer ${index}`, { ownerId: person.id });
+  // The oldest row sits past the default page of 20; its task then goes to the trash.
+  await db()
+    .update(notifications)
+    .set({ createdAt: new Date('2026-01-01T00:00:00.000Z') })
+    .where(eq(notifications.subjectId, oldest.id));
+  await harness.run((ctx) => removeTask(ctx, oldest.id, 1));
+  expect((await feedAs(member)).body.data.unread).toBe(22);
+  expect((await readAllAs(member)).body).toEqual({ data: { marked: 22 } });
+  expect((await feedAs(member)).body.data.unread).toBe(0);
 });
 it('NOTIF-A04 NOTIF-B06 a trashed subject leaves the feed and the count without its row being deleted', async () => {
   const { member } = users();

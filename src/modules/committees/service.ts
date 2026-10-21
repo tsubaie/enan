@@ -7,7 +7,7 @@ import { id } from '@/core/db/ids';
 import { writeAudit, toJson } from '@/core/db/audit-repo';
 import { getSetting } from '@/core/db/settings-repo';
 import { dayAt } from '@/core/time/tasks';
-import { requireRevision, applyUpdate, restoreByOp } from '@/core/entity/service';
+import { requireRevision, applyUpdate, restoreByOp, reorderInPlace } from '@/core/entity/service';
 import { filtersHash, decodeCursor, encodeCursor } from '@/core/db/keyset';
 import { AppError } from '@/core/http/errors';
 import { routes } from '@/core/routes';
@@ -159,12 +159,9 @@ export const reorderCommittees = transactional(async function reorderCommittees(
   ctx: Context,
   input: z.infer<typeof Reorder>,
 ) {
-  // The immediate transaction serialises concurrent reorders (ADR 0029).
-  for (const [sortOrder, item] of input.items.entries()) {
-    const row = await requireRevision(ctx, ops, item.id, item.revision);
-    await applyUpdate(ctx, ops, row, { sortOrder }, { action: 'reorder' });
-  }
-  return { data: { updatedIds: input.items.map((item) => item.id) } };
+  // COMM-B04: the committees named take the places they held, in the new order, so the archived
+  // and filtered-out ones never move. The immediate transaction serialises reorders (ADR 0029).
+  return reorderInPlace(ctx, ops, input.items);
 });
 // HOME-B01: the home page consumes this through the module's server manifest (HOME-B03).
 export async function homeSummary(ctx: Context, day: string): Promise<HomeSection[]> {

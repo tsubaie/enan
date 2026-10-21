@@ -268,11 +268,11 @@ export function computeKpiStatus(input: StatusInput): KpiStatus {
   // One missed report is lag; more than one is nobody maintaining the measure (KPIS-B01).
   if (periodsBehind(currentDate, input.today, input.frequency) > 1) return 'stale';
   if (target === null) return 'no_target';
-  // A ratio only carries meaning when both sides share a sign and the target is not zero. Without
-  // one there is no "near" band to fall into, so the reading is simply on the right side or not.
+  // No "near" band without a ratio of same-signed values; both negative, the ratio is inverted.
   if (target === 0 || Math.sign(current) !== Math.sign(target))
     return meets(current, target, direction) ? 'on_target' : 'off_target';
-  return banded(current / target, direction, thresholds[direction]);
+  const ratio = target < 0 ? target / current : current / target;
+  return banded(ratio, direction, thresholds[direction]);
 }
 // KPIS-B03: 100 percent means on target in both directions, so the ratio inverts with the
 // direction. It is undefined where a ratio would be meaningless, and the gauge then shows the

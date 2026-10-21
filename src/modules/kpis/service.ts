@@ -272,17 +272,9 @@ async function restoreObjectiveInTransaction(ctx: Context, objectiveId: string, 
 // KPIS-B27: the measures given take the places they held, in their new order.
 const reorderKpisInTransaction = (ctx: Context, items: { id: string; revision: number }[]) =>
   reorderInPlace(ctx, kpiOps, items);
-async function reorderObjectivesInTransaction(
-  ctx: Context,
-  items: { id: string; revision: number }[],
-) {
-  // The immediate transaction serialises concurrent reorders (ADR 0029).
-  for (const [sortOrder, item] of items.entries()) {
-    const row = await requireRevision(ctx, objectiveOps, item.id, item.revision);
-    await applyUpdate(ctx, objectiveOps, row, { sortOrder }, { action: 'reorder' });
-  }
-  return { data: { updatedIds: items.map((item) => item.id) } };
-}
+// Objectives the same way: the ones named take the places they held.
+const reorderObjectivesInTransaction = (ctx: Context, items: { id: string; revision: number }[]) =>
+  reorderInPlace(ctx, objectiveOps, items);
 export async function listReadings(ctx: Context, kpiId: string) {
   const { at } = await requireRow(ctx, kpiId, true);
   const rows = await repo.selectReadings(ctx.db, kpiId);

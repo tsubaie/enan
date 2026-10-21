@@ -188,6 +188,14 @@ it('ADMIN-B03 inviting a member answers 201 with the account and a one-time pass
   ]);
   expect(data.every((user: User) => !('passwordHash' in user))).toBe(true);
 });
+it('ADMIN-B03 inviting an address an account already holds is a field error, not a crash', async () => {
+  expect((await invite('taken@example.test')).status).toBe(201);
+  const again = await invite('Taken@Example.test');
+  expect(again.status).toBe(400);
+  expect(await again.json()).toMatchObject({
+    error: { code: 'validation_failed', details: { fieldErrors: { email: ['email_taken'] } } },
+  });
+});
 it('ADMIN-B03 a bad invitation names each field by its path and writes nothing', async () => {
   const response = await api.create(
     request('POST', '/admin/users', { name: ' ', email: 'nope', role: 'owner', extra: 1 }),
