@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Role, Password, User } from '@/core/http/user-schema';
+import { Role, User } from '@/core/http/user-schema';
 export { User };
 export const UserPatch = z.strictObject({
   name: z.string().trim().min(1).max(200),
@@ -12,6 +12,5 @@ export const UserCreate = z.strictObject({
   name: z.string().trim().min(1).max(200),
   email: z.email().transform((v) => v.toLowerCase()),
   role: Role,
-  password: Password.optional(),
 });
 export type UserCreate = z.infer<typeof UserCreate>;

@@ -15,9 +15,14 @@ it('ADMIN-B03 an invitation carries a name, a lower-cased email and a role, and 
   const invalid = UserCreate.safeParse({ name: '  ', email: 'not-an-email', role: 'owner' });
   expect(invalid.success).toBe(false);
   expect(issues(invalid)).toEqual(expect.arrayContaining(['name', 'email', 'role']));
-  // A password is optional on an invitation, but when one is sent it meets the floor.
+  // The server generates the first password (ADMIN-B03), so an invitation cannot carry one.
   expect(
-    UserCreate.safeParse({ name: 'D', email: 'd@x.test', role: 'admin', password: 'short' }),
+    UserCreate.safeParse({
+      name: 'D',
+      email: 'd@x.test',
+      role: 'admin',
+      password: 'a password long enough',
+    }),
   ).toMatchObject({ success: false });
   expect(
     UserCreate.safeParse({ name: 'D', email: 'd@x.test', role: 'admin', isActive: false }).success,

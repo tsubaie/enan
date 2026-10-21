@@ -116,24 +116,17 @@ export function selectActivity(database: Database, committeeId: string, last: (s
     cursorPredicate(activitySort, last))).orderBy(...orderBy(activitySort)).limit(51);
 }
 // HOME-B01: committees still carrying open top-level work, busiest first. One query, no cursor.
-const openWork = sql`(select count(*) from tasks t where t.committee_id = committees.id
-  and t.deleted_at is null and t.parent_id is null and t.status <> 'completed')`;
-// HOME-B09: the late portion of each committee's open work, so the bars compare load and show how
-// much of it has already slipped.
-const lateWork = (today: string) => sql`(select count(*) from tasks t where t.committee_id = committees.id
-  and t.deleted_at is null and t.parent_id is null and t.status <> 'completed' and t.due_date < ${today})`;
-// Completed top-level work, so a committee row can show how far along it is rather than only how
-// much is left.
-const doneWork = sql`(select count(*) from tasks t where t.committee_id = committees.id
-  and t.deleted_at is null and t.parent_id is null and t.status = 'completed')`;
+// HOME-B09: the late and the completed share use the card's own figures (COMM-B02), so the two
+// never disagree on what counts as open or overdue.
 export async function selectHomeSummary(database: Database, today: string) {
+  const openWork = stat('open', today);
   const carrying = and(isNull(committees.deletedAt), eq(committees.status, 'active'), sql`${openWork} > 0`);
   const [row] = await database.select({
     count: sql<number>`count(*)`,
     items: sql`(select json_group_array(json_object('id', item.id, 'title', item.title, 'count', item.count,
         'owner', item.owner, 'overdue', item.overdue, 'done', item.done) order by item.count desc, lower(item.title), item.id)
       from (select id, name as title, nullif(ownership, '') as owner, ${openWork} as count,
-        ${lateWork(today)} as overdue, ${doneWork} as done
+        ${stat('overdue', today)} as overdue, ${stat('completed', today)} as done
       from committees where ${carrying} order by ${openWork} desc, lower(name), id limit 5) item)`.mapWith(parseJson),
   }).from(committees).where(carrying);
   return row ?? { count: 0, items: [] };

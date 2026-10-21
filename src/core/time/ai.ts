@@ -1,18 +1,36 @@
-import { Temporal } from '@js-temporal/polyfill';
-export function monthStart(timezone: string) {
-  return new Date(
-    Number(
-      Temporal.Now.zonedDateTimeISO(timezone).with({
-        day: 1,
-        hour: 0,
-        minute: 0,
-        second: 0,
-        millisecond: 0,
-        microsecond: 0,
-        nanosecond: 0,
-      }).epochMilliseconds,
-    ),
+import { dayAt, dayValue } from './days';
+// The wall-clock time `instant` shows in `timezone`, read as if it were UTC.
+function wallClock(timezone: string, instant: number) {
+  const parts = new Intl.DateTimeFormat(undefined, {
+    timeZone: timezone,
+    calendar: 'gregory',
+    numberingSystem: 'latn',
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+  }).formatToParts(new Date(instant));
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((item) => item.type === type)?.value);
+  return Date.UTC(
+    part('year'),
+    part('month') - 1,
+    part('day'),
+    part('hour'),
+    part('minute'),
+    part('second'),
   );
+}
+// The instant the current month began in `timezone`: its first local midnight. Each pass moves by
+// the zone's offset there; the second catches a daylight-saving change between the two readings.
+export function monthStart(timezone: string, now = new Date()) {
+  const midnight = dayValue(`${dayAt(timezone, now.toISOString()).slice(0, 8)}01`);
+  let instant = midnight;
+  for (let pass = 0; pass < 2; pass++) instant -= wallClock(timezone, instant) - midnight;
+  return new Date(instant);
 }
 
 export function retryDelay(value: string | null | undefined) {

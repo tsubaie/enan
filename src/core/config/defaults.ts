@@ -10,6 +10,5 @@ export const defaults = {
   filesDir: '/var/lib/executiveos/files',
   backupDir: '/var/lib/executiveos/backups',
   cookieName: 'eos_session',
-  setupLock: 7232,
   migrationLock: 7231,
 };

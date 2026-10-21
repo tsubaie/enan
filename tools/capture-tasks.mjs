@@ -2,7 +2,6 @@ import { chromium } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { lookup } from 'node:dns/promises';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { Temporal } from '@js-temporal/polyfill';
 await mkdir('tmp/screenshots', { recursive: true });
 const fixtures = JSON.parse(await readFile('tests/fixtures/tasks/preview.json', 'utf8'));
 const { address } = await lookup('app');
@@ -51,9 +50,10 @@ for (const locale of ['en', 'ar']) {
             title,
             status: 'next_action',
             priority: index === 0 ? 'high' : 'medium',
-            dueDate: Temporal.PlainDate.from(today)
-              .add({ days: index - 1 })
-              .toString(),
+            // `today` is YYYY-MM-DD, read as UTC midnight, so adding whole days never shifts it.
+            dueDate: new Date(Date.parse(today) + (index - 1) * 86_400_000)
+              .toISOString()
+              .slice(0, 10),
           })
         ).data,
       );
