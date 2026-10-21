@@ -169,10 +169,7 @@ it('KPIS-B05 KPIS-B04 the derived meta carries the series, the change and the ch
       direction: 'higher',
       frequency: 'quarterly',
       current: { date: '2026-09-09', value: 90 },
-      // The reading before this one and the last reading of the period before it are different
-      // numbers whenever a measure is read more often than it is reported. The change a scorecard
-      // states is the one against the period (KPIS-B04), so 80 is never what it compares to.
-      previous: 80,
+      // The change a scorecard states is against the last reading of the period before (KPIS-B04).
       previousPeriodValue: 75,
       sparkline: [
         { date: '2026-08-09', value: 75 },
@@ -200,7 +197,6 @@ const shiftable = {
   direction: 'higher',
   frequency: 'quarterly',
   current: { date: TODAY, value: 90 },
-  previous: 80,
   previousPeriodValue: 75,
   sparkline: [],
   targets: [

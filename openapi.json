@@ -6430,11 +6430,6 @@
             "minLength": 1,
             "type": "string"
           },
-          "password": {
-            "maxLength": 256,
-            "minLength": 12,
-            "type": "string"
-          },
           "role": {
             "enum": [
               "admin",

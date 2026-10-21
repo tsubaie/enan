@@ -49,7 +49,6 @@ it('KPIS-B05 the candidate select reads the current, previous and sparkline valu
   await harness.reading(kpi.id, addDays(today, 10), 99);
   const [row] = await repo.selectKpis(db(), empty, window(today));
   expect(row?.current).toEqual({ date: today, value: 15.25 });
-  expect(row?.previous).toBe(12.5);
   expect(row?.sparkline).toEqual([
     { date: addDays(today, -2), value: 12.5 },
     { date: today, value: 15.25 },

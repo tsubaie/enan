@@ -12,7 +12,7 @@ import { getNote, patchNote } from '../service';
 import { Tags } from '../schema/validation';
 import { NoteAiApply, RefinementOutput, TagOutput, SuggestedTask } from '../schema/validation';
 import { derivedParticipants } from '../schema/validation';
-import { lockNote, reviewRefinement } from '../repo';
+import { reviewRefinement } from '../repo';
 // Receives the apply's own context, so the tasks it creates share the apply's transaction.
 type CreateTask = (
   ctx: Context,
@@ -36,7 +36,6 @@ export const applyNoteAi = transactional(async function applyNoteAi(
 ) {
   const { payload, result } = await reviewJob(ctx, input.jobId, noteId, capability);
   if (result.appliedIds) return { ids: result.appliedIds };
-  await lockNote(ctx.db, noteId);
   const note = await getNote(ctx, noteId);
   if (note.revision !== payload.revision) throw new AppError('conflict', { reason: 'revision' });
   const { refined, chosenTags, chosenTasks } = choices(result.output, capability, input);

@@ -304,7 +304,6 @@ export type KpiFacts = {
   direction: string;
   frequency: string;
   current: Point | null;
-  previous: number | null;
   previousPeriodValue: number | null;
   sparkline: Point[];
   targets: PeriodTarget[];

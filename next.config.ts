@@ -9,7 +9,7 @@ const buildCpus = Number(process.env.NEXT_BUILD_CPUS);
 const config: NextConfig = {
   output: 'standalone',
   poweredByHeader: false,
-  serverExternalPackages: ['argon2', 'pg'],
+  serverExternalPackages: ['argon2'],
   ...(buildCpus >= 1
     ? { experimental: { cpus: Math.floor(buildCpus), webpackMemoryOptimizations: true } }
     : {}),

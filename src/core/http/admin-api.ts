@@ -124,6 +124,9 @@ export const jobAction = defineHandler({
     }
     if (!['failed', 'cancelled'].includes(job.status))
       throw new AppError('conflict', { reason: 'state' });
+    // ADMIN-B15: an AI job is asked for again from its record, where admission checks the budget,
+    // the rate limit and the reader's own access; a re-enqueue here would skip all three.
+    if (job.kind.startsWith('ai.')) throw new AppError('rule_violation', { rule: 'ADMIN-B15' });
     return {
       data: await enqueue(
         ctx.db,

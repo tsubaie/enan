@@ -60,8 +60,6 @@ function columns(window: Window) {
     ownerName: sql<string | null>`(select p.full_name from people p where p.id = kpis.owner_id)`,
     current: json<Reading | null>(sql`(select json_object('date', r.reading_date, 'value', r.value)
       from kpi_readings r where ${upTo(today)} order by r.reading_date desc, r.id desc limit 1)`),
-    previous: sql<number | null>`(select r.value from kpi_readings r where ${upTo(today)}
-      order by r.reading_date desc, r.id desc limit 1 offset 1)`,
     // KPIS-B05: the last eight readings up to today, oldest first so the spark reads left to right.
     sparkline: json<
       Reading[]
