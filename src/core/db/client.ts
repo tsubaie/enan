@@ -53,7 +53,7 @@ function prime(client: Client, connections: number) {
 // enan.db in that directory takes it over, the -wal and -shm files first and the database last, so
 // an interrupted move finishes on the next start.
 const formerName = 'executiveos.db';
-export function adoptFormerDatabase(path: string) {
+function adoptFormerDatabase(path: string) {
   if (basename(path) !== 'enan.db' || existsSync(path)) return;
   const former = join(dirname(path), formerName);
   if (!existsSync(former)) return;
