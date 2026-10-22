@@ -1,19 +1,20 @@
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { closeDatabase, db, withTransaction } from '@/core/db/client';
 import { enqueue } from '@/core/db/jobs-repo';
 import { migrateDatabase } from '@/core/db/migrate';
 import { env } from '@/core/config/env';
 import { id } from '@/core/db/ids';
-import { auditLog, jobs, sessions, users } from '@/core/db/system-schema';
-import { getSetting, writeSetting } from '@/core/db/settings-repo';
-import { hashPassword } from '@/core/auth/password';
+import { auditLog, jobs, users } from '@/core/db/system-schema';
+import { authAccounts, authSessions } from '@/core/db/auth-schema';
+import { getSetting } from '@/core/db/settings-repo';
+import { verifyPassword } from '@/core/auth/password';
 import { User } from '@/core/http/user-schema';
 import { createBackup, listBackups } from '@/core/backup/dump';
 import * as api from '../api';
 import * as admin from '@/core/http/admin-api';
 import * as controls from '@/core/http/ai-controls-api';
-import { recoveryApi, loginApi } from '@/core/auth/api';
+import { recoveryApi } from '@/core/auth/api';
 import { update as updateSetting } from '@/modules/settings/api';
 import { addSession, addUser, harness } from './fixtures';
 // The session is the only thing the handlers read from the request environment; the rest of the
@@ -80,10 +81,7 @@ const patchOf = (user: User) => ({
   revision: user.revision,
 });
 const liveSessions = (userId: string) =>
-  db()
-    .select({ id: sessions.id })
-    .from(sessions)
-    .where(and(eq(sessions.userId, userId), isNull(sessions.revokedAt)));
+  db().select({ id: authSessions.id }).from(authSessions).where(eq(authSessions.userId, userId));
 it('ADMIN-B03 ADMIN-B01 ADMIN-B02 member administration is admin-guarded and its writes are idempotent; setup and recovery are public', () => {
   expect(meta(api.list)).toEqual({
     guard: 'admin',
@@ -347,16 +345,16 @@ it('ADMIN-B02 ADMIN-A06 recovery resets a chosen administrator once; the second 
   expect(done.status).toBe(200);
   expect(await done.json()).toEqual({ data: null });
   expect(await liveSessions(target.id)).toHaveLength(0);
-  const signedIn = await loginApi(
-    request(
-      'POST',
-      '/login',
-      { email: target.email, password: 'a-brand-new-password-1' },
-      { key: null },
-    ),
-  );
-  expect(signedIn.status).toBe(200);
-  expect(await signedIn.json()).toMatchObject({ data: { id: target.id, revision: 2 } });
+  // The new password is where Better Auth reads it (ADR 0055) and on the row, which moved on.
+  const [credential] = await db()
+    .select({ password: authAccounts.password })
+    .from(authAccounts)
+    .where(and(eq(authAccounts.userId, target.id), eq(authAccounts.providerId, 'credential')));
+  expect(await verifyPassword(credential?.password ?? '', 'a-brand-new-password-1')).toBe(true);
+  expect((await db().select().from(users).where(eq(users.id, target.id)))[0]).toMatchObject({
+    revision: 2,
+    passwordHash: credential?.password,
+  });
   const again = await recover(target.email, token, 'yet-another-password-2');
   expect(again.status).toBe(409);
   expect(await again.json()).toMatchObject({
@@ -366,45 +364,6 @@ it('ADMIN-B02 ADMIN-A06 recovery resets a chosen administrator once; the second 
     sql`select count(*) as count from recovery_token_uses`,
   );
   expect(used?.count).toBe(1);
-});
-it('ACCT-B04 signing in sets the language the reader chose, and leaves the cookie alone without one', async () => {
-  session.user = null;
-  const reader = await addUser('member', 'reader@example.test');
-  await db()
-    .update(users)
-    .set({ passwordHash: await hashPassword('a-long-enough-password') })
-    .where(eq(users.id, reader.id));
-  const signIn = () =>
-    loginApi(
-      request(
-        'POST',
-        '/login',
-        { email: reader.email, password: 'a-long-enough-password' },
-        { key: null },
-      ),
-    );
-  session.localeCookie = null;
-  expect((await signIn()).status).toBe(200);
-  expect(session.localeCookie).toBeNull();
-  await writeSetting(db(), 'user.locale', 'ar', reader.id, reader.id);
-  expect((await signIn()).status).toBe(200);
-  expect(session.localeCookie).toBe('ar');
-});
-it('ADMIN-B20 failed logins over HTTP are recorded, so the sixth attempt is throttled', async () => {
-  session.user = null;
-  const attempt = () =>
-    loginApi(
-      request(
-        'POST',
-        '/login',
-        { email: 'guessed@example.test', password: 'wrong-password' },
-        { key: null },
-      ),
-    );
-  for (let failure = 0; failure < 5; failure++) expect((await attempt()).status).toBe(401);
-  const throttled = await attempt();
-  expect(throttled.status).toBe(429);
-  expect(await throttled.json()).toMatchObject({ error: { code: 'rate_limited' } });
 });
 it('ADMIN-B22 wrong recovery tokens over HTTP are recorded, so the sixth attempt is throttled', async () => {
   session.user = null;

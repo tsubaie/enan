@@ -40,7 +40,8 @@ async function tryLogin(page: Page, locale: string, email: string, password: str
   await page.getByLabel(m.auth.password).fill(password);
   const [response] = await Promise.all([
     page.waitForResponse(
-      (reply) => reply.url().endsWith('/api/v1/auth/login') && reply.request().method() === 'POST',
+      (reply) =>
+        reply.url().endsWith('/api/auth/sign-in/email') && reply.request().method() === 'POST',
       { timeout: 15_000 },
     ),
     page.getByRole('button', { name: m.auth.login, exact: true }).click(),

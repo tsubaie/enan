@@ -1,6 +1,6 @@
 import 'server-only';
 import { transactional } from '@/core/db/transaction';
-import { currentSessionHash, currentUser, type Context } from '@/core/auth/session';
+import { currentSessionId, currentUser, type Context } from '@/core/auth/session';
 import { db } from '@/core/db/client';
 import { AppError } from '@/core/http/errors';
 import { hashPassword } from '@/core/auth/password';
@@ -12,6 +12,7 @@ import {
   userSessions,
   revokeOtherSessions,
   revokeOwnSession,
+  setPassword,
 } from '@/core/db/auth-repo';
 import { getSetting, hasSetting, writeSetting, clearSetting } from '@/core/db/settings-repo';
 import { toJson, writeAudit } from '@/core/db/audit-repo';
@@ -60,14 +61,14 @@ async function preferences(ctx: Context) {
     explicit,
   };
 }
-// ACCT-B03: the current session is the one whose token hash matches the cookie this request
-// arrived with, so it can be marked without trusting anything the client sent as an id.
+// ACCT-B03: the current session is the one the cookie this request arrived with belongs to, so it
+// can be marked without trusting anything the client sent as an id.
 async function sessions(ctx: Context) {
   const rows = await userSessions(ctx.db, ctx.user.id);
-  const current = await currentSessionHash();
+  const current = await currentSessionId();
   return rows.map((row) => ({
     id: row.id,
-    current: row.tokenHash === current,
+    current: row.id === current,
     issuedAt: row.issuedAt.toISOString(),
     lastSeenAt: row.lastSeenAt.toISOString(),
     ip: row.ip,
@@ -153,15 +154,12 @@ const passwordChange = transactional(async function changePassword(
   const user = await userById(ctx.db, ctx.user.id);
   if (!user) throw new AppError('not_found');
   if (!(await checkCurrentPassword(ctx.db, user, current))) return null;
-  await updateUserAccount(ctx.db, ctx.user.id, {
-    passwordHash: await hashPassword(next),
-    passwordChangedAt: new Date(),
-    revision: user.revision + 1,
-  });
+  // ADR 0055: written where Better Auth reads it, and on the row, with the revision moved on.
+  await setPassword(ctx.db, ctx.user.id, await hashPassword(next));
   const revoked = await revokeOtherSessions(
     ctx.db,
     ctx.user.id,
-    (await currentSessionHash()) ?? '',
+    (await currentSessionId()) ?? '',
   );
   // The diff records that sessions were ended and how many; it never records either password.
   await writeAudit(
@@ -183,7 +181,7 @@ export const signOutOthers = transactional(async function signOutOthers(ctx: Con
   const revoked = await revokeOtherSessions(
     ctx.db,
     ctx.user.id,
-    (await currentSessionHash()) ?? '',
+    (await currentSessionId()) ?? '',
   );
   return { revoked };
 });

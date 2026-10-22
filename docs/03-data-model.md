@@ -64,10 +64,10 @@ Global rules:
 Singleton (`id = 1`), `setup_completed_at`, `schema_version`, `maintenance_mode boolean`. Setup and restore each run in one immediate transaction, so two of them cannot interleave.
 
 ### users
-`id, email unique (lowercased), name, password_hash (argon2id m=64MiB t=3 p=4), role (admin|member), is_active, last_login_at, password_changed_at, revision, created_at, updated_at`. Locale, timezone, theme live in user-scoped settings.
+`id, email unique (lowercased), email_verified, image, name, password_hash (argon2id m=64MiB t=3 p=4; kept equal to the credential account's for the previous release, ADR 0050), role (admin|member), is_active, last_login_at, password_changed_at, revision, created_at, updated_at`. Locale, timezone, theme live in user-scoped settings.
 
-### sessions
-`id, user_id fk cascade, token_hash unique (sha256), issued_at, last_seen_at, expires_at (sliding), absolute_expires_at, ip, user_agent, revoked_at`.
+### auth_sessions, auth_accounts, auth_verifications (ADR 0055)
+Better Auth's tables. `auth_sessions`: `id, token unique, user_id fk cascade, expires_at, ip_address, user_agent, created_at, updated_at`. `auth_accounts`: `id, account_id, provider_id (credential|google), user_id fk cascade, password (argon2id, credential only), access/refresh/id tokens (encrypted), scope, created_at, updated_at`, unique `(provider_id, account_id)`. `auth_verifications`: `id, identifier (hashed), value (hashed code), expires_at`. The old `sessions` table is no longer written and is dropped by a later contract migration.
 
 ### login_attempts
 `id, email, ip, succeeded, created_at`. Pruned after 30 days by `system.prune`.

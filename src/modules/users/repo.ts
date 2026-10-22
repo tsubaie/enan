@@ -1,6 +1,7 @@
 import 'server-only';
 import { eq, and, count, isNull } from 'drizzle-orm';
-import { users, sessions } from '@/core/db/system-schema';
+import { users } from '@/core/db/system-schema';
+import { revokeUserSessions } from '@/core/db/auth-repo';
 import type { Database } from '@/core/db/client';
 import { updateEntity } from '@/core/db/entity';
 export function selectUsers(database: Database) {
@@ -36,10 +37,6 @@ export async function updateUser(
     fields,
     actorId,
   );
-  if (row && !patch.isActive)
-    await database
-      .update(sessions)
-      .set({ revokedAt: new Date() })
-      .where(eq(sessions.userId, userId));
+  if (row && !patch.isActive) await revokeUserSessions(database, userId);
   return row;
 }

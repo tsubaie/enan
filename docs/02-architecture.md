@@ -13,7 +13,7 @@
 | i18n | next-intl | Message catalogs, direction per locale |
 | AI | `@anthropic-ai/sdk` | In-process API calls; structured outputs via Zod. ADR 0003, 0010 |
 | Jobs | In-process runner on a `jobs` table with leases | No external worker; at-least-once with fencing. ADR 0010 |
-| Auth | Own `users` + `sessions` tables, argon2id, cookie sessions | Simple, auditable. ADR 0005 |
+| Auth | Better Auth on Enan's `users` and its own tables, argon2id, cookie sessions | Issue #47: Google, email codes, one maintained library. ADR 0055 |
 | Backups | `VACUUM INTO` snapshot of the database file + files tar + manifest | ADR 0008 (rule), ADR 0029 (mechanism) |
 | Tests | Vitest, Testing Library, Playwright, a real SQLite file per worker | Behavior tests only |
 | Package manager | pnpm, Node 22 LTS | |
@@ -121,7 +121,7 @@ Browser ──HTTP──▶ src/app/api/v1/tasks/route.ts
 
 ## Authentication and authorization
 
-- Cookie session (`eos_session`, httpOnly, `SameSite=Lax`, Secure in production). Session rows store a token hash. Sliding 30-day expiry, absolute 90-day expiry. ADR 0005. The expiry slides on API requests, which re-issue the cookie with the remaining lifetime (`ACCT-B09`).
+- Cookie session (`enan.session_token`, Better Auth's, httpOnly, `SameSite=Lax`, Secure in production) at `/api/auth/*`. Sliding 30-day expiry, refreshed at most daily on API requests (`ACCT-B09`). ADR 0055.
 - Roles: `admin`, `member`. All members read and write shared module data. Admin additionally manages users, settings, backups, jobs, AI, and learnings.
 - **Private data** is stored in per-user tables (`meeting_private_notes`, user preferences) and never on shared rows. Services take `ctx` and filter private tables by `ctx.user.id` on every read path, including server components, jobs that build AI inputs (private notes are never sent to AI), audit diffs (private tables are not audited), and backups (included; backup operators are admins by definition).
 - `core/auth/guards.ts` exposes `session` and `admin` guards. `defineHandler` refuses a route without a guard.

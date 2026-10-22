@@ -6,7 +6,8 @@ import { migrateDatabase } from '@/core/db/migrate';
 import { env } from '@/core/config/env';
 import { insertUser, insertSession } from '@/core/db/auth-repo';
 import { writeSetting } from '@/core/db/settings-repo';
-import { users, sessions, settings } from '@/core/db/system-schema';
+import { users, settings } from '@/core/db/system-schema';
+import { authSessions } from '@/core/db/auth-schema';
 import { hashPassword } from '@/core/auth/password';
 import { User } from '@/core/http/user-schema';
 import { id } from '@/core/db/ids';
@@ -23,7 +24,7 @@ const session = vi.hoisted(() => ({
 vi.mock('@/core/auth/session', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/core/auth/session')>()),
   currentUser: async () => session.user,
-  currentSessionHash: async () => session.hash,
+  currentSessionId: async () => named.get(session.hash) ?? null,
   setLocaleCookie: async (locale: string) => {
     session.localeCookie = locale;
   },
@@ -57,8 +58,7 @@ async function call(
     'Content-Type': 'application/json',
     'Idempotency-Key': options.key ?? crypto.randomUUID(),
   };
-  if (options.requestedWith !== null)
-    headers['X-Requested-With'] = options.requestedWith ?? 'Enan';
+  if (options.requestedWith !== null) headers['X-Requested-With'] = options.requestedWith ?? 'Enan';
   const request = new Request(new URL(`/api/v1/account${path}`, env().APP_URL), {
     method,
     headers,
@@ -76,27 +76,30 @@ let holder: User;
 let member: User;
 let holderOther: string;
 let memberSession: string;
-async function session_(userId: string, tokenHash: string) {
+// Sessions are named in the scenarios and stored under their own id (ADR 0055); the request's
+// session is the one whose name `session.hash` holds.
+const named = vi.hoisted(() => new Map<string, string>());
+async function session_(userId: string, name: string) {
   const sessionId = id();
-  const now = new Date();
+  named.set(name, sessionId);
   await insertSession(db(), {
     id: sessionId,
     userId,
-    tokenHash,
-    issuedAt: now,
-    lastSeenAt: now,
-    expiresAt: new Date(now.getTime() + 86_400_000),
-    absoluteExpiresAt: new Date(now.getTime() + 86_400_000),
-    ip: '203.0.113.7',
-    userAgent: `Agent ${tokenHash}`,
+    token: id(),
+    expiresAt: new Date(Date.now() + 86_400_000),
+    ipAddress: '203.0.113.7',
+    userAgent: `Agent ${name}`,
   });
   return sessionId;
 }
-const live = (userId: string) =>
-  db()
-    .select({ tokenHash: sessions.tokenHash, revokedAt: sessions.revokedAt })
-    .from(sessions)
-    .where(eq(sessions.userId, userId));
+// The names of the sessions that still exist: ending one deletes it.
+const live = async (userId: string) => {
+  const rows = await db()
+    .select({ id: authSessions.id })
+    .from(authSessions)
+    .where(eq(authSessions.userId, userId));
+  return rows.map((row) => [...named].find(([, value]) => value === row.id)?.[0]);
+};
 const userRow = async (userId: string) =>
   (await db().select().from(users).where(eq(users.id, userId)))[0];
 beforeAll(async () => {
@@ -176,8 +179,7 @@ it('ACCT-A04 a member reads only their own account and cannot reach another sess
     params: { id: holderOther },
   });
   expect(revoke.status).toBe(404);
-  const rows = await db().select().from(sessions).where(eq(sessions.id, holderOther));
-  expect(rows[0]?.revokedAt).toBeNull();
+  expect(await live(holder.id)).toContain('hash-holder-other');
   // ACCT-I02: role and active state cannot be named in a patch, so a promotion is a 400 and the
   // row is untouched.
   const promote = await call(api.patch, 'PATCH', '', { revision: 1, role: 'admin' });
@@ -380,7 +382,7 @@ it('ACCT-B02 a wrong current password is reported on that field and changes noth
     passwordChangedAt: null,
     revision: 1,
   });
-  expect((await live(holder.id)).every((row) => row.revokedAt === null)).toBe(true);
+  expect(await live(holder.id)).toHaveLength(2);
 });
 
 it('ACCT-B02 ACCT-A02 the right current password changes it, keeps this session and signs out every other', async () => {
@@ -394,10 +396,9 @@ it('ACCT-B02 ACCT-A02 the right current password changes it, keeps this session 
   expect(row?.passwordHash).not.toBe(passwordHash);
   expect(row?.passwordChangedAt).toBeInstanceOf(Date);
   const mine = await live(holder.id);
-  expect(mine.find((s) => s.tokenHash === 'hash-holder-current')?.revokedAt).toBeNull();
-  expect(mine.find((s) => s.tokenHash === 'hash-holder-other')?.revokedAt).toBeInstanceOf(Date);
+  expect(mine).toEqual(['hash-holder-current']);
   // Someone else's devices are not "other sessions" of this account.
-  expect((await live(member.id))[0]?.revokedAt).toBeNull();
+  expect(await live(member.id)).toEqual(['hash-member']);
   const after = await call(api.detail, 'GET');
   expect(after.body.data.user.passwordChangedAt).toEqual(row?.passwordChangedAt?.toISOString());
   expect(after.body.data.sessions).toEqual([expect.objectContaining({ current: true })]);
@@ -455,5 +456,5 @@ it('ACCT-B03 "sign out everywhere else" revokes every other session, replays und
   expect(read.body.data.sessions).toEqual([
     expect.objectContaining({ current: true, userAgent: 'Agent hash-holder-current' }),
   ]);
-  expect((await live(member.id))[0]?.revokedAt).toBeNull();
+  expect(await live(member.id)).toEqual(['hash-member']);
 });

@@ -85,6 +85,13 @@
       "when": 1792706512744,
       "tag": "0011_google_sign_in",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1792708381729,
+      "tag": "0012_better_auth",
+      "breakpoints": true
     }
   ]
 }

@@ -6,9 +6,9 @@ import {
   schedules,
   loginAttempts,
   signInCodes,
-  sessions,
   idempotencyKeys,
 } from './system-schema';
+import { authSessions } from './auth-schema';
 import { db, withTransaction, type Database } from './client';
 import { id } from './ids';
 import type { z } from 'zod';
@@ -315,7 +315,7 @@ export async function prune(database: Database) {
   await database
     .delete(idempotencyKeys)
     .where(lt(idempotencyKeys.createdAt, new Date(Date.now() - 86400000)));
-  await database.delete(sessions).where(lt(sessions.expiresAt, new Date()));
+  await database.delete(authSessions).where(lt(authSessions.expiresAt, new Date()));
   await database
     .delete(signInCodes)
     .where(lt(signInCodes.createdAt, new Date(Date.now() - 86400000)));

@@ -42,7 +42,6 @@ afterAll(() => closeDatabase());
 it('ADMIN-B01 a concurrent retry of the same setup creates one administrator and signs in as it; ADMIN-B04 protects last active admin', async () => {
   const results = await Promise.all([setup(input), setup(input)]);
   expect(results[0].user.id).toBe(results[1].user.id);
-  expect(results[0].token).not.toBe(results[1].token);
   expect(await db().select().from(users)).toHaveLength(1);
   const user = results[0].user;
   await expect(

@@ -4,8 +4,7 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowRight } from 'lucide-react';
-import { z } from 'zod';
-import { request } from '@/core/http/client';
+import { authCall, authClient } from '@/core/http/auth-client';
 import { routes } from '@/core/routes';
 import { Button } from '@/ui/primitives/button';
 import { Input } from '@/ui/primitives/input';
@@ -18,12 +17,12 @@ export function CodeSignIn({ passwordEnabled }: { passwordEnabled: boolean }) {
   const t = useTranslations('auth');
   const [email, setEmail] = useState('');
   const [sentTo, setSentTo] = useState<string | null>(null);
+  const word = useTranslations('errors');
   const send = useMutation({
     mutationFn: (address: string) =>
-      request('/auth/code', z.object({ data: z.null() }), {
-        method: 'POST',
-        body: { email: address },
-      }),
+      authCall(authClient.emailOtp.sendVerificationOtp({ email: address, type: 'sign-in' }), (code) =>
+        word(code),
+      ),
     onSuccess: (_, address) => setSentTo(address),
   });
   return (
@@ -74,12 +73,10 @@ function CodeEntry({ email, onRestart }: { email: string; onRestart: () => void 
   const t = useTranslations('auth');
   const client = useQueryClient();
   const [code, setCode] = useState('');
+  const word = useTranslations('errors');
   const verify = useMutation({
     mutationFn: () =>
-      request('/auth/code/verify', z.object({ data: z.json() }), {
-        method: 'POST',
-        body: { email, code },
-      }),
+      authCall(authClient.signIn.emailOtp({ email, otp: code }), (failure) => word(failure)),
     onSuccess: () => {
       client.clear();
       location.assign(routes.home());

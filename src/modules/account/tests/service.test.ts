@@ -1,10 +1,11 @@
 import { beforeAll, beforeEach, afterAll, it, expect, vi } from 'vitest';
-import { sql, eq, and } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { closeDatabase, db, withTransaction, type Database } from '@/core/db/client';
 import { migrateDatabase } from '@/core/db/migrate';
 import { clearDatabase } from '@/core/db/reset';
 import { insertUser, insertSession } from '@/core/db/auth-repo';
-import { users, sessions, settings } from '@/core/db/system-schema';
+import { users, settings } from '@/core/db/system-schema';
+import { authSessions } from '@/core/db/auth-schema';
 import { getSetting, writeSetting } from '@/core/db/settings-repo';
 import { hashPassword } from '@/core/auth/password';
 import { User } from '@/core/http/user-schema';
@@ -12,26 +13,26 @@ import { id } from '@/core/db/ids';
 import * as service from '../service';
 import { AccountPatch } from '../schema/validation';
 // The account identifies its own session by the cookie the request arrived with, so the scenarios
-// control what that cookie is rather than going through the HTTP layer to set one.
+// control which session that is rather than going through the HTTP layer to set one.
 const currentHash = vi.hoisted(() => ({ value: 'session-hash-current' }));
 vi.mock('@/core/auth/session', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/core/auth/session')>()),
-  currentSessionHash: async () => currentHash.value,
+  currentSessionId: async () => named.get(currentHash.value) ?? null,
 }));
 type Ctx = { db: Database; user: User; requestId: string };
 let actor: User;
 const run = <T>(action: (ctx: Ctx) => Promise<T>) =>
   withTransaction(db(), (database) => action({ db: database, user: actor, requestId: id() }));
-async function session(tokenHash: string) {
-  const now = new Date();
+// Sessions are named in the scenarios and stored under their own id (ADR 0055).
+const named = vi.hoisted(() => new Map<string, string>());
+async function session(name: string) {
+  const sessionId = id();
+  named.set(name, sessionId);
   await insertSession(db(), {
-    id: id(),
+    id: sessionId,
     userId: actor.id,
-    tokenHash,
-    issuedAt: now,
-    lastSeenAt: now,
-    expiresAt: new Date(now.getTime() + 86_400_000),
-    absoluteExpiresAt: new Date(now.getTime() + 86_400_000),
+    token: id(),
+    expiresAt: new Date(Date.now() + 86_400_000),
   });
 }
 beforeAll(async () => {
@@ -110,11 +111,8 @@ it('ACCT-B02 keeps the session it was made in and revokes every other', async ()
     service.changePassword(ctx, 'correct horse battery', 'a new long password'),
   );
   expect(result.revoked).toBe(2);
-  const live = await db()
-    .select()
-    .from(sessions)
-    .where(sql`${sessions.revokedAt} is null`);
-  expect(live.map((row) => row.tokenHash)).toEqual(['session-hash-current']);
+  const live = await db().select().from(authSessions);
+  expect(live.map((row) => row.id)).toEqual([named.get('session-hash-current')]);
 });
 
 it('ACCT-B03 marks the requesting session as the current one', async () => {
@@ -141,17 +139,14 @@ it('ACCT-B03 revokes only the reader own session, never one belonging to someone
   await insertSession(db(), {
     id: theirs,
     userId: other.id,
-    tokenHash: 'theirs',
-    issuedAt: now,
-    lastSeenAt: now,
+    token: id(),
     expiresAt: new Date(now.getTime() + 86_400_000),
-    absoluteExpiresAt: new Date(now.getTime() + 86_400_000),
   });
   await expect(run((ctx) => service.revokeSessionById(ctx, theirs))).rejects.toMatchObject({
     code: 'not_found',
   });
-  const [row] = await db().select().from(sessions).where(eq(sessions.id, theirs));
-  expect(row?.revokedAt).toBeNull();
+  const [row] = await db().select().from(authSessions).where(eq(authSessions.id, theirs));
+  expect(row).toBeDefined();
 });
 
 it('ACCT-I03 clearing a preference removes the row so the workspace default reaches the reader', async () => {

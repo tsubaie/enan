@@ -15,6 +15,5 @@ export const defaults = {
   updaterCommandsDir: '/var/lib/enan-updater/commands',
   // ADMIN-B57: a version's release notes are this address followed by the version.
   releaseNotes: 'https://github.com/tsubaie/enan/releases/tag/v',
-  cookieName: 'eos_session',
   migrationLock: 7231,
 };

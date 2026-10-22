@@ -7,6 +7,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { request } from '@/core/http/client';
+import { authCall, authClient } from '@/core/http/auth-client';
 import { Locale, defaults } from '@/core/config/defaults';
 import { routes } from '@/core/routes';
 import { Button } from '@/ui/primitives/button';
@@ -32,7 +33,6 @@ type FormValues = z.infer<typeof Form>;
 type Mode = 'setup' | 'login' | 'recovery';
 const setupFields = z.enum(['name', 'workspaceName', 'timezone', 'principalName']);
 function authBody(mode: Mode, values: FormValues) {
-  if (mode === 'login') return { email: values.email, password: values.password };
   if (mode === 'recovery')
     return { email: values.email, password: values.password, token: values.token };
   const { token, ...setup } = values;
@@ -56,12 +56,23 @@ function useAuthState(mode: Mode) {
       token: '',
     },
   });
+  const word = useTranslations('errors');
+  // ADR 0055: signing in is Better Auth's. Setup makes the administrator first, then signs in the
+  // same way; recovery sets a password and sends the reader to sign in with it.
+  const signIn = (values: FormValues) =>
+    authCall(
+      authClient.signIn.email({ email: values.email, password: values.password }),
+      (code) => word(code),
+    );
   const mutation = useMutation({
-    mutationFn: (values: FormValues) =>
-      request(mode === 'login' ? '/auth/login' : `/${mode}`, z.object({ data: z.json() }), {
-        method: 'POST',
-        body: authBody(mode, values),
-      }),
+    mutationFn: async (values: FormValues) => {
+      if (mode !== 'login')
+        await request(`/${mode}`, z.object({ data: z.json() }), {
+          method: 'POST',
+          body: authBody(mode, values),
+        });
+      if (mode !== 'recovery') await signIn(values);
+    },
     onSuccess: () => {
       client.clear();
       location.assign(mode === 'recovery' ? routes.login() : routes.home());
