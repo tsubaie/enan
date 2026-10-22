@@ -5,8 +5,8 @@ on:
   pull_request:
 concurrency:
   group: ci-${{ github.ref }}
-  # A newer push cancels checks on other branches, never a run on main: cancelling a production
-  # deploy midway could leave the app stopped. On main the next run waits for this one.
+  # A newer push cancels checks on other branches, never a run on main: a run cut short there could
+  # leave `edge` behind the commit it already published. On main the next run waits for this one.
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 # `pnpm audit:all` is `audit:static && audit:data && audit:browser`, so the jobs below cover
@@ -291,7 +291,7 @@ jobs:
             ENAN_REVISION=${{ github.sha }}
           # Only the commit. An image that fails a check below must never become `edge` or `latest`.
           tags: ghcr.io/${{ github.repository }}:${{ github.sha }}
-          # `source` links the package to this repository, so the deploy job's GITHUB_TOKEN can pull it.
+          # `source` links the package to this repository, which makes it public with it (ADR 0051).
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.version=${{ steps.identity.outputs.version }}
@@ -508,86 +508,3 @@ jobs:
           image=ghcr.io/${{ github.repository }}
           docker buildx imagetools create --tag "$image:edge" "$image:${{ github.sha }}"
           docker buildx imagetools create --tag "$image-updater:edge" "$image-updater:${{ github.sha }}"
-
-  # Deploys main to the maintainer's server once the gate has passed (every check, and the image
-  # built, published and smoke-tested above). It runs only when the repository variable
-  # DEPLOY_ENABLED is "true", so forks and fresh clones never try to deploy. The server, user and
-  # paths come from the `production` environment's secrets, not from this file, and are masked
-  # in the public logs: DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY, DEPLOY_DIR (a checkout of this
-  # repository) and DEPLOY_OVERLAY (an untracked compose overlay in it that names the image). The environment
-  # admits only `main`, so no other branch or workflow can read them. On the server: take the app's own verified
-  # backup, pull the image, point the overlay at it and restart; migrations run on start. If the
-  # new container is not healthy within three minutes the overlay goes back to the previous image,
-  # the app is restarted on it, and the job fails (ADR 0039).
-  deploy:
-    name: Deploy
-    needs: [gate]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
-    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-latest"') }}
-    timeout-minutes: 20
-    environment: production
-    permissions:
-      contents: read
-      packages: read
-    steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          protocol: tcp4
-          timeout: 30s
-          command_timeout: 15m
-          envs: IMAGE,SHA,REPOSITORY,GHCR_USER,GHCR_TOKEN,DEPLOY_DIR,DEPLOY_OVERLAY
-          script: |
-            set -eu
-            cd "$DEPLOY_DIR"
-            # One deploy at a time on this host.
-            exec 9>"$DEPLOY_DIR/.deploy.lock"
-            flock -n 9 || { echo "::error::another deploy is running on the server"; exit 1; }
-            overlay=$DEPLOY_OVERLAY
-            compose="docker compose -f docker-compose.yml -f $overlay"
-            previous=$(sed -n 's/^ *image: *//p' "$overlay" | head -n 1)
-            echo "previous image: $previous, new image: $IMAGE"
-            # The compose files follow the deployed commit; the overlays are untracked and stay.
-            git fetch -q "https://x-access-token:${GHCR_TOKEN}@github.com/${REPOSITORY}.git" main
-            git reset -q --hard "$SHA"
-            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
-            docker pull -q "$IMAGE"
-            docker logout ghcr.io
-            app=$($compose ps -q app)
-            # The way back: a verified backup from the running version, before migrations touch it.
-            docker exec "$app" pnpm backup:create
-            # ADR 0048: the image's data moved from /var/lib/executiveos to /var/lib/enan. An overlay
-            # that mounts a volume at the old path would otherwise sit beside the new mount, and the
-            # app would start on an empty database. Rewriting it is a no-op once done.
-            sed -i 's#/var/lib/executiveos\b#/var/lib/enan#g' "$overlay"
-            sed -i "s#^\( *image: *\).*#\1$IMAGE#" "$overlay"
-            $compose up -d
-            app=$($compose ps -q app)
-            for attempt in $(seq 1 60); do
-              state=$(docker inspect -f '{{.State.Health.Status}}' "$app" 2>/dev/null || echo missing)
-              [ "$state" = healthy ] && break
-              sleep 3
-            done
-            if [ "$state" != healthy ]; then
-              docker logs --tail 80 "$app" || true
-              echo "::error::the new image is $state; rolling back to $previous"
-              sed -i "s#^\( *image: *\).*#\1$previous#" "$overlay"
-              $compose up -d
-              exit 1
-            fi
-            echo "deployed $IMAGE"
-            # Keep the deployed image and the one before it (the rollback); older ones re-pull.
-            docker images "ghcr.io/${REPOSITORY}" --format '{{.Repository}}:{{.Tag}}' \
-              | grep -v -x -e "$IMAGE" -e "$previous" | xargs -r docker rmi || true
-            docker image prune -f >/dev/null
-        env:
-          IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }}
-          SHA: ${{ github.sha }}
-          REPOSITORY: ${{ github.repository }}
-          GHCR_USER: ${{ github.repository_owner }}
-          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DEPLOY_DIR: ${{ secrets.DEPLOY_DIR }}
-          DEPLOY_OVERLAY: ${{ secrets.DEPLOY_OVERLAY }}

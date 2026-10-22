@@ -42,8 +42,8 @@ One decision per file. Format: **Status**, **Context**, **Decision**, **Conseque
 | 0036 | The Sadu mark, and a sage accent in the night theme | accepted, fixed accent superseded by 0037 (sage kept as fallback), mark superseded by 0046 |
 | 0037 | Uploaded wallpapers, and the accent follows the wallpaper | accepted |
 | 0038 | The route bundle budget is 300 KB | accepted |
-| 0039 | A push to main deploys to the server | accepted, amended by 0040; its image tags changed by 0050 |
-| 0040 | CI on GitHub's hosted runners; deployment is opt-in and configured outside the code | accepted |
+| 0039 | A push to main deploys to the server | accepted, amended by 0040; its image tags changed by 0050; its deploy superseded by 0052 |
+| 0040 | CI on GitHub's hosted runners; deployment is opt-in and configured outside the code | accepted; its deployment superseded by 0052 |
 | 0041 | Page changes start their data early and prefetch on intent | accepted |
 | 0042 | Oxlint replaces ESLint | accepted |
 | 0043 | TypeScript 7, and dependency-cruiser parses with swc | accepted |
@@ -55,5 +55,6 @@ One decision per file. Format: **Status**, **Context**, **Decision**, **Conseque
 | 0049 | An install may supply its own Arabic faces | accepted |
 | 0050 | Releases, channel tags, and migrations the previous release can run on | accepted |
 | 0051 | Installs update themselves through an opt-in updater service | accepted |
+| 0052 | The push deploy is removed; the maintainer's install updates itself | accepted |
 
 Open decisions awaiting an ADR: license (see roadmap); chart library confirmation (`recharts`).
