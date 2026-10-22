@@ -614,6 +614,8 @@
     "updateHistory": "التحديثات الأخيرة",
     "jobKind_users_updates": "إشعارات التحديث",
     "auditEntity_updater": "التحديث التلقائي",
+    "auditAction_purge": "حذف نهائي للعناصر القديمة من",
+    "auditEntity_trash": "سلة المهملات",
     "auditAction_update_check": "طلب فحص في",
     "auditAction_update_pause": "إيقاف مؤقت في",
     "auditAction_update_resume": "استئناف",

@@ -614,6 +614,8 @@
     "updateHistory": "Recent updates",
     "jobKind_users_updates": "Update notifications",
     "auditEntity_updater": "automatic updates",
+    "auditAction_purge": "Permanently deleted old items from",
+    "auditEntity_trash": "trash",
     "auditAction_update_check": "Asked for a check of",
     "auditAction_update_pause": "Paused",
     "auditAction_update_resume": "Resumed",

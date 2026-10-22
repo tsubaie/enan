@@ -115,7 +115,7 @@ it('ADMIN-B48 TASKS-B11 trash past the retention goes with its own parts; anythi
   expect(row?.committee_id).toBe(linked.id);
 });
 
-it('ADMIN-B48 a retention of 0 days never purges', async () => {
+it('ADMIN-B48 ADMIN-B43 a retention of 0 days never purges; a purge is on the audit record under System', async () => {
   const gone = await committee('Old');
   await run((ctx) => removeCommittee(ctx, gone.id, gone.revision));
   await age();
@@ -125,9 +125,18 @@ it('ADMIN-B48 a retention of 0 days never purges', async () => {
     handlerFor('system.trash_purge').publish(database, {} as never, null),
   );
   expect(await ids('committees')).toEqual([gone.id]);
+  const audited = () =>
+    db().all<{ actor_id: string | null; diff: string }>(
+      sql`select actor_id, diff from audit_log where action = 'purge' and entity_type = 'trash'`,
+    );
+  expect(await audited()).toEqual([]);
   await writeSetting(db(), 'retention.trash_days', 30, user.id);
   await withTransaction(db(), (database) =>
     handlerFor('system.trash_purge').publish(database, {} as never, null),
   );
   expect(await ids('committees')).toEqual([]);
+  // On the record, under System, with what went.
+  const [entry] = await audited();
+  expect(entry?.actor_id).toBeNull();
+  expect(JSON.parse(entry?.diff ?? '{}')).toEqual({ removed: { committees: 1 } });
 });

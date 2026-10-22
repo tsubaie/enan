@@ -4,7 +4,7 @@ import { createBackup, pruneBackups } from '@/core/backup/dump';
 import { prune } from '@/core/db/jobs-repo';
 import { purgeExpired } from '@/core/notifications/retention';
 import { purgeTrash } from '@/core/db/trash-repo';
-import { logger } from '@/core/config/logger';
+import { toJson, writeAudit } from '@/core/db/audit-repo';
 import { db } from '@/core/db/client';
 import { getSetting } from '@/core/db/settings-repo';
 import { mergeJobs } from '@/core/modules/registry';
@@ -32,7 +32,9 @@ const system: Record<string, JobHandler> = {
       const days = await getSetting(database, 'retention.trash_days');
       if (days <= 0) return;
       const removed = await purgeTrash(database, new Date(Date.now() - days * 86400000));
-      if (Object.keys(removed).length) logger.info({ removed }, 'Trash purged');
+      // What went for good is on the record, under System, with how many rows of each kind.
+      if (Object.keys(removed).length)
+        await writeAudit(database, null, 'purge', 'trash', null, toJson({ removed }));
     },
   },
   // NOTIF-B10: retention. A system kind rather than a module's, because the notifications module

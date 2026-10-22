@@ -10,7 +10,8 @@ export function toJson(value: object | Json): Json {
 }
 export async function writeAudit(
   database: Database,
-  actorId: string,
+  // null for a change the system makes on its own (ADMIN-B43 shows it as System).
+  actorId: string | null,
   action: string,
   entityType: string,
   entityId: string | null,
