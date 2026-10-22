@@ -8,6 +8,12 @@ export const NotificationKind = z.enum([
   'note.mentioned',
   'kpi.off_target',
   'job.finished',
+  // ADMIN-B59: owned by the users module, which owns the administration area.
+  'update.installed',
+  'update.failed',
+  'update.rollback_failed',
+  'update.blocked',
+  'update.stalled',
 ]);
 export type NotificationKind = z.infer<typeof NotificationKind>;
 export const Notification = z.object({

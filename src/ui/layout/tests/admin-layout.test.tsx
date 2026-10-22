@@ -41,6 +41,7 @@ it('ADMIN-B40 the side list groups every administration page and marks the one s
     '/admin/notes',
     '/admin/objectives',
     '/admin/backups',
+    '/admin/updates',
     '/admin/jobs',
     '/admin/audit',
   ]);

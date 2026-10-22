@@ -48,6 +48,7 @@ const pages = [
   'notes',
   'objectives',
   'backups',
+  'updates',
   'jobs',
   'audit',
 ] as const;

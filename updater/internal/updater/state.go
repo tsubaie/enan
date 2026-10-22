@@ -54,6 +54,7 @@ const previousSuffix = "-enan-previous"
 
 // Outcomes recorded in the status.
 const (
+	Checking       = "checking"
 	Checked        = "checked"
 	Updating       = "updating"
 	Updated        = "updated"
@@ -80,6 +81,8 @@ type Status struct {
 	LastCheckAt    time.Time `json:"lastCheckAt,omitzero"`
 	Paused         bool      `json:"paused"`
 	UpdaterUpdate  string    `json:"updaterUpdate,omitempty"`
+	// How often the updater checks, so a reader can tell when it has stopped (ADMIN-B57).
+	IntervalSeconds int `json:"intervalSeconds"`
 }
 
 type store struct{ dir string }

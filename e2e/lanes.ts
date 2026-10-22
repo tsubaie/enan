@@ -1,4 +1,5 @@
 import { availableParallelism } from 'node:os';
+import { resolve } from 'node:path';
 
 // Lanes: the browser suite runs on several Playwright workers at once, and its tests change state
 // (tasks, notes, settings, the workspace itself), so every worker owns a lane — its own SQLite
@@ -42,6 +43,12 @@ export function currentLane() {
   return value;
 }
 
+// ADMIN-B57: the updater's two folders for a lane; absolute, because the standalone server runs
+// from .next/standalone.
+export function updaterDirs(lane = currentLane()) {
+  const root = resolve(`tmp/e2e-updater${lane === 0 ? '' : `-lane${lane}`}`);
+  return { status: `${root}/status`, commands: `${root}/commands` };
+}
 export function laneBaseURL(lane = currentLane()) {
   return `http://localhost:${FIRST_PORT + lane}`;
 }
@@ -73,5 +80,7 @@ export function laneEnv(lane: number): Record<string, string> {
     HOSTNAME: '127.0.0.1',
     // ADMIN-B54: what the production image sets to its commit.
     ENAN_REVISION: 'e2e-revision',
+    UPDATER_STATUS_DIR: updaterDirs(lane).status,
+    UPDATER_COMMANDS_DIR: updaterDirs(lane).commands,
   };
 }

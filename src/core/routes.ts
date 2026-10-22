@@ -8,7 +8,16 @@ function withQuery(path: string, query: Query = {}) {
   return encoded ? `${path}?${encoded}` : path;
 }
 export type AdminPage =
-  'users' | 'settings' | 'tasks' | 'notes' | 'objectives' | 'ai' | 'backups' | 'jobs' | 'audit';
+  | 'users'
+  | 'settings'
+  | 'tasks'
+  | 'notes'
+  | 'objectives'
+  | 'ai'
+  | 'backups'
+  | 'updates'
+  | 'jobs'
+  | 'audit';
 export const routes = {
   committees: (query?: Optional<'view' | 'id' | 'scope'>) => withQuery('/committees', query),
   root: () => '/',

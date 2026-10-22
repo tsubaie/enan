@@ -11,7 +11,7 @@ const line = {
   createdAt: '2026-09-10T09:00:00.000Z',
   readAt: null,
 };
-it('NOTIF-I03 NOTIF-B04 the kinds are the six shipped in v1 and nothing else parses', () => {
+it('NOTIF-I03 NOTIF-B04 ADMIN-B59 the kinds are the six of v1 and the five update kinds, nothing else', () => {
   expect([...NotificationKind.options].sort()).toEqual(
     [
       'task.assigned',
@@ -20,6 +20,11 @@ it('NOTIF-I03 NOTIF-B04 the kinds are the six shipped in v1 and nothing else par
       'note.mentioned',
       'kpi.off_target',
       'job.finished',
+      'update.installed',
+      'update.failed',
+      'update.rollback_failed',
+      'update.blocked',
+      'update.stalled',
     ].sort(),
   );
   expect(NotificationKind.safeParse('task.commented').success).toBe(false);

@@ -58,6 +58,11 @@ it('NOTIF-I03 the database refuses a kind no module declares', async () => {
     'note.mentioned',
     'kpi.off_target',
     'job.finished',
+    'update.installed',
+    'update.failed',
+    'update.rollback_failed',
+    'update.blocked',
+    'update.stalled',
   ])
     await expect(insert({ userId: member.id, kind })).resolves.toBeTruthy();
 });

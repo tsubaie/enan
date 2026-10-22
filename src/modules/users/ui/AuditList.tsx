@@ -19,6 +19,7 @@ import { addDays, dayAt } from '@/core/time/tasks';
 import { defaults } from '@/core/config/defaults';
 import { useDateTime, usePlainDate, useRelativeTime, useToday } from '@/ui/format';
 import { useAuditChanges } from './audit-changes';
+import { ActionKey, EntityKey } from './audit-keys';
 export const AuditRow = z.object({
   id: z.string(),
   action: z.string(),
@@ -112,48 +113,6 @@ function subjectOf(diff: Entry['diff']) {
   if (!parsed.success) return null;
   return parsed.data.title ?? parsed.data.name ?? parsed.data.fullName ?? parsed.data.key ?? null;
 }
-const ActionKey = z.enum([
-  'download',
-  'create',
-  'update',
-  'delete',
-  'restore',
-  'archive',
-  'unarchive',
-  'complete',
-  'undo_complete',
-  'reopen',
-  'reorder',
-  'merge',
-  'cancel',
-  'retry',
-  'tags_merge',
-  'tags_delete',
-  'ai_controls_update',
-  'ai_credentials_save',
-  'ai_credentials_remove',
-  'ai_job_cancel',
-  'ai_models_update',
-]);
-const EntityKey = z.enum([
-  'task',
-  'note',
-  'person',
-  'committee',
-  'kpi',
-  'kpi_reading',
-  'kpi_target',
-  'kpi_targets',
-  'objective',
-  'setting',
-  'settings',
-  'user',
-  'ai_credentials',
-  'jobs',
-  'backup',
-  'tag',
-  'wallpaper',
-]);
 const clip = (text: string) => (text.length > 80 ? `${text.slice(0, 80)}…` : text);
 // A setting is named the way the settings page names it, not by its key.
 const settingNames: Record<

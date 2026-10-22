@@ -297,6 +297,7 @@ func TestScenarios(t *testing.T) {
 		{"ADMIN-B56 a second updater is refused", aSecondUpdaterIsRefused},
 		{"ADMIN-B56 commands are read once", commandsAreReadOnce},
 		{"ADMIN-B56 the history keeps the last outcomes", historyKeepsTheLastOutcomes},
+		{"ADMIN-B56 an update held back is one history entry, not one per check", aHeldUpdateIsOneHistoryEntry},
 	} {
 		t.Run(scenario.name, scenario.run)
 	}
@@ -569,5 +570,21 @@ func historyKeepsTheLastOutcomes(t *testing.T) {
 	data, _ := os.ReadFile(filepath.Join(u.Config.StatusDir, "history.jsonl"))
 	if lines := strings.Count(string(data), "\n"); lines != historyLength {
 		t.Fatalf("%d history lines", lines)
+	}
+}
+
+func aHeldUpdateIsOneHistoryEntry(t *testing.T) {
+	u, f, sent := setup(t)
+	f.image("img-2", "sha256:two", "2.0.0", 8, 0)
+	f.publish("latest", "sha256:two")
+	for range 5 {
+		u.Check(context.Background())
+	}
+	data, _ := os.ReadFile(filepath.Join(u.Config.StatusDir, "history.jsonl"))
+	if lines := strings.Count(string(data), "\n"); lines != 1 || u.status.State != Blocked {
+		t.Fatalf("%d history lines, state %s", lines, u.status.State)
+	}
+	if len(*sent) != 1 {
+		t.Fatalf("alerts %v", *sent)
 	}
 }

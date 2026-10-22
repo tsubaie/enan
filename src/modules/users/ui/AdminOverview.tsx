@@ -144,11 +144,12 @@ const aiKey: Record<AiReading, 'connected' | 'aiConnectionFailed' | 'disabledAI'
     notConfigured: 'disabledAI',
     notTested: 'aiNotTested',
   };
-const DescribedPage = z.enum(['settings', 'tasks', 'notes', 'objectives']);
+const DescribedPage = z.enum(['settings', 'tasks', 'notes', 'objectives', 'updates']);
 const describedKey: Record<
-  'settings' | 'tasks' | 'notes' | 'objectives',
-  'overviewSettings' | 'overviewTasks' | 'overviewNotes' | 'overviewObjectives'
+  'settings' | 'tasks' | 'notes' | 'objectives' | 'updates',
+  'overviewSettings' | 'overviewTasks' | 'overviewNotes' | 'overviewObjectives' | 'overviewUpdates'
 > = {
+  updates: 'overviewUpdates',
   settings: 'overviewSettings',
   tasks: 'overviewTasks',
   notes: 'overviewNotes',

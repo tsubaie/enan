@@ -18,6 +18,10 @@ services:
       - data:/var/lib/enan/data
       - files:/var/lib/enan/files
       - backups:/var/lib/enan/backups
+      # ADMIN-B57, ADR 0051: the updater's status, read-only, and where Admin → Updates leaves
+      # its requests. Both stay empty while the updater is off.
+      - updater-status:/var/lib/enan-updater/status:ro
+      - updater-commands:/var/lib/enan-updater/commands
     restart: unless-stopped
     stop_grace_period: 35s
     healthcheck:

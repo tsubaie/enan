@@ -1,5 +1,5 @@
 import 'server-only';
-import { and, eq, gt, lte, isNull, or, sql, desc, count, inArray, lt } from 'drizzle-orm';
+import { and, eq, gt, lte, isNull, or, sql, desc, count, inArray, lt, ne } from 'drizzle-orm';
 import {
   jobs,
   jobAttempts,
@@ -137,6 +137,18 @@ export async function latestJob(database: Database, kind: string) {
     .orderBy(desc(jobs.createdAt))
     .limit(1);
   return row ?? null;
+}
+// When a kind last finished successfully, for a scheduled job that reports what happened since.
+// `current` is the asking job: publish marks it succeeded before its effect runs, in the same
+// transaction, so without excluding it every run would find itself.
+export async function lastSucceeded(database: Database, kind: string, current: string) {
+  const [row] = await database
+    .select({ finishedAt: jobs.finishedAt })
+    .from(jobs)
+    .where(and(eq(jobs.kind, kind), eq(jobs.status, 'succeeded'), ne(jobs.id, current)))
+    .orderBy(desc(jobs.finishedAt))
+    .limit(1);
+  return row?.finishedAt ?? null;
 }
 async function selectCandidate(database: Database, kind: string, now: Date) {
   const [candidate] = await database
