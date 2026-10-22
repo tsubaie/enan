@@ -11,7 +11,7 @@ import { transactional } from '@/core/db/transaction';
 import { z } from 'zod';
 import { settingsRegistry, isSettingKey, type SettingKey } from '@/core/config/settings';
 import { getSetting, readSettings, writeSetting } from '@/core/db/settings-repo';
-import { db } from '@/core/db/client';
+import { db, withTransaction } from '@/core/db/client';
 import { createHash } from 'node:crypto';
 import {
   Wallpaper,
@@ -156,20 +156,17 @@ async function store(bytes: Uint8Array, mime: string) {
 }
 // ADMIN-B47: the upload is checked by size, then by its first bytes, then decoded and re-encoded
 // (core/files/wallpaper-image), and only the re-encoded image and its thumbnail are stored. The
-// tone and accent come from the decoded pixels, never from the browser.
-export const uploadWallpaper = transactional(async function uploadWallpaper(
-  ctx: Context,
-  input: { file: File },
-) {
+// tone and accent come from the decoded pixels, never from the browser. Decoding takes seconds on
+// a small server, so it and the file writes happen before the write lock (ADR 0054); the rows go
+// in one short transaction, and a failed one removes the files it would have named.
+const wallpaperLimit = () =>
+  new AppError('rule_violation', { reason: 'limit_reached', max: wallpaperImageLimits.maxStored });
+export async function uploadWallpaper(ctx: Context, input: { file: File }) {
   if (ctx.user.role !== 'admin') throw new AppError('forbidden');
   const limit = env().WALLPAPER_MAX_MB * 1024 * 1024;
   if (input.file.size > limit)
     throw new AppError('rule_violation', { reason: 'too_large', maxBytes: limit });
-  if ((await countWallpapers(ctx.db)) >= wallpaperImageLimits.maxStored)
-    throw new AppError('rule_violation', {
-      reason: 'limit_reached',
-      max: wallpaperImageLimits.maxStored,
-    });
+  if ((await countWallpapers(ctx.db)) >= wallpaperImageLimits.maxStored) throw wallpaperLimit();
   const bytes = new Uint8Array(await input.file.arrayBuffer());
   if (!imageTypeOf(bytes)) throw new AppError('rule_violation', { reason: 'unsupported_type' });
   const processed = await processWallpaperImage(bytes);
@@ -181,50 +178,61 @@ export const uploadWallpaper = transactional(async function uploadWallpaper(
     stored.push(await store(processed.thumbnail, processed.mime));
     const [image, thumbnail] = stored;
     if (!image || !thumbnail) throw new AppError('internal');
-    await insertWallpaper(ctx.db, {
-      id: wallpaperId,
-      name,
-      tone: processed.tone,
-      accent: processed.accent,
-      createdBy: ctx.user.id,
-      image,
-      thumbnail,
+    return await withTransaction(ctx.db, async (database) => {
+      // Checked again under the lock: two uploads may both have passed the check above.
+      if ((await countWallpapers(database)) >= wallpaperImageLimits.maxStored)
+        throw wallpaperLimit();
+      await insertWallpaper(database, {
+        id: wallpaperId,
+        name,
+        tone: processed.tone,
+        accent: processed.accent,
+        createdBy: ctx.user.id,
+        image,
+        thumbnail,
+      });
+      const { tone, accent } = processed;
+      await writeAudit(database, ctx.user.id, 'create', 'wallpaper', wallpaperId, {
+        name,
+        tone,
+        accent,
+      });
+      const row = await selectWallpaperById(database, wallpaperId);
+      if (!row) throw new AppError('internal');
+      return shown(row);
     });
   } catch (error) {
     for (const file of stored) await removeStoredFile(file.storageKey);
     throw error;
   }
-  const { tone, accent } = processed;
-  await writeAudit(ctx.db, ctx.user.id, 'create', 'wallpaper', wallpaperId, { name, tone, accent });
-  const row = await selectWallpaperById(ctx.db, wallpaperId);
-  if (!row) throw new AppError('internal');
-  return shown(row);
-});
+}
 // Deleting is for good: both rows and the binary go. The chosen wallpaper falls back to the
-// default first, so no page is ever drawn on an image that no longer exists.
-export const deleteWallpaper = transactional(async function deleteWallpaper(
-  ctx: Context,
-  wallpaperId: string,
-) {
+// default first, so no page is ever drawn on an image that no longer exists. The files go only
+// once the rows' removal has committed (ADR 0054): a rollback must never leave a row without them.
+export async function deleteWallpaper(ctx: Context, wallpaperId: string) {
   if (ctx.user.role !== 'admin') throw new AppError('forbidden');
-  await lockWorkspace(ctx.db);
-  const row = await selectWallpaperById(ctx.db, wallpaperId);
-  if (!row) throw new AppError('not_found');
-  const chosen = await getSetting(ctx.db, 'workspace.wallpaper');
-  const reset = chosen === row.id;
-  if (reset) {
-    await writeSetting(ctx.db, 'workspace.wallpaper', defaultWallpaper, ctx.user.id);
-    await writeAudit(ctx.db, ctx.user.id, 'update', 'setting', null, {
-      key: 'workspace.wallpaper',
-      value: defaultWallpaper,
-    });
-  }
-  await deleteWallpaperRows(ctx.db, row);
-  await writeAudit(ctx.db, ctx.user.id, 'delete', 'wallpaper', row.id, { name: row.name });
+  const { row, result } = await withTransaction(ctx.db, async (database) => {
+    await lockWorkspace(database);
+    const row = await selectWallpaperById(database, wallpaperId);
+    if (!row) throw new AppError('not_found');
+    const chosen = await getSetting(database, 'workspace.wallpaper');
+    const reset = chosen === row.id;
+    if (reset) {
+      await writeSetting(database, 'workspace.wallpaper', defaultWallpaper, ctx.user.id);
+      await writeAudit(database, ctx.user.id, 'update', 'setting', null, {
+        key: 'workspace.wallpaper',
+        value: defaultWallpaper,
+      });
+    }
+    await deleteWallpaperRows(database, row);
+    await writeAudit(database, ctx.user.id, 'delete', 'wallpaper', row.id, { name: row.name });
+    const wallpaper = reset ? defaultWallpaper : WallpaperChoice.parse(chosen);
+    return { row, result: { id: row.id, wallpaper } };
+  });
   await removeStoredFile(row.storageKey);
   if (row.thumbnailKey) await removeStoredFile(row.thumbnailKey);
-  return { id: row.id, wallpaper: reset ? defaultWallpaper : WallpaperChoice.parse(chosen) };
-});
+  return result;
+}
 // The image behind an uploaded wallpaper, or its thumbnail, for any signed-in member: every page
 // is drawn on it. An image stored before thumbnails were made answers its thumbnail with itself.
 export async function wallpaperImage(wallpaperId: string, size: 'full' | 'thumbnail' = 'full') {

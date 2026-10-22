@@ -320,6 +320,11 @@ func (u *Updater) guard(running, candidate *Image) string {
 	if !u.Config.AllowMajor && major(running.Version) >= 0 && major(candidate.Version) > major(running.Version) {
 		return fmt.Sprintf("%s is a new major version after %s; set ENAN_ALLOW_MAJOR=true to install it", candidate.Version, running.Version)
 	}
+	// An older candidate (a channel moved back, or switched): it must be able to read this database.
+	// Not overridable here; going back across a contract is `enan-updater rollback --force`.
+	if running.Contract > candidate.Schema {
+		return fmt.Sprintf("%s cannot read migration %d of the running %s (ADR 0050); restore a backup taken before it instead", versionOf(candidate), running.Contract, versionOf(running))
+	}
 	if !u.Config.AllowContract && candidate.Contract > running.Schema {
 		return fmt.Sprintf("migration %d of %s cannot be undone by going back to %s (ADR 0050); back up, then set ENAN_ALLOW_CONTRACT=true to install it", candidate.Contract, versionOf(candidate), versionOf(running))
 	}

@@ -8,6 +8,8 @@ export const read = defineHandler({
   guard: 'admin',
   input: z.strictObject({}),
   response,
+  // It may fetch the provider's catalog; it only reads.
+  transaction: false,
   handler: async (_, ctx) => ({ data: await modelSettings(ctx.db) }),
 });
 export const save = defineHandler({

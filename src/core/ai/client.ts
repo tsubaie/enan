@@ -9,20 +9,28 @@ type Connection = {
   error: string | null;
 };
 const KeyStatus = z.object({ data: z.object({ limit_remaining: z.number().nullable() }) });
-let connection: Connection = { state: 'disabled', checkedAt: null, error: null };
-export function aiConnection() {
-  return connection;
+// Once per process, as the database client's state is (src/core/db/client.ts): every server chunk
+// carries a copy of this module, and a status kept per chunk means a provider call per chunk.
+declare global {
+  var enanAiConnection: Connection | undefined;
+}
+export function aiConnection(): Connection {
+  return (globalThis.enanAiConnection ??= { state: 'disabled', checkedAt: null, error: null });
 }
 export function resetConnection() {
-  connection = { state: 'disabled', checkedAt: null, error: null };
+  globalThis.enanAiConnection = { state: 'disabled', checkedAt: null, error: null };
 }
 export async function checkConnection(database?: Database) {
   let error: string | null = null;
   try {
     const client = await aiClient(10_000, database);
     if (!client) {
-      connection = { state: 'disabled', checkedAt: new Date().toISOString(), error: null };
-      return connection;
+      globalThis.enanAiConnection = {
+        state: 'disabled',
+        checkedAt: new Date().toISOString(),
+        error: null,
+      };
+      return globalThis.enanAiConnection;
     }
     // ADMIN-B23: the public model catalog cannot verify a key; this authenticated endpoint can.
     const raw: unknown = await client.get('/v1/key');
@@ -31,10 +39,10 @@ export async function checkConnection(database?: Database) {
   } catch (cause) {
     error = connectionError(cause);
   }
-  connection = {
+  globalThis.enanAiConnection = {
     state: error ? 'error' : 'enabled',
     checkedAt: new Date().toISOString(),
     error,
   };
-  return connection;
+  return globalThis.enanAiConnection;
 }

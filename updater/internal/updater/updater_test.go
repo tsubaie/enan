@@ -462,6 +462,8 @@ func guards(t *testing.T) {
 		{"a migration the running release cannot read", "1.1.0", 9, 8, nil, true},
 		{"a contract migration the running release already has", "1.1.0", 9, 7, nil, false},
 		{"a contract migration, allowed", "1.1.0", 9, 8, func(c *Config) { c.AllowContract = true }, false},
+		{"an older image that cannot read the running database", "0.9.0", 5, 0, func(c *Config) { c.AllowContract = true }, true},
+		{"an older image that can read the running database", "0.9.0", 6, 0, nil, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -469,6 +471,8 @@ func guards(t *testing.T) {
 			if tc.allow != nil {
 				tc.allow(&u.Config)
 			}
+			// The running image's own newest contract migration is 6.
+			f.image("img-1", "sha256:one", "1.0.0", 7, 6)
 			f.image("img-2", "sha256:two", tc.version, tc.schema, tc.contract)
 			f.publish("latest", "sha256:two")
 			u.Check(context.Background())

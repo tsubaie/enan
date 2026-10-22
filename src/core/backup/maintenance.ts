@@ -53,6 +53,14 @@ async function claim(file: string, retry = true): Promise<boolean> {
     return claim(file, false);
   }
 }
+// ADMIN-B31: called once at server start. A lock naming this pid was left by this process before
+// it restarted (pid 1 again in a container); a restore command, another pid, would see pid 1 alive
+// and be refused until the next backup took the lock over.
+export async function releaseStaleLock() {
+  const file = join(env().BACKUP_DIR, '.lock');
+  const holder = await readFile(file, 'utf8').catch(() => '');
+  if (!holding && Number(holder) === process.pid) await rm(file, { force: true });
+}
 export async function withBackupLock<T>(
   work: () => Promise<T>,
 ): Promise<{ acquired: true; value: T } | { acquired: false }> {

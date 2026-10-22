@@ -11,6 +11,10 @@ export async function register() {
   const { bootstrap } = await import('./core/auth/bootstrap');
   await migrateDatabase();
   await bootstrap();
+  const { releaseStaleLock } = await import('./core/backup/maintenance');
+  await releaseStaleLock();
+  const { removePartialFiles } = await import('./core/files/storage');
+  await removePartialFiles();
   const { env } = await import('./core/config/env');
   const { checkConnection } = await import('./core/ai/client');
   await checkConnection();

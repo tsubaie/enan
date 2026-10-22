@@ -23,21 +23,21 @@ export function contentHash(input: z.infer<ReturnType<typeof z.json>>) {
   return createHash('sha256').update(JSON.stringify(input)).digest('hex');
 }
 let refreshing: ReturnType<typeof checkConnection> | undefined;
-export async function availableCapabilities(ctx: Context) {
+// `wait` only from a route without a transaction (the availability read): a provider call may
+// take seconds, and inside the write lock it would hold up every other writer. Otherwise a
+// never-checked connection or a missing catalog is fetched in the background and AI is not ready yet.
+export async function availableCapabilities(ctx: Context, wait = false) {
   if (!env().JOBS_ENABLED) return [];
-  // Route bundles may not share instrumentation's module state; initialize on demand. Only a
-  // never-checked connection is awaited: a stale one is refreshed in the background, because this
-  // often runs inside a request's write transaction and the check is a provider call.
   const connection = aiConnection();
-  if (connection.checkedAt === null) await checkConnection(ctx.db);
-  else if (Date.now() - Date.parse(connection.checkedAt) > 60000)
+  if (connection.checkedAt === null && wait) await checkConnection(ctx.db);
+  else if (connection.checkedAt === null || Date.now() - Date.parse(connection.checkedAt) > 60000)
     refreshing ??= checkConnection().finally(() => (refreshing = undefined));
   if (aiConnection().state !== 'enabled') return [];
   const enabled = await getSetting(ctx.db, 'ai.enabled_capabilities');
   const defaultModel = await getSetting(ctx.db, 'ai.model.default');
   const fastModel = await getSetting(ctx.db, 'ai.model.fast');
   try {
-    const models = await loadModels();
+    const models = await loadModels({ wait });
     return enabled.filter((capability) => {
       const slot = capability === 'notes.suggest_tags' ? 'fast' : 'default';
       return models.some((model) => model.id === (slot === 'fast' ? fastModel : defaultModel) && supportsModelSlot(model, slot));
@@ -51,7 +51,8 @@ export async function availableCapabilities(ctx: Context) {
 // feature this office simply does not use, which is not news on any record, let alone every one.
 // `availableCapabilities` refreshes the connection first, so the state read here is the fresh one.
 export async function aiAvailability(ctx: Context) {
-  const capabilities = await availableCapabilities(ctx);
+  // Only the availability route calls this, and it runs without a transaction.
+  const capabilities = await availableCapabilities(ctx, true);
   const enabled = await getSetting(ctx.db, 'ai.enabled_capabilities');
   const configured =
     env().JOBS_ENABLED && aiConnection().state !== 'disabled' && enabled.length > 0;
@@ -120,7 +121,7 @@ async function chooseModel(
 ) {
   const slot = capability === 'notes.suggest_tags' ? 'ai.model.fast' : 'ai.model.default';
   const selected = await getSetting(ctx.db, slot);
-  const model = (await loadModels()).find((entry) => entry.id === selected);
+  const model = (await loadModels({ wait: false })).find((entry) => entry.id === selected);
   if (!model) throw new AppError('ai_unavailable', { reason: 'model' });
   const maxOutputTokens = Math.min(
     capability === 'notes.refine' ? 16000 : capability === 'notes.suggest_tags' ? aiExecutionLimits.tags.maxOutputTokens : 4096,

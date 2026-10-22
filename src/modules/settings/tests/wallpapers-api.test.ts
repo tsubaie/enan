@@ -7,7 +7,8 @@ import { migrateDatabase } from '@/core/db/migrate';
 import { env } from '@/core/config/env';
 import { insertUser } from '@/core/db/auth-repo';
 import { auditLog, files, settings } from '@/core/db/system-schema';
-import { readStoredFile } from '@/core/files/storage';
+import { readStoredFile, removePartialFiles } from '@/core/files/storage';
+import { names, writeTree } from '@/core/backup/tests/fixtures/archive';
 import { insertWallpaper } from '../repo';
 import { User } from '@/core/http/user-schema';
 import { id } from '@/core/db/ids';
@@ -25,6 +26,18 @@ vi.mock('@/core/auth/session', async (importOriginal) => ({
   currentUser: async () => session.user,
 }));
 vi.mock('next-intl/server', () => ({ getTranslations: async () => (key: string) => key }));
+// The real decoder, announcing when it starts, so a test can act while an upload is decoding.
+const decoder = vi.hoisted(() => ({ started: () => {} }));
+vi.mock('@/core/files/wallpaper-image', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@/core/files/wallpaper-image')>();
+  return {
+    ...real,
+    processWallpaperImage: (...args: Parameters<typeof real.processWallpaperImage>) => {
+      decoder.started();
+      return real.processWallpaperImage(...args);
+    },
+  };
+});
 // Real images, made here: a still frame of one colour, optionally with EXIF (GPS included).
 const frame = (width: number, height: number, rgb = { r: 40, g: 90, b: 230 }) =>
   sharp({ create: { width, height, channels: 3, background: rgb } });
@@ -355,6 +368,58 @@ it('ADMIN-B47 delete removes the rows and both binaries; deleting the chosen ima
   // Deleting one that is not chosen leaves the choice alone.
   await choose('sky');
   expect((await remove(kept.body.data.id)).body.data.wallpaper).toBe('sky');
+});
+
+it('ADMIN-B47 an upload decodes outside the write lock: a save made meanwhile is not held up', async () => {
+  const large = new Uint8Array(await frame(3800, 2400).png().toBuffer());
+  const finished: string[] = [];
+  const decoding = new Promise<void>((resolve) => (decoder.started = resolve));
+  const uploading = upload({ bytes: large }).then((result) => (finished.push('upload'), result));
+  await decoding;
+  const saving = choose('sky').then((result) => (finished.push('save'), result));
+  expect((await saving).status).toBe(200);
+  expect((await uploading).status).toBe(201);
+  expect(finished).toEqual(['save', 'upload']);
+});
+
+it('ADMIN-B47 two uploads racing for the last place: one is refused and leaves no file behind', async () => {
+  for (let i = 0; i < wallpaperImageLimits.maxStored - 1; i += 1) {
+    const file = () => ({
+      id: id(),
+      storageKey: `wallpaper-${id()}`,
+      mime: 'image/webp',
+      sizeBytes: 1,
+      sha256: 'x',
+    });
+    await insertWallpaper(db(), {
+      id: id(),
+      name: `n${i}`,
+      tone: 'dark',
+      accent: null,
+      createdBy: admin.id,
+      image: file(),
+      thumbnail: file(),
+    });
+  }
+  const before = await names(env().FILES_DIR).catch((): string[] => []);
+  const results = await Promise.all([upload({ bytes: png }), upload({ bytes: jpeg })]);
+  expect(results.map((result) => result.status).sort()).toEqual([201, 422]);
+  const added = (await names(env().FILES_DIR)).filter((name) => !before.includes(name));
+  const owned = await db().select().from(files);
+  expect(added.sort()).toEqual(
+    owned
+      .map((file) => file.storageKey)
+      .filter((key) => added.includes(key))
+      .sort(),
+  );
+  expect(added).toHaveLength(2);
+});
+
+it('ADMIN-B47 a temporary file a crash left is removed at the next start', async () => {
+  const leftover = `.wallpaper-${id()}.partial`;
+  await writeTree(env().FILES_DIR, { [leftover]: 'half' });
+  await removePartialFiles();
+  expect(await names(env().FILES_DIR)).not.toContain(leftover);
 });
 
 it('ADMIN-B42 a saved choice of a retired wallpaper (Indigo, Fan, Mist) is read as the default, Jade', async () => {
