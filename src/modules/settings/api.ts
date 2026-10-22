@@ -5,6 +5,8 @@ import { env } from '@/core/config/env';
 import { WallpaperChoice } from '@/core/config/wallpapers';
 import { SignInMethodsStatus, SignInMethodsWrite } from '@/core/config/sign-in-schema';
 import { signInMethods } from '@/core/auth/methods';
+import { GoogleSettingsWrite, GoogleStatus } from '@/core/config/google-schema';
+import { googleStatus, removeGoogle, saveGoogle } from '@/core/auth/google-settings';
 import { Setting, SettingWrite, UploadedWallpaper, WallpaperUpload } from './schema/validation';
 import {
   deleteWallpaper,
@@ -94,4 +96,26 @@ export const signInSave = defineHandler({
     await updateSetting(authenticated(ctx), 'auth.sign_in_methods', input.methods);
     return { data: await signInMethods(ctx.db) };
   },
+});
+// ADMIN-B65: the Google OAuth client; the secret is never returned.
+const google = z.object({ data: GoogleStatus });
+export const googleRead = defineHandler({
+  guard: 'admin',
+  input: z.strictObject({}),
+  response: google,
+  handler: async (_, ctx) => ({ data: await googleStatus(ctx.db) }),
+});
+export const googleSave = defineHandler({
+  guard: 'admin',
+  input: GoogleSettingsWrite,
+  response: google,
+  handler: async (input, ctx) => ({
+    data: await saveGoogle(ctx.db, authenticated(ctx).user.id, input),
+  }),
+});
+export const googleRemove = defineHandler({
+  guard: 'admin',
+  input: z.strictObject({}),
+  response: google,
+  handler: async (_, ctx) => ({ data: await removeGoogle(ctx.db, authenticated(ctx).user.id) }),
 });

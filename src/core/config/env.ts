@@ -39,6 +39,9 @@ const Environment = z.object({
   SMTP_USER: optionalText,
   SMTP_PASSWORD: optionalText,
   MAIL_FROM: z.preprocess((v) => (v === '' ? undefined : v), z.email().optional()),
+  // ADMIN-B65: the Google OAuth client when none is saved from Administration.
+  GOOGLE_CLIENT_ID: optionalText,
+  GOOGLE_CLIENT_SECRET: optionalText,
   AI_RATE_LIMIT_ENABLED: z
     .enum(['true', 'false'])
     .default('true')

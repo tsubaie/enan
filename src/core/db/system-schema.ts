@@ -55,6 +55,8 @@ export const users = sqliteTable(
     revision: integer().notNull().default(1),
     lastLoginAt: time('last_login_at'),
     passwordChangedAt: time('password_changed_at'),
+    // ADMIN-B65: the Google account this user signed in with first; only that one may again.
+    googleSubject: text('google_subject'),
     createdAt: time('created_at').notNull().default(now),
     updatedAt: time('updated_at').notNull().default(now),
     createdBy: text('created_by'),
@@ -64,6 +66,7 @@ export const users = sqliteTable(
   },
   (t) => [
     check('users_role_check', sql`${t.role} in ('admin','member')`),
+    uniqueIndex('users_google_subject_idx').on(t.googleSubject),
     check('users_email_lower_check', sql`${t.email} = lower(${t.email})`),
   ],
 );
@@ -322,6 +325,19 @@ export const mailSettings = sqliteTable(
     updatedAt: time('updated_at').notNull().default(now),
   },
   (t) => [check('mail_settings_singleton', sql`${t.id} = 1`)],
+);
+
+// ADMIN-B65 (ADR 0053): the Google OAuth client an administrator saved. One row; the client secret
+// is sealed like the mail password.
+export const googleSettings = sqliteTable(
+  'google_settings',
+  {
+    id: integer().primaryKey().default(1),
+    clientId: text('client_id').notNull(),
+    encryptedSecret: text('encrypted_secret').notNull(),
+    updatedAt: time('updated_at').notNull().default(now),
+  },
+  (t) => [check('google_settings_singleton', sql`${t.id} = 1`)],
 );
 
 // ADR 0022: one row per recipient, addressed to a user and never to a person — external people

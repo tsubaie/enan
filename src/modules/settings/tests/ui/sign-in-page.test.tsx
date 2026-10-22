@@ -42,3 +42,30 @@ it('ADMIN-B64 with two methods on either can be switched off', () => {
   expect(box(ar.admin.signInMethod_code).getAttribute('aria-checked')).toBe('true');
   expect(screen.queryByText(ar.admin.signInLast)).toBeNull();
 });
+it('ADMIN-B65 the Google client shows the redirect address to register and never the secret', () => {
+  const client = newClient();
+  client.setQueryData(['admin', 'sign-in'], {
+    data: {
+      chosen: ['password', 'code', 'google'],
+      available: { password: true, code: false, google: true },
+      enabled: ['password', 'google'],
+    },
+  });
+  client.setQueryData(['admin', 'sign-in', 'google'], {
+    data: {
+      source: 'saved',
+      clientId: '1234-abc.apps.googleusercontent.com',
+      hasSecret: true,
+      redirectUri: 'https://office.example.test/api/v1/auth/google/callback',
+    },
+  });
+  mount(<SignInPage />, 'en', client);
+  expect(box(en.admin.signInMethod_google).getAttribute('aria-checked')).toBe('true');
+  expect(screen.getByText('https://office.example.test/api/v1/auth/google/callback')).toBeTruthy();
+  expect(screen.getByLabelText(en.admin.googleClientId)).toHaveProperty(
+    'value',
+    '1234-abc.apps.googleusercontent.com',
+  );
+  expect(screen.getByLabelText(en.admin.googleClientSecret)).toHaveProperty('value', '');
+  expect(screen.getByText(en.admin.googleSecretKept)).toBeTruthy();
+});

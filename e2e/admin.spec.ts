@@ -496,3 +496,41 @@ test('ADMIN-B64 ADMIN-B63 the workspace offers an emailed code once mail is set 
     await visitor.close();
   }
 });
+
+test('ADMIN-B65 a Google client saved on the Sign-in page puts Continue with Google on the login page, which goes to Google', async ({
+  page,
+  browser,
+}) => {
+  await loginAs(page, 'en');
+  await page.goto('/admin/signin');
+  await expect(page.getByText('/api/v1/auth/google/callback')).toBeVisible();
+  await page.getByLabel(en.admin.googleClientId).fill('1234-e2e.apps.googleusercontent.com');
+  await page.getByLabel(en.admin.googleClientSecret).fill('e2e-google-secret');
+  await page.getByRole('button', { name: en.common.save, exact: true }).click();
+  await expect(page.getByText(en.admin.googleSecretKept)).toBeVisible();
+  await expect(page.getByRole('checkbox', { name: en.admin.signInMethod_google })).toBeChecked();
+  const status = await api(page, '/admin/sign-in/google');
+  expect(JSON.stringify(status.body)).not.toContain('e2e-google-secret');
+  const visitor = await browser.newContext({ baseURL: laneBaseURL() });
+  try {
+    const login = await visitor.newPage();
+    await login.goto('/login');
+    await expect(login.getByRole('link', { name: en.auth.googleLink })).toBeVisible();
+    // Not followed: the browser suite does not talk to Google, only checks where it is sent.
+    const start = await login.request.get('/api/v1/auth/google', { maxRedirects: 0 });
+    expect(start.status()).toBe(303);
+    const target = new URL(start.headers().location ?? '');
+    expect(target.host).toBe('accounts.google.com');
+    expect(target.searchParams.get('client_id')).toBe('1234-e2e.apps.googleusercontent.com');
+    expect(target.searchParams.get('code_challenge_method')).toBe('S256');
+    // A callback this browser did not start is refused.
+    const forged = await login.request.get('/api/v1/auth/google/callback?code=x&state=y', {
+      maxRedirects: 0,
+    });
+    expect(forged.headers().location).toContain('/login?error=google_failed');
+  } finally {
+    await visitor.close();
+    await page.getByRole('button', { name: en.admin.googleRemove }).click();
+    await expect(page.getByText(en.admin.signInNeedsGoogle)).toBeVisible();
+  }
+});

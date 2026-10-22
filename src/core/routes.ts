@@ -39,4 +39,5 @@ export const routes = {
   setup: () => '/setup',
   recovery: () => '/recovery',
   loginCode: () => '/login/code',
+  googleSignIn: () => '/api/v1/auth/google',
 };
