@@ -295,6 +295,7 @@ func TestScenarios(t *testing.T) {
 		{"ADMIN-B56 pause and resume", pauseAndResume},
 		{"ADMIN-B56 a manual rollback goes back to the replaced image", manualRollbackGoesBackToTheReplacedImage},
 		{"ADMIN-B56 a failed rollback pauses the updater instead of installing the image again", aFailedRollbackPausesTheUpdater},
+		{"ADMIN-B56 a shutdown during verification records nothing and the next start finishes the update", aShutdownDuringVerificationIsLeftForRecovery},
 		{"ADMIN-B56 a second updater is refused", aSecondUpdaterIsRefused},
 		{"ADMIN-B56 commands are read once", commandsAreReadOnce},
 		{"ADMIN-B56 the history keeps the last outcomes", historyKeepsTheLastOutcomes},
@@ -546,6 +547,25 @@ func manualRollbackGoesBackToTheReplacedImage(t *testing.T) {
 	u.Check(context.Background())
 	if u.status.State != Blocked || app(t, f).Image != "img-1" {
 		t.Fatalf("next check: state %s, running %s", u.status.State, app(t, f).Image)
+	}
+}
+
+func aShutdownDuringVerificationIsLeftForRecovery(t *testing.T) {
+	u, f, sent := setup(t)
+	f.image("img-2", "sha256:two", "1.1.0", 8, 0)
+	f.publish("latest", "sha256:two")
+	// Not healthy yet when the stop arrives; the verification wait sees the cancelled context.
+	f.broken["img-2"] = true
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	u.Check(ctx)
+	if u.state.Phase != Verifying || u.state.Paused || len(u.state.Rejected) != 0 || len(*sent) != 0 {
+		t.Fatalf("phase %s, paused %v, rejected %v, alerts %v", u.state.Phase, u.state.Paused, u.state.Rejected, *sent)
+	}
+	f.broken["img-2"] = false
+	u.Recover(context.Background())
+	if u.status.State != Updated || u.state.Paused || app(t, f).Image != "img-2" {
+		t.Fatalf("after restart: state %s, paused %v, running %s", u.status.State, u.state.Paused, app(t, f).Image)
 	}
 }
 

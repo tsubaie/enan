@@ -22,7 +22,10 @@ import { AiPayload } from './job-schema';
 export function contentHash(input: z.infer<ReturnType<typeof z.json>>) {
   return createHash('sha256').update(JSON.stringify(input)).digest('hex');
 }
-let refreshing: ReturnType<typeof checkConnection> | undefined;
+// Shared per process like the status it refreshes (client.ts), so one check runs, not one per chunk.
+declare global {
+  var enanAiConnectionCheck: ReturnType<typeof checkConnection> | undefined;
+}
 // `wait` only from a route without a transaction (the availability read): a provider call may
 // take seconds, and inside the write lock it would hold up every other writer. Otherwise a
 // never-checked connection or a missing catalog is fetched in the background and AI is not ready yet.
@@ -31,7 +34,9 @@ export async function availableCapabilities(ctx: Context, wait = false) {
   const connection = aiConnection();
   if (connection.checkedAt === null && wait) await checkConnection(ctx.db);
   else if (connection.checkedAt === null || Date.now() - Date.parse(connection.checkedAt) > 60000)
-    refreshing ??= checkConnection().finally(() => (refreshing = undefined));
+    globalThis.enanAiConnectionCheck ??= checkConnection().finally(
+      () => (globalThis.enanAiConnectionCheck = undefined),
+    );
   if (aiConnection().state !== 'enabled') return [];
   const enabled = await getSetting(ctx.db, 'ai.enabled_capabilities');
   const defaultModel = await getSetting(ctx.db, 'ai.model.default');

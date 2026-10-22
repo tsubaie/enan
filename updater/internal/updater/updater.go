@@ -516,6 +516,12 @@ func (u *Updater) complete(ctx context.Context) {
 // database is never restored: the status names the backup and the command, for a person.
 func (u *Updater) recoverFrom(ctx context.Context, cause error) {
 	step := u.status.Step
+	if ctx.Err() != nil {
+		// Shutting down: every Docker call would fail and read as a failed rollback. The saved
+		// phase is left as it is, and Recover finishes or reverses the update after the restart.
+		u.Log.Warn("stopped during an update; recovery runs at the next start", "step", step)
+		return
+	}
 	u.status.Error = cause.Error()
 	if current, err := u.Engine.InspectContainer(ctx, u.state.Name); err == nil && current.ID != u.state.PreviousContainer {
 		if logs, err := u.Engine.Logs(ctx, current.ID, 200); err == nil {
