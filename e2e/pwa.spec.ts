@@ -17,6 +17,20 @@ test('ADMIN-B52 the manifest scopes the installed app to the whole origin', asyn
   expect(response.ok()).toBe(true);
   const manifest = await response.json();
   expect(manifest).toMatchObject({ id: '/', start_url: '/', scope: '/', display: 'standalone' });
+
+  // iOS takes its home-screen icon from apple-touch-icon and ignores SVG, so each icon must be a PNG.
+  const icons = [
+    ...manifest.icons
+      .filter((icon: { type: string }) => icon.type === 'image/png')
+      .map((icon: { src: string }) => icon.src),
+    await page.locator('link[rel="apple-touch-icon"]').getAttribute('href'),
+  ];
+  expect(icons).toHaveLength(3);
+  for (const src of icons) {
+    const image = await request.get(src!);
+    expect(image.ok()).toBe(true);
+    expect(image.headers()['content-type']).toBe('image/png');
+  }
 });
 
 test('ADMIN-B52 the phone tabs navigate in the same window on the same origin @mobile', async ({
