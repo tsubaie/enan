@@ -38,11 +38,13 @@ function EntityLayout<T extends Entity, P extends object, C>({
         <Button
           key={option.id}
           variant="ghost"
-          size="sm"
+          // An icon button is a circle at every size (docs/design-system.md § Shape): 28 px with a
+          // pointer, 44 px on touch, so the selected one never stretches into an oval.
+          size="icon-sm"
           aria-label={option.label}
           aria-pressed={option.id === c.state.layout}
           className={cn(
-            'h-7 px-2 text-text-muted focus-visible:ring-2 focus-visible:ring-inset dark:hover:bg-white/8',
+            'text-text-muted focus-visible:ring-2 focus-visible:ring-inset dark:hover:bg-white/8',
             option.id === c.state.layout &&
               'bg-surface-raised text-text dark:bg-white/15 dark:hover:bg-white/15',
           )}

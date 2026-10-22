@@ -223,6 +223,10 @@
     height: 32px;
     font-size: var(--text-meta);
   }
+  /* An icon button stays a circle at the step's height. */
+  .entity-toolbar button[data-slot='button'][data-size^='icon']:not(.bg-primary) {
+    width: 32px;
+  }
   .entity-toolbar
     :is([data-slot='select-trigger'], button[data-slot='button']:not(.bg-primary))
     svg {
