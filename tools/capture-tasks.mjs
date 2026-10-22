@@ -24,7 +24,7 @@ for (const locale of ['en', 'ar']) {
           method,
           headers: {
             'Content-Type': 'application/json',
-            'X-Requested-With': 'ExecutiveOS',
+            'X-Requested-With': 'Enan',
             'Idempotency-Key': crypto.randomUUID(),
           },
           ...(body ? { body: JSON.stringify(body) } : {}),

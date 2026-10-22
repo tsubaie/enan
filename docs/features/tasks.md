@@ -113,7 +113,7 @@ Recurring tasks, reminders, attachments, task comments, time tracking.
 
 ## Current implementation boundary — Tasks management
 
-The manual workflow from Mission Control's `docs/tasks-patterns.md` and `docs/notion-tasks-api.md` is implemented with ExecutiveOS UUIDs, People ownership, API envelopes, transaction guards, and localization. The predecessor's private data, Notion integration, task-owner table, fire-and-forget writes, and TailAdmin palette are not copied.
+The manual workflow from Mission Control's `docs/tasks-patterns.md` and `docs/notion-tasks-api.md` is implemented with Enan UUIDs, People ownership, API envelopes, transaction guards, and localization. The predecessor's private data, Notion integration, task-owner table, fire-and-forget writes, and TailAdmin palette are not copied.
 
 The current slice includes create/edit, status/priority/owner/date, views/counts/search/sort/cursors, completion with force confirmation, one-level subtasks, keyboard-accessible reorder, conversion to top-level, grouping, soft delete/restore, Home summaries, and assigned tasks on People detail. Deleted children of active parents are accessible through the detail's Trash disclosure. Restored rows append to the current sibling order, preserving the relative order of siblings restored together and avoiding collisions after reordering.
 

@@ -58,7 +58,7 @@ async function call(
     'Idempotency-Key': options.key ?? crypto.randomUUID(),
   };
   if (options.requestedWith !== null)
-    headers['X-Requested-With'] = options.requestedWith ?? 'ExecutiveOS';
+    headers['X-Requested-With'] = options.requestedWith ?? 'Enan';
   const request = new Request(new URL(`/api/v1/account${path}`, env().APP_URL), {
     method,
     headers,

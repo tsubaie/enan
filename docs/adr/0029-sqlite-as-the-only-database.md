@@ -1,6 +1,6 @@
 # ADR 0029 — SQLite as the only database
 
-**Status:** accepted (2026-10-16). Supersedes ADR 0002 and ADR 0027 entirely, the backup mechanism of ADR 0008 (the "no CLI" rule itself stands and becomes stricter) and the database TLS part of ADR 0025 (the security headers stand).
+**Status:** accepted (2026-10-16); its database location is superseded by ADR 0048. Supersedes ADR 0002 and ADR 0027 entirely, the backup mechanism of ADR 0008 (the "no CLI" rule itself stands and becomes stricter) and the database TLS part of ADR 0025 (the security headers stand).
 
 ## Context
 

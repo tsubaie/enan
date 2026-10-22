@@ -18,7 +18,7 @@ async function api(page: Page, path: string, method = 'GET', body?: object): Pro
         method,
         headers: {
           'Content-Type': 'application/json',
-          'X-Requested-With': 'ExecutiveOS',
+          'X-Requested-With': 'Enan',
           'Idempotency-Key': crypto.randomUUID(),
         },
         ...(body ? { body: JSON.stringify(body) } : {}),

@@ -1,4 +1,4 @@
-# AGENTS.md — operating contract for AI agents working on ExecutiveOS
+# AGENTS.md — operating contract for AI agents working on Enan
 
 This file is the entry point for every agent session. It is short on purpose. The detailed rules live in `docs/` and are binding.
 

@@ -1,6 +1,6 @@
 # Security status
 
-ExecutiveOS is a development preview. There are no supported production releases yet. The remaining authentication, backup, job recovery, audit, and release-security requirements are tracked in docs/STATUS.md and the feature specs.
+Enan is a development preview. There are no supported production releases yet. The remaining authentication, backup, job recovery, audit, and release-security requirements are tracked in docs/STATUS.md and the feature specs.
 
 The default Compose deployment publishes the application on loopback only. The database is a SQLite file on the `data` volume, readable by the application user only; nothing else is listening. Secrets belong in the ignored `.env` file. The setup token is printed in the application log only while the installation has no users.
 

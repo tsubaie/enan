@@ -1,6 +1,6 @@
 # ADR 0005 — Own multi-user auth with cookie sessions and roles
 
-**Status:** accepted (2026-09-07)
+**Status:** accepted (2026-09-07); its `X-Requested-With` value is superseded by ADR 0048.
 
 ## Context
 

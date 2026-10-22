@@ -19,7 +19,7 @@ const arabic = Noto_Sans_Arabic({
   variable: '--font-arabic',
 });
 export const metadata = {
-  title: 'ExecutiveOS',
+  title: 'Enan',
   description: 'Self-hosted operating surface for executive offices',
   icons: { icon: { url: '/icon.svg', type: 'image/svg+xml' } },
 };

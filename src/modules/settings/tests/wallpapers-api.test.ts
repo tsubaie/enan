@@ -56,7 +56,7 @@ async function form({ bytes, name = 'Desert dusk.jpg', extra = {} }: Fields) {
 }
 const headers = (extra: Record<string, string> = {}) => ({
   Origin: env().APP_URL,
-  'X-Requested-With': 'ExecutiveOS',
+  'X-Requested-With': 'Enan',
   'Idempotency-Key': crypto.randomUUID(),
   ...extra,
 });

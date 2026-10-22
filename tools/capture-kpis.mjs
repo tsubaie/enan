@@ -57,7 +57,7 @@ async function api(path, method = 'GET', body) {
         method: call.method,
         headers: {
           'Content-Type': 'application/json',
-          'X-Requested-With': 'ExecutiveOS',
+          'X-Requested-With': 'Enan',
           'Idempotency-Key': crypto.randomUUID(),
         },
         ...(call.body ? { body: call.body } : {}),

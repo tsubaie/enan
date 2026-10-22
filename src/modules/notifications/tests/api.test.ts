@@ -48,7 +48,7 @@ function post(path: string, options: Write = {}) {
     'Content-Type': 'application/json',
   });
   if (options.requestedWith !== null)
-    headers.set('X-Requested-With', options.requestedWith ?? 'ExecutiveOS');
+    headers.set('X-Requested-With', options.requestedWith ?? 'Enan');
   if (options.key !== null) headers.set('Idempotency-Key', options.key ?? crypto.randomUUID());
   return new Request(new URL(`/api/v1/notifications${path}`, env().APP_URL), {
     method: 'POST',

@@ -38,7 +38,7 @@ export function usePeople(filters: Filters) {
     placeholderData: keepPreviousData,
   });
   // Started while the page renders, not when it mounts: a page change runs its view transition
-  // (ADR 0019) before effects, and a fetch begun in an effect waits for it (ExecutiveOS#79).
+  // (ADR 0019) before effects, and a fetch begun in an effect waits for it.
   usePrefetchInfiniteQuery(options);
   const result = useInfiniteQuery(options);
   return listResult(result);

@@ -27,7 +27,7 @@ export async function request<S extends z.ZodType>(
     credentials: 'same-origin',
     headers: {
       'Content-Type': 'application/json',
-      'X-Requested-With': 'ExecutiveOS',
+      'X-Requested-With': 'Enan',
       'Idempotency-Key': options.key ?? crypto.randomUUID(),
     },
     ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
@@ -39,7 +39,7 @@ export async function upload<S extends z.ZodType>(path: string, schema: S, form:
   const response = await fetch(`/api/v1${path}`, {
     method: 'POST',
     credentials: 'same-origin',
-    headers: { 'X-Requested-With': 'ExecutiveOS', 'Idempotency-Key': crypto.randomUUID() },
+    headers: { 'X-Requested-With': 'Enan', 'Idempotency-Key': crypto.randomUUID() },
     body: form,
   });
   return parseResponse(response, schema);

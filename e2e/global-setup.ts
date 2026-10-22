@@ -24,7 +24,7 @@ export default async function globalSetup() {
     const account = await credentials(lane);
     const api = await request.newContext({
       baseURL,
-      extraHTTPHeaders: { Origin: baseURL, 'X-Requested-With': 'ExecutiveOS' },
+      extraHTTPHeaders: { Origin: baseURL, 'X-Requested-With': 'Enan' },
     });
     const response = await api.post('/api/v1/setup', {
       data: {

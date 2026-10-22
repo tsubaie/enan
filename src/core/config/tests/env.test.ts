@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { parseEnvironment, secureCookies } from '../env';
 const base = {
-  DATABASE_URL: 'file:/var/lib/executiveos/data/executiveos.db',
+  DATABASE_URL: 'file:/var/lib/enan/data/enan.db',
   SESSION_SECRET: 'a'.repeat(32),
 };
 describe('environment', () => {
@@ -59,7 +59,7 @@ describe('environment', () => {
     const relative = attempt('file:./tmp/dev.db').DATABASE_URL;
     expect(relative.startsWith('file:/')).toBe(true);
     expect(relative.endsWith('/tmp/dev.db')).toBe(true);
-    expect(attempt('file:///var/lib/executiveos/data/executiveos.db').DATABASE_URL).toContain(
+    expect(attempt('file:///var/lib/enan/data/enan.db').DATABASE_URL).toContain(
       'file:///',
     );
   });
@@ -67,9 +67,9 @@ describe('environment', () => {
     const parsed = parseEnvironment({
       ...base,
       NODE_ENV: 'test',
-      DATABASE_URL_TEST: 'file:./tmp/executiveos_test.db',
+      DATABASE_URL_TEST: 'file:./tmp/enan_test.db',
     });
-    expect(parsed.DATABASE_URL_TEST?.endsWith('/tmp/executiveos_test.db')).toBe(true);
+    expect(parsed.DATABASE_URL_TEST?.endsWith('/tmp/enan_test.db')).toBe(true);
     expect(parsed.DATABASE_URL_TEST?.startsWith('file:/')).toBe(true);
     expect(() =>
       parseEnvironment({ ...base, NODE_ENV: 'test', DATABASE_URL_TEST: 'postgresql://x/y' }),

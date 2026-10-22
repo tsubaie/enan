@@ -236,7 +236,7 @@ The whole office lives in one SQLite file on the `data` volume. Uploaded files a
 
 ```bash
 docker compose exec app pnpm backup:create
-docker compose exec app pnpm backup:restore /var/lib/executiveos/backups/BACKUP_ID --confirm
+docker compose exec app pnpm backup:restore /var/lib/enan/backups/BACKUP_ID --confirm
 ```
 
 A restore replaces the database and the uploaded files, so it requires `--confirm`. Keep a copy of `SESSION_SECRET` with your backups, because a backup cannot decrypt a saved AI key without it.

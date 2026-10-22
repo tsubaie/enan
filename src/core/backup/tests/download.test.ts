@@ -79,7 +79,7 @@ it('ADMIN-B44 a valid backup streams one tar of manifest, database and files, na
   expect(response.status).toBe(200);
   expect(response.headers.get('Content-Type')).toBe('application/x-tar');
   expect(response.headers.get('Content-Disposition')).toBe(
-    `attachment; filename="executiveos-backup-${manifest.createdAt.slice(0, 10)}.tar"`,
+    `attachment; filename="enan-backup-${manifest.createdAt.slice(0, 10)}.tar"`,
   );
   const entries = await bufferNames(Buffer.from(await response.arrayBuffer()));
   expect(entries.map((name) => name.replace(/\/$/u, '')).sort()).toEqual(

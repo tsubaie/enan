@@ -28,7 +28,7 @@ afterAll(() => closeDatabase());
 function request(method: string, origin = env().APP_URL) {
   return new Request(new URL('/api/v1/admin/ai/credentials', env().APP_URL), {
     method,
-    headers: { Origin: origin, 'X-Requested-With': 'ExecutiveOS' },
+    headers: { Origin: origin, 'X-Requested-With': 'Enan' },
     ...(method === 'PUT' ? { body: JSON.stringify({ apiKey: 'fixture-api-key' }) } : {}),
   });
 }

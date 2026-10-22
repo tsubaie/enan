@@ -34,7 +34,7 @@ vi.mock('@/ui/primitives/toast', () => ({ useToastManager: () => ({ add: state.t
 const name: Setting = {
   key: 'workspace.name',
   value: 'E2E Office',
-  default: 'ExecutiveOS',
+  default: 'Enan',
   type: 'string',
 };
 const days: Setting = { key: 'retention.trash_days', value: 30, default: 30, type: 'number' };

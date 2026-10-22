@@ -1,6 +1,6 @@
 # 10 — Agent workflow
 
-ExecutiveOS is built primarily by AI coding agents supervised by a human maintainer. This document defines how work is packaged, executed, verified, and handed back so that quality does not depend on any single agent's judgment.
+Enan is built primarily by AI coding agents supervised by a human maintainer. This document defines how work is packaged, executed, verified, and handed back so that quality does not depend on any single agent's judgment.
 
 ## Roles
 

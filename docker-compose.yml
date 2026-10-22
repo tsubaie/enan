@@ -5,15 +5,15 @@ services:
       target: runtime
     env_file: .env
     environment:
-      DATABASE_URL: file:/var/lib/executiveos/data/executiveos.db
-      FILES_DIR: /var/lib/executiveos/files
-      BACKUP_DIR: /var/lib/executiveos/backups
+      DATABASE_URL: file:/var/lib/enan/data/enan.db
+      FILES_DIR: /var/lib/enan/files
+      BACKUP_DIR: /var/lib/enan/backups
     ports:
       - '127.0.0.1:3000:3000'
     volumes:
-      - data:/var/lib/executiveos/data
-      - files:/var/lib/executiveos/files
-      - backups:/var/lib/executiveos/backups
+      - data:/var/lib/enan/data
+      - files:/var/lib/enan/files
+      - backups:/var/lib/enan/backups
     restart: unless-stopped
     stop_grace_period: 35s
     healthcheck:

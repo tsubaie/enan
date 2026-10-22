@@ -28,7 +28,7 @@ const send = (page: Page, path: string, method: string, body: object) =>
         credentials: 'same-origin',
         headers: {
           'Content-Type': 'application/json',
-          'X-Requested-With': 'ExecutiveOS',
+          'X-Requested-With': 'Enan',
           'Idempotency-Key': crypto.randomUUID(),
         },
         body: call.payload,
@@ -138,7 +138,7 @@ async function setThresholds(page: Page, value: string) {
         credentials: 'same-origin',
         headers: {
           'Content-Type': 'application/json',
-          'X-Requested-With': 'ExecutiveOS',
+          'X-Requested-With': 'Enan',
           'Idempotency-Key': crypto.randomUUID(),
         },
         body: JSON.stringify(body),
@@ -157,7 +157,7 @@ const createByApi = (page: Page, name: string, unit: string) =>
         credentials: 'same-origin',
         headers: {
           'Content-Type': 'application/json',
-          'X-Requested-With': 'ExecutiveOS',
+          'X-Requested-With': 'Enan',
           'Idempotency-Key': crypto.randomUUID(),
         },
         body: JSON.stringify(body),

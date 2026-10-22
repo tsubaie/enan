@@ -1,6 +1,6 @@
-# ExecutiveOS design system
+# Enan design system
 
-**Status:** current (2026-10-18). The single reference for how ExecutiveOS looks and behaves. The decisions behind it are recorded in ADR 0030 (visual identity), ADR 0031 (Apple's dark materials) and ADR 0032 (Inter and Noto Sans Arabic); `05-ui-guidelines.md` holds the engineering rules (primitives, data fetching, i18n, accessibility). Where this document and a feature spec disagree about behaviour, the spec wins; about appearance, this document wins.
+**Status:** current (2026-10-18). The single reference for how Enan looks and behaves. The decisions behind it are recorded in ADR 0030 (visual identity), ADR 0031 (Apple's dark materials) and ADR 0032 (Inter and Noto Sans Arabic); `05-ui-guidelines.md` holds the engineering rules (primitives, data fetching, i18n, accessibility). Where this document and a feature spec disagree about behaviour, the spec wins; about appearance, this document wins.
 
 Every value below is a token in `src/ui/tokens.css` or a shared component. A component never names a colour, a pixel size between Tailwind's steps, or a radius of its own: it uses the token or the component.
 
@@ -26,7 +26,7 @@ The night theme is the default. Paper (light) shares every role; its values diff
 | Inset sheet | Property sheets, card rows, lists inside a record | `bg-bg/50` with a full `border`, `rounded-xl` |
 | Glass card | Every list's cards, the KPI tiles and the Home tiles (`.entity-glass`; HOME-B15). A glass surface that is not itself a control (a Home tile, whose rows are the controls) adds `.glass-static` and does not react to hover; its rows take the `--nav-hover` wash | Flat, with no depth effects: a light neutral frosted tint `rgb(255 255 255 / 0.045)`, the frost grain and a hairline edge. No sheen, rim, shadow, lift or sweep. Hover brightens the tint and edge only. On a KPI tile the status is a faint wash on the arc's side and a dim light behind the arc, kept inside the tile. |
 | Table frame | The table view of a list (`.entity-table-frame`) | The same frosted glass as the cards, as one rounded panel inset from the page's edges; it scrolls sideways inside itself, and only the row under the pointer changes on hover. |
-| Sign-in panel | `/login`, `/setup`, `/recovery` (`.auth-glass`) | The side menu's own frost, value for value, as one 400 px panel centred over the workspace wallpaper (20 px corners, 16 px gutters on a phone). The ع-horse mark in its accent tile and "ExecutiveOS" head the panel; the language flags sit in the top corner on the end side. A custom wallpaper cannot be served before sign-in, so these pages fall back to the drawn wallpaper when one is chosen. |
+| Sign-in panel | `/login`, `/setup`, `/recovery` (`.auth-glass`) | The side menu's own frost, value for value, as one 400 px panel centred over the workspace wallpaper (20 px corners, 16 px gutters on a phone). The ع-horse mark in its accent tile and "Enan" head the panel; the language flags sit in the top corner on the end side. A custom wallpaper cannot be served before sign-in, so these pages fall back to the drawn wallpaper when one is chosen. |
 | Raised step | Selected pills, chips, hover wash | White at 8 % (`--raised`) |
 | Elevated | Solid fallback for sheets and popups | `#232326` (`--elevated`) |
 

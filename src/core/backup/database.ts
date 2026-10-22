@@ -62,7 +62,7 @@ async function verifySnapshot(client: DatabaseClient) {
       ),
     );
   } catch (error) {
-    throw new Error('Backup database has no migrations ledger; it is not an ExecutiveOS database', {
+    throw new Error('Backup database has no migrations ledger; it is not an Enan database', {
       cause: error,
     });
   }
@@ -73,7 +73,7 @@ async function verifySnapshot(client: DatabaseClient) {
   );
   if (ledger.latest > known)
     throw new Error(
-      'Backup was created by a newer version of ExecutiveOS; upgrade before restoring it',
+      'Backup was created by a newer version of Enan; upgrade before restoring it',
     );
 }
 // A random stamp in the file header (`user_version`) that tells one restored file from another,

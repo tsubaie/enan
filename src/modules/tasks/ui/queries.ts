@@ -49,7 +49,7 @@ export function useTasks(filters: Filters) {
     staleTime: 30000,
   });
   // Started while the page renders rather than when it mounts: a page change runs its view
-  // transition (ADR 0019) before effects, and a fetch begun in an effect waits for it (ExecutiveOS#79).
+  // transition (ADR 0019) before effects, and a fetch begun in an effect waits for it.
   usePrefetchInfiniteQuery(options);
   const query = useInfiniteQuery(options);
   return { ...listResult(query), defaultView: query.data?.pages[0]?.meta.defaultView };
@@ -82,7 +82,7 @@ export function useOwners() {
     queryKey: ['people', 'assignable'],
     queryFn: () => request('/people?view=assignable&limit=200', PersonList),
     // The owner choices change only when the directory does, and every people mutation
-    // invalidates ['people']; a page visit reads them from the cache (ExecutiveOS#79).
+    // invalidates ['people']; a page visit reads them from the cache.
     staleTime: 300000,
   });
 }

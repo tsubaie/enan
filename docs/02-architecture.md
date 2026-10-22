@@ -20,7 +20,7 @@
 
 ## Deployment model (v1)
 
-- Exactly one application instance and one SQLite database file (`DATABASE_URL=file:/var/lib/executiveos/data/executiveos.db`, on the `data` volume). The spec does not support horizontal scaling in v1; the queue is still crash-safe so a restart never loses or duplicates completed work. The file and its `-wal` and `-shm` siblings must be on local disk, never on NFS, SMB or a synced folder (ADR 0029).
+- Exactly one application instance and one SQLite database file (`DATABASE_URL=file:/var/lib/enan/data/enan.db`, on the `data` volume). The spec does not support horizontal scaling in v1; the queue is still crash-safe so a restart never loses or duplicates completed work. The file and its `-wal` and `-shm` siblings must be on local disk, never on NFS, SMB or a synced folder (ADR 0029).
 - Local file storage on a volume (`FILES_DIR`). Files are immutable and content-addressed.
 - Releases are continuous (ADR 0039): a push to `main` that passes every check publishes the production image to GHCR (`linux/amd64`, built on the CI runners, never on the server), smoke-tests it, and deploys it over SSH to a server configured in the repository settings (ADR 0040), taking the app's own backup first and falling back to the previous image if the new one does not become healthy.
 - Migrations run on container start, inside one immediate transaction, before the HTTP server accepts requests. With one application process that transaction is the migration lock (ADR 0003, ADR 0029).

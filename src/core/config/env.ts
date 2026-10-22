@@ -6,7 +6,7 @@ import { validProxyCidrs } from './cidr';
 
 const optionalText = z.preprocess((v) => (v === '' ? undefined : v), z.string().optional());
 // ADR 0029: the database is a SQLite file named by a `file:` URL (`file:./tmp/dev.db`,
-// `file:/var/lib/executiveos/data/executiveos.db`). The scheme is checked here so a stale
+// `file:/var/lib/enan/data/enan.db`). The scheme is checked here so a stale
 // PostgreSQL URL fails at startup with one clear message instead of inside the driver.
 // A relative path is taken from the directory pnpm was started in (INIT_CWD), so every process
 // of one checkout names the same file: the dev server, the scripts, and the standalone server the
@@ -20,7 +20,7 @@ const databaseUrl = z
   .string()
   .refine((value) => value.startsWith('file:'), {
     message:
-      'DATABASE_URL must be a file: URL naming the SQLite database, for example file:/var/lib/executiveos/data/executiveos.db',
+      'DATABASE_URL must be a file: URL naming the SQLite database, for example file:/var/lib/enan/data/enan.db',
   })
   .transform(absoluteFileUrl);
 const Environment = z.object({
