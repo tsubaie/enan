@@ -591,3 +591,4 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DEPLOY_DIR: ${{ secrets.DEPLOY_DIR }}
           DEPLOY_OVERLAY: ${{ secrets.DEPLOY_OVERLAY }}
+          BASIC_AUTH_URL: ${{ secrets.BASIC_AUTH_URL }}

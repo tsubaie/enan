@@ -15,6 +15,7 @@ import {
 } from '../../src/modules/notes/schema/validation';
 import { archiveNote, createNote, listNotes, noteTypes } from '../../src/modules/notes/service';
 import type { Context } from '../../src/core/auth/session';
+import { resolve } from 'node:path';
 // Imports the `notion_notes` rows of a Mission Control `pg_dump` (plain SQL) as standalone notes
 // (docs/03 § Import from legacy Mission Control). Every legacy note becomes one note; threads are
 // only consulted for a missing title (ADR 0012). Legacy types that are not one of the six defaults
@@ -24,7 +25,7 @@ import type { Context } from '../../src/core/auth/session';
 // scripts/db/import-mission-control-notes.ts <path/to/database.sql>`.
 const [, , file] = process.argv;
 if (!file) throw new Error('Pass the path of the Mission Control database.sql');
-const sql = await readFile(file, 'utf8');
+const sql = await readFile(resolve(file), 'utf8');
 // PostgreSQL COPY text format: one row per line, tab-separated, `\N` for null, backslash escapes.
 function unescapeCopy(field: string) {
   if (field === '\\N') return null;
