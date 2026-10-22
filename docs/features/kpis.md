@@ -50,7 +50,7 @@ See `03-data-model.md`. Invariants:
   record shows the same history properly, as the trend. The figures stay in the payload because
   they are what any future reading of recent movement would be drawn from, and they cost one
   aggregate in a select the row already makes.
-- KPIS-B06 **Objectives** CRUD with manual sort; deleting an objective soft-deletes it and leaves `objective_id` on KPIs and initiatives (chip renders "archived"); purge nulls.
+- KPIS-B06 **Objectives** CRUD with manual sort; deleting an objective soft-deletes it and leaves `objective_id` on KPIs and initiatives (chip renders "archived"); an objective they still name is never purged (ADMIN-B48).
 - KPIS-B07 **List** tiles (EP-B27): name, the objective it serves, the status as one chip whose
   wash is the mark and whose label is the word, an arc carrying how far through the target the
   measure is with that figure inside it, the current reading with its unit, the change since the

@@ -14,7 +14,7 @@ Done when: the maintainer has resolved the open decisions below that are marked 
 - `core/config`, `core/db` with Drizzle, migration runner (one immediate transaction), first migration (workspace, users, sessions, login_attempts, settings, idempotency_keys, jobs, job_attempts, schedules, ai_invocations, audit_log, files, people), `db:reset`, seed.
 - `core/auth`: setup with token, login, logout, sessions, recovery, guards, rate limit, origin check.
 - `core/http`: handler wrapper, envelopes, pagination, idempotency, client, OpenAPI.
-- `core/jobs`: runner with leases and fencing, scheduler, registry, `system.noop`, `system.prune`.
+- `core/jobs`: runner with leases and fencing, scheduler, registry, `system.noop`, `system.prune`, `system.trash_purge`.
 - `core/files` and `core/backup`: storage, orphan sweep, backup job, restore command, manifest.
 - `core/i18n`, theme, `src/ui` primitives, tokens, shell, nav, toast, confirm, markdown, chart wrappers.
 - Admin module per `features/admin.md`; Users and Settings.

@@ -313,7 +313,9 @@ docker compose exec app pnpm backup:create
 docker compose exec app pnpm backup:restore /var/lib/enan/backups/BACKUP_ID --confirm
 ```
 
-A restore replaces the database and the uploaded files, so it requires `--confirm`. Keep a copy of `SESSION_SECRET` with your backups, because a backup cannot decrypt a saved AI key or mail password without it.
+A restore replaces the database and the uploaded files, so it requires `--confirm`. A backup can't be deleted while a backup or a restore is running.
+
+Deleted items wait in the trash, where they can be restored, for 30 days by default (**Admin → Settings**, "Delete trash permanently after"). A nightly job then deletes them for good, with their own parts such as a note's participants or a KPI's readings. An item that something else still links to, such as a committee a live task names, stays in the trash until the link is gone. Each purge is listed in the audit log under System. Set the setting to 0 to keep the trash forever. Keep a copy of `SESSION_SECRET` with your backups, because a backup cannot decrypt a saved AI key or mail password without it.
 
 ## How it's built
 

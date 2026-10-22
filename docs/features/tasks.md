@@ -28,7 +28,7 @@ See `03-data-model.md` § tasks. Invariants:
 - TASKS-I03 `completed_at` non-null iff `status = completed` (CHECK).
 - TASKS-I04 Cascade delete: deleting a parent soft-deletes its non-deleted subtasks with the same op id; restoring by op id restores exactly those; a subtask deleted earlier by its own op stays deleted.
 - TASKS-I05 `sort_order` unique within a parent among non-deleted rows (partial unique index `tasks_active_order_idx`; SQLite cannot defer it, so a reorder that would collide moves the affected rows through temporary negative positions first); reorder rewrites all positions of that parent in one transaction.
-- TASKS-I06 Links to committee, initiative, note, owner survive soft delete of the target and are nulled on purge.
+- TASKS-I06 Links to committee, initiative, note, owner survive soft delete of the target; a target a task still links to is never purged, so a purge never empties the link (ADMIN-B48).
 
 ## Behaviors
 
