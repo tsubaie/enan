@@ -268,18 +268,18 @@ Every variable is documented in [`.env.example`](.env.example).
 <summary><b>The ones you are most likely to touch</b></summary>
 <br>
 
-| Variable              | Default                         | Purpose                                                                    |
-| --------------------- | ------------------------------- | -------------------------------------------------------------------------- |
-| `SESSION_SECRET`      | (required)                      | 32+ characters. Keep it stable: saved AI and mail keys are sealed with it. |
-| `APP_URL`             | `http://localhost:3000`         | The browser origin. It must be `https` in production, except on loopback.  |
-| `DATABASE_URL`        | `file:` path on the data volume | The SQLite file. Keep it on a local disk, not a network share.             |
-| `TRUSTED_PROXY_CIDRS` | empty                           | Your proxy's addresses, so per-address login throttling sees real clients. |
-| `OPENROUTER_API_KEY`  | empty                           | Optional fallback. A key saved in **Admin → AI** takes precedence.         |
-| `SMTP_HOST` …         | empty                           | Optional mail server. Settings saved in **Admin → Email** take precedence. |
-| `FILES_QUOTA_GB`      | `20`                            | Storage quota for uploaded files.                                          |
-| `MAX_UPLOAD_MB`       | `20`                            | The largest single upload.                                                 |
-| `RECOVERY_TOKEN`      | empty                           | A one-time admin recovery token. Set it, restart, use it, then remove it.  |
-| `LOG_LEVEL`           | `info`                          | `trace` through `fatal`.                                                   |
+| Variable              | Default                         | Purpose                                                                            |
+| --------------------- | ------------------------------- | ---------------------------------------------------------------------------------- |
+| `SESSION_SECRET`      | (required)                      | 32+ characters. Keep it stable: saved AI, mail and Google keys are sealed with it. |
+| `APP_URL`             | `http://localhost:3000`         | The browser origin. It must be `https` in production, except on loopback.          |
+| `DATABASE_URL`        | `file:` path on the data volume | The SQLite file. Keep it on a local disk, not a network share.                     |
+| `TRUSTED_PROXY_CIDRS` | empty                           | Your proxy's addresses, so per-address login throttling sees real clients.         |
+| `OPENROUTER_API_KEY`  | empty                           | Optional fallback. A key saved in **Admin → AI** takes precedence.                 |
+| `SMTP_HOST` …         | empty                           | Optional mail server. Settings saved in **Admin → Email** take precedence.         |
+| `FILES_QUOTA_GB`      | `20`                            | Storage quota for uploaded files.                                                  |
+| `MAX_UPLOAD_MB`       | `20`                            | The largest single upload.                                                         |
+| `RECOVERY_TOKEN`      | empty                           | A one-time admin recovery token. Set it, restart, use it, then remove it.          |
+| `LOG_LEVEL`           | `info`                          | `trace` through `fatal`.                                                           |
 
 </details>
 
@@ -295,6 +295,14 @@ With Google Workspace or Gmail:
 4. Press **Send test email**. It goes to your own address.
 
 The password is stored encrypted with `SESSION_SECRET` and is never shown again.
+
+### Signing in with Google
+
+Members can sign in with the Google account of their email address. Nobody can sign up this way: only people an administrator has added get in.
+
+1. In [Google Cloud Console](https://console.cloud.google.com/), open **APIs & Services → Credentials**, create an **OAuth client ID** of type **Web application**, and add `https://<your domain>/api/v1/auth/google/callback` as an authorized redirect URI. (Set up the OAuth consent screen first if asked; the `openid` and `email` scopes are enough.)
+2. In **Admin → Sign-in**, paste the client ID and secret (or set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`).
+3. **Admin → Sign-in** also chooses which ways in the login page offers: password, a code by email, and Google. If you ever lock yourself out, `RECOVERY_TOKEN` still works.
 
 ## Data and backups
 

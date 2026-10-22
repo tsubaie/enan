@@ -9,7 +9,9 @@ import { buttonVariants } from '@/ui/primitives/button';
 // password form when there is one and in its place when there is not.
 export function OtherMethods({ methods }: { methods: SignInMethod[] }) {
   const t = useTranslations('auth');
-  if (!methods.includes('code')) return null;
+  const google = methods.includes('google');
+  const code = methods.includes('code');
+  if (!google && !code) return null;
   return (
     <div className="mt-5 grid gap-3">
       {methods.includes('password') && (
@@ -17,10 +19,18 @@ export function OtherMethods({ methods }: { methods: SignInMethod[] }) {
           {t('or')}
         </p>
       )}
-      <Link href={routes.loginCode()} className={buttonVariants({ variant: 'secondary' })}>
-        <Mail className="me-1 size-4" aria-hidden />
-        {t('codeLink')}
-      </Link>
+      {/* ADMIN-B65: a full navigation, not a client one: the server answers with a redirect to Google. */}
+      {google && (
+        <a href={routes.googleSignIn()} className={buttonVariants({ variant: 'secondary' })}>
+          {t('googleLink')}
+        </a>
+      )}
+      {code && (
+        <Link href={routes.loginCode()} className={buttonVariants({ variant: 'secondary' })}>
+          <Mail className="me-1 size-4" aria-hidden />
+          {t('codeLink')}
+        </Link>
+      )}
     </div>
   );
 }

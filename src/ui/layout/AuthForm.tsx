@@ -74,10 +74,12 @@ export function AuthForm({
   mode,
   recoveryEnabled = false,
   methods = ['password'],
+  notice = null,
 }: {
   mode: Mode;
   recoveryEnabled?: boolean;
   methods?: SignInMethod[];
+  notice?: 'google_failed' | 'google_unknown' | null;
 }) {
   const t = useTranslations('auth');
   const c = useTranslations('common');
@@ -86,6 +88,7 @@ export function AuthForm({
   const password = !login || methods.includes('password');
   return (
     <AuthFrame title={t(`${mode}Title`)} description={t(`${mode}Description`)}>
+      {notice && <Notice notice={notice} />}
       {password && (
         <form
           onSubmit={state.form.handleSubmit((values) => state.mutation.mutate(values))}
@@ -101,8 +104,23 @@ export function AuthForm({
           </Button>
         </form>
       )}
-      {login && <OtherMethods methods={methods} />}
-      {login && recoveryEnabled && (
+      {login && <LoginExtras methods={methods} recoveryEnabled={recoveryEnabled} />}
+    </AuthFrame>
+  );
+}
+
+function LoginExtras({
+  methods,
+  recoveryEnabled,
+}: {
+  methods: SignInMethod[];
+  recoveryEnabled: boolean;
+}) {
+  const t = useTranslations('auth');
+  return (
+    <>
+      <OtherMethods methods={methods} />
+      {recoveryEnabled && (
         <p className="mt-5 text-center">
           <Link
             className="rounded-sm text-sm text-text-muted underline outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
@@ -112,10 +130,17 @@ export function AuthForm({
           </Link>
         </p>
       )}
-    </AuthFrame>
+    </>
   );
 }
-
+function Notice({ notice }: { notice: 'google_failed' | 'google_unknown' }) {
+  const t = useTranslations('auth');
+  return (
+    <p role="alert" className="mb-5 rounded-lg border border-danger/40 p-3 text-sm">
+      {t(notice === 'google_unknown' ? 'googleUnknown' : 'googleFailed')}
+    </p>
+  );
+}
 function SetupFields({ state }: { state: AuthState }) {
   const t = useTranslations('auth');
   const names = new Intl.DisplayNames(state.locale, { type: 'language' });

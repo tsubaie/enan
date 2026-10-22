@@ -187,7 +187,10 @@
     "codeSent": "إن كان {email} لحساب هنا فالرمز في طريقه إليك. أدخله أدناه.",
     "code": "الرمز",
     "codeAgain": "أرسل رمزًا جديدًا",
-    "passwordLink": "الدخول بكلمة المرور"
+    "passwordLink": "الدخول بكلمة المرور",
+    "googleLink": "المتابعة بحساب Google",
+    "googleFailed": "لم يكتمل الدخول بحساب Google. أعد المحاولة أو ادخل بطريقة أخرى.",
+    "googleUnknown": "لا يوجد هنا حساب لحساب Google هذا. اطلب من مسؤول أن يضيفك بعنوان بريده."
   },
   "home": {
     "title": "مكتبك، في لمحة",
@@ -659,7 +662,19 @@
     "signInMethodHelp_google": "يدخل الأعضاء بحساب Google الذي يحمل عنوان البريد نفسه.",
     "signInNeedsMail": "أعدّ البريد أولًا",
     "signInLast": "هذه الطريقة الوحيدة المفعّلة، فلا يمكن إيقافها.",
-    "signInSaved": "حُفظ. تعرض صفحة الدخول الآن ما هو محدّد."
+    "signInSaved": "حُفظ. تعرض صفحة الدخول الآن ما هو محدّد.",
+    "signInNeedsGoogle": "أعدّ عميل Google أدناه أولًا.",
+    "googleClient": "عميل Google",
+    "googleHelp": "في Google Cloud Console أنشئ عميل OAuth من نوع تطبيق ويب، وأضف عنوان إعادة التوجيه أدناه ضمن عناوين إعادة التوجيه المصرّح بها، ثم الصق معرّف العميل وسرّه هنا. لا يدخل إلا من أضافه مسؤول، بمطابقة بريده في Google.",
+    "googleFromEnv": "يُستخدم الآن GOOGLE_CLIENT_ID وGOOGLE_CLIENT_SECRET على الخادم. ما تحفظه هنا يحلّ محلّهما.",
+    "googleRedirect": "عنوان إعادة التوجيه:",
+    "googleClientId": "معرّف العميل",
+    "googleClientSecret": "سرّ العميل",
+    "googleSecretKept": "يوجد سرّ محفوظ لهذا العميل. اترك الحقل فارغًا للإبقاء عليه.",
+    "googleRemove": "احذف عميل Google",
+    "auditAction_google_settings_save": "حفظ عميل Google في",
+    "auditAction_google_settings_remove": "حذف عميل Google من",
+    "auditEntity_google_settings": "الدخول"
   },
   "errors": {
     "validation_failed": "تحقّق من القيم المدخلة.",

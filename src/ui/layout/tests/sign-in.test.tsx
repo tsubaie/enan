@@ -48,3 +48,11 @@ it('ADMIN-B63 the code form asks for the email, then for the six digits it says 
   expect(screen.getByRole('button', { name: en.auth.login })).toHaveProperty('disabled', true);
   expect(screen.getByRole('link', { name: en.auth.passwordLink })).toBeTruthy();
 });
+it('ADMIN-B65 Continue with Google is a full navigation to the server, and a failed one says why', () => {
+  mount(<AuthForm mode="login" methods={['password', 'google']} notice="google_unknown" />);
+  const google = screen.getByRole('link', { name: en.auth.googleLink });
+  expect(google.getAttribute('href')).toBe('/api/v1/auth/google');
+  expect(screen.getByRole('alert').textContent).toBe(en.auth.googleUnknown);
+  mount(<AuthForm mode="login" methods={['password']} />);
+  expect(screen.queryByRole('link', { name: en.auth.googleLink })).toBeNull();
+});

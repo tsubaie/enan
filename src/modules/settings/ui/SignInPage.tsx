@@ -15,10 +15,11 @@ import { PropertySheet } from '@/ui/layout/Property';
 import { RecordSection } from '@/ui/layout/Record';
 import { ErrorPanel } from '@/ui/layout/ErrorPanel';
 import Loading from '@/ui/layout/Loading';
+import { GoogleClient } from './GoogleClient';
 const response = z.object({ data: SignInMethodsStatus });
 type Status = z.infer<typeof SignInMethodsStatus>;
 // The methods this version can offer, in the order the login page shows them.
-const offered: SignInMethod[] = ['password', 'code'];
+const offered: SignInMethod[] = ['password', 'code', 'google'];
 // ADMIN-B64: which ways in the login page offers. A method the server cannot serve yet says what it
 // needs; the last one switched on cannot be switched off. Every change saves at once.
 export function SignInPage() {
@@ -43,28 +44,31 @@ export function SignInPage() {
         : status.chosen.filter((chosen) => chosen !== method),
     });
   return (
-    <RecordSection title={t('signInMethods')}>
-      <p className="px-1 text-sm leading-relaxed font-light text-text-muted">
-        {t('signInMethodsHelp')}
-      </p>
-      <PropertySheet>
-        {offered.map((method) => (
-          <MethodRow
-            key={method}
-            method={method}
-            status={status}
-            disabled={save.isPending}
-            onChange={(on) => toggle(method, on)}
-          />
-        ))}
-      </PropertySheet>
-      {save.error && <ErrorPanel error={save.error} />}
-      {save.isSuccess && (
-        <p role="status" className="px-1 text-sm font-light text-success">
-          {t('signInSaved')}
+    <>
+      <RecordSection title={t('signInMethods')}>
+        <p className="px-1 text-sm leading-relaxed font-light text-text-muted">
+          {t('signInMethodsHelp')}
         </p>
-      )}
-    </RecordSection>
+        <PropertySheet>
+          {offered.map((method) => (
+            <MethodRow
+              key={method}
+              method={method}
+              status={status}
+              disabled={save.isPending}
+              onChange={(on) => toggle(method, on)}
+            />
+          ))}
+        </PropertySheet>
+        {save.error && <ErrorPanel error={save.error} />}
+        {save.isSuccess && (
+          <p role="status" className="px-1 text-sm font-light text-success">
+            {t('signInSaved')}
+          </p>
+        )}
+      </RecordSection>
+      <GoogleClient />
+    </>
   );
 }
 function MethodRow({
@@ -93,7 +97,9 @@ function MethodRow({
         <span className="font-medium">{t(`signInMethod_${method}`)}</span>
       </label>
       <p className="ps-7 text-xs font-light text-text-muted">
-        {!available ? (
+        {!available && method === 'google' ? (
+          t('signInNeedsGoogle')
+        ) : !available ? (
           <Link className="underline" href={routes.admin('mail')}>
             {t('signInNeedsMail')}
           </Link>

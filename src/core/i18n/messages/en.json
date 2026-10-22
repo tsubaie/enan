@@ -187,7 +187,10 @@
     "codeSent": "If {email} belongs to an account here, a code is on its way. Enter it below.",
     "code": "Code",
     "codeAgain": "Send a new code",
-    "passwordLink": "Sign in with a password"
+    "passwordLink": "Sign in with a password",
+    "googleLink": "Continue with Google",
+    "googleFailed": "Signing in with Google did not finish. Try again, or use another way in.",
+    "googleUnknown": "That Google account has no account here. Ask an administrator to add you with its email address."
   },
   "home": {
     "title": "Your office, at a glance",
@@ -659,7 +662,19 @@
     "signInMethodHelp_google": "Members sign in with the Google account of the same email address.",
     "signInNeedsMail": "Set up email first",
     "signInLast": "This is the only way in that is on, so it cannot be turned off.",
-    "signInSaved": "Saved. The login page now offers what is checked."
+    "signInSaved": "Saved. The login page now offers what is checked.",
+    "signInNeedsGoogle": "Set up the Google client below first.",
+    "googleClient": "Google client",
+    "googleHelp": "In Google Cloud Console, create an OAuth client of type Web application, add the redirect address below as an authorized redirect URI, then paste its client ID and secret here. Only people an administrator has added can sign in, matched on their Google email.",
+    "googleFromEnv": "The server's GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are in use. A client saved here takes their place.",
+    "googleRedirect": "Redirect address:",
+    "googleClientId": "Client ID",
+    "googleClientSecret": "Client secret",
+    "googleSecretKept": "A secret is saved for this client. Leave this empty to keep it.",
+    "googleRemove": "Remove the Google client",
+    "auditAction_google_settings_save": "Saved the Google client in",
+    "auditAction_google_settings_remove": "Removed the Google client from",
+    "auditEntity_google_settings": "Sign-in"
   },
   "errors": {
     "validation_failed": "Check the entered values.",

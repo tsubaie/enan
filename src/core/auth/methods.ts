@@ -4,6 +4,7 @@ import { type Database } from '@/core/db/client';
 import { getSetting } from '@/core/db/settings-repo';
 import { AppError } from '@/core/http/errors';
 import { mailStatus } from '@/core/mail/settings';
+import { googleStatus } from './google-settings';
 // ADMIN-B64: a method is offered when an administrator chose it and the server can serve it:
 // password always, a code once mail is set up, Google once its client is. Should every chosen
 // method become unservable (mail removed after password was turned off), password comes back, so
@@ -12,7 +13,7 @@ export async function signInMethods(database: Database) {
   const available: Record<Method, boolean> = {
     password: true,
     code: (await mailStatus(database)).source !== 'none',
-    google: false,
+    google: (await googleStatus(database)).source !== 'none',
   };
   const chosen = await getSetting(database, 'auth.sign_in_methods');
   const enabled = SignInMethod.options.filter(
