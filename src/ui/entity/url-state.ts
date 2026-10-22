@@ -58,3 +58,12 @@ export function toggleSelection(search: string, id: string, on?: boolean) {
   const next = current.filter((entry) => entry !== id);
   return (selected ? [...next, id] : next).join(',');
 }
+
+// EP-B30, #59: the address a navigation starts from, naming the module's default view when the
+// address does not name one yet. The default is held in memory when it arrives and recorded only
+// with the reader's next action, so it never races a navigation they already started.
+export function withDefaultView(search: string, defaultView: string | null) {
+  const params = new URLSearchParams(search);
+  if (defaultView && !params.has('view') && !params.has('q')) params.set('view', defaultView);
+  return params;
+}

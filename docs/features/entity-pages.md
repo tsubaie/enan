@@ -203,6 +203,10 @@ Twelve top-level props is the ceiling (`07-coding-guidelines.md`); related optio
   so a list route carries no chart runtime it may never need, but the chunk is fetched once the list
   is on screen rather than when a row is clicked — otherwise the first record opened on a fresh page
   pauses and every one after it is instant, which reads as the page loading once for no reason.
+  A module's default view, which its list names once the counts arrive, is applied in memory and
+  recorded in the URL only with the reader's next action on the list. Writing it as it arrived
+  could land after the reader had already tapped elsewhere, and a history entry written while that
+  navigation is in flight brought them back to the list (#59).
 - EP-B29 `renderers.columns` declares the same records as a table, and declaring them is what
   offers the reader the choice: a module with no columns has no toggle. A column carries a `head`,
   a `cell`, and `numeric` — the only styling a module may ask for, because it is the one that means

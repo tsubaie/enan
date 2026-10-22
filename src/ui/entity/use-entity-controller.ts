@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback, type RefObject } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { resolveUrlState, changeUrl, clearEntityFilters } from './url-state';
+import { resolveUrlState, changeUrl, clearEntityFilters, withDefaultView } from './url-state';
 import type { Entity, EntityPageProps, FiltersDef } from './types';
 import { useEntityNavigation } from './navigation';
 import { useEntityNeighbors } from './use-entity-neighbors';
@@ -16,7 +16,7 @@ export function useEntityController<T extends Entity, P extends object, C>(
   const path = usePathname();
   const params = useSearchParams();
   const guarded = useEntityNavigation();
-  const state = resolveUrlState(new URLSearchParams(params));
+  const { state, fallback, learn } = useUrlState(params);
   const sort = state.sort || (props.filters.sort?.default ?? '');
   const facets = Object.fromEntries(
     keyedFilters(props.filters).map((f) => [f.key, params.get(f.key) ?? '']),
@@ -29,10 +29,10 @@ export function useEntityController<T extends Entity, P extends object, C>(
   const [selecting, setSelecting] = useState(false);
   const [railOpen, setRailOpen] = useState(true);
   const [searchReset, setSearchReset] = useState(0);
-  const navigate = useGuardedNavigate(guarded, path);
+  const navigate = useGuardedNavigate(guarded, path, fallback);
   const close = useCallback(() => navigate({ id: null, new: null }), [navigate]);
   const neighbors = useEntityNeighbors(list, state.id, navigate);
-  useDefaultView(list.defaultView, Boolean(state.id || state.creating));
+  if (!state.id && !state.creating) learn(list.defaultView);
   useSearchScope(props.title, navigate);
   useControllerKeyboard(root, {
     list,
@@ -80,14 +80,20 @@ export type EntityController<T extends Entity, P extends object, C> = ReturnType
 // with the router and with `useSearchParams` (Next's linking guide, § Native History API), so back
 // and forward still work and the address bar still says what is on screen, without asking the
 // server to re-render a page it has no say in.
-function useGuardedNavigate(guarded: (action: () => void) => void, path: string) {
+// `defaultView` is the view on screen that the address does not name yet: the reader's first
+// action records it, so the address says what is on screen from then on.
+function useGuardedNavigate(
+  guarded: (action: () => void) => void,
+  path: string,
+  defaultView: string | null,
+) {
   return useCallback(
     (patch: Record<string, string | null>, replace = false) => {
-      const query = changeUrl(new URLSearchParams(window.location.search), patch);
+      const query = changeUrl(withDefaultView(window.location.search, defaultView), patch);
       const url = `${path}${query ? '?' + query : ''}`;
       guarded(() => window.history[replace ? 'replaceState' : 'pushState'](null, '', url));
     },
-    [guarded, path],
+    [guarded, path, defaultView],
   );
 }
 type KeyboardArgs<T extends Entity> = {
@@ -138,19 +144,22 @@ function useSearchScope(
     return () => setSearchScope(null);
   }, [label, navigate]);
 }
-function useDefaultView(defaultView: string | undefined, panel: boolean) {
-  const params = useSearchParams();
-  const path = usePathname();
-  // EP-B30: this is client state, so the history entry is written directly rather than asking the
-  // server to re-render a route whose output it cannot change.
-  // sync: record the module default view in the URL once counts arrive.
-  useEffect(() => {
-    if (!params.has('view') && !params.has('q') && defaultView && !panel) {
-      const next = new URLSearchParams(params);
-      next.set('view', defaultView);
-      window.history.replaceState(null, '', `${path}?${next}`);
-    }
-  }, [params, path, defaultView, panel]);
+// EP-B30, #59: the list's state from the address, with the module's default view once its counts
+// name it. The default is held here, not written into the address when it arrives: by then the
+// reader may already have tapped elsewhere, and a history entry written while that navigation is in
+// flight pulls them back to this list. Their next action on the list records it (useGuardedNavigate).
+function useUrlState(params: URLSearchParams) {
+  const [known, setKnown] = useState<string | null>(null);
+  const resolved = resolveUrlState(new URLSearchParams(params));
+  const fallback = !params.has('view') && !params.has('q') ? known : null;
+  return {
+    state: { ...resolved, view: fallback ?? resolved.view },
+    fallback,
+    // Called while rendering, as React's state-from-props pattern does; it settles in one pass.
+    learn: (view: string | undefined) => {
+      if (view && view !== known) setKnown(view);
+    },
+  };
 }
 function useEntityCreate<T extends Entity, C>(
   create: (input: C) => Promise<T | null>,

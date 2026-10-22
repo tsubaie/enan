@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveUrlState, changeUrl, toggleSelection } from '../url-state';
+import { resolveUrlState, changeUrl, toggleSelection, withDefaultView } from '../url-state';
 describe('Entity URL state', () => {
   it('EP-B01 create wins over detail and opening a row removes create', () => {
     expect(resolveUrlState(new URLSearchParams('new=1&id=old')).id).toBeNull();
@@ -49,4 +49,12 @@ it('EP-A05 a toggle starts from the selection in the address bar and keeps the o
   expect(toggleSelection('?sel=a', 'a', true)).toBe('a');
   expect(toggleSelection('?sel=a', 'b', false)).toBe('a');
   expect(toggleSelection('', 'a')).toBe('a');
+});
+
+it('EP-B30 the default view is recorded by the next action, never over a view or a search the reader chose', () => {
+  expect(changeUrl(withDefaultView('', 'next'), { id: 'a' })).toBe('view=next&id=a');
+  expect(withDefaultView('?view=today', 'next').get('view')).toBe('today');
+  expect(withDefaultView('?q=board', 'next').has('view')).toBe(false);
+  // Before the counts name a default, the address stays as it is.
+  expect(withDefaultView('?id=a', null).toString()).toBe('id=a');
 });
