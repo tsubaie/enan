@@ -28,7 +28,7 @@ export function ShellHeader({ user }: { user: { name: string; email: string; rol
       {/* The page's title, at the header's leading edge from 1024 px, the way a macOS window titles
           its toolbar. A list page renders its title group here (EntityTitle); a page without one
           leaves it empty. */}
-      <div id={HEADER_TITLE_SLOT} className="hidden min-w-0 items-center gap-2 lg:flex" />
+      <div id={HEADER_TITLE_SLOT} className="flex min-w-0 flex-1 items-center gap-2" />
       {/* SEARCH-B08: a button, not an input. The palette owns the text, so there is one place it is
           typed and no state to hand over when it opens.
           SEARCH-B11: and it looks like one. It used to be drawn as a bordered field stretched
@@ -53,7 +53,10 @@ export function ShellHeader({ user }: { user: { name: string; email: string; rol
             {t(apple ? 'searchShortcutMac' : 'searchShortcut')}
           </kbd>
         </Button>
-        <LanguageToggle />
+        {/* On a phone the language is chosen in the bar's More sheet (MobileNav), not up here. */}
+        <div className="hidden lg:block">
+          <LanguageToggle />
+        </div>
         <NotificationBell />
         <AccountMenu user={user} />
       </div>

@@ -16,7 +16,8 @@ export function EntityList<T extends Entity, P extends object, C>(props: Surface
   const t = useTranslations('common');
   const { list } = props.controller;
   const rows = useRowMotion(list.items, list.pending);
-  if (list.pending) return <EntityListSkeleton />;
+  if (list.pending)
+    return <EntityListSkeleton cards={props.config.renderers.rowStyle === 'card'} />;
   if (list.error) return <ErrorPanel error={list.error} retry={list.refetch} />;
   if (!rows.length) return <EntityEmpty {...props} />;
   // EP-B29: the table is the same records, the same selection and the same keyboard; only the
@@ -167,8 +168,8 @@ function rowShape(style: 'card' | 'grid' | undefined, lead: boolean) {
     };
   if (style === 'card')
     return {
-      shell: cn('mx-3 mb-2 flex-wrap @lg:mx-0 @lg:me-6 @lg:flex-nowrap', CARD),
-      button: cn(button, 'min-h-14 basis-3/4 px-3 py-3.5 @lg:basis-0'),
+      shell: cn('entity-card-row mx-3 mb-2 flex-wrap @lg:mx-0 @lg:me-6 @lg:flex-nowrap', CARD),
+      button: cn(button, 'entity-card-open min-h-14 basis-3/4 px-3 py-3.5 @lg:basis-0'),
     };
   return { shell: 'border-b', button: cn(button, !lead && 'ps-4') };
 }
@@ -186,6 +187,7 @@ function EntityRowTrail<T extends Entity, P extends object, C>({
   if (!trail) return null;
   return (
     <div
+      data-card-trail={config.renderers.rowStyle === 'card' || undefined}
       className={
         config.renderers.rowStyle === 'card'
           ? 'mx-4 mb-2.5 flex w-full flex-col justify-center @lg:ms-1 @lg:me-4 @lg:mb-0 @lg:w-auto @lg:max-w-[45%] @lg:shrink-0 @lg:self-stretch @lg:py-3.5'

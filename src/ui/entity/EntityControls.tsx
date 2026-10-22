@@ -1,12 +1,12 @@
 'use client';
 import { useTranslations } from 'next-intl';
-import { SlidersHorizontal, CirclePlus, X } from 'lucide-react';
+import { SlidersHorizontal, CirclePlus, Plus, X } from 'lucide-react';
 import { Button } from '@/ui/primitives/button';
 import { EntitySearch } from './EntitySearch';
 import { EntityModes } from './EntityModes';
 import { EntityBulkBar } from './EntityBulkBar';
 import { EntitySelectionControl } from './EntitySelectionControl';
-import { EntityTitle, EntityTitlePortal } from './EntityTitle';
+import { EntityTitlePortal } from './EntityTitle';
 import { ChoiceSelect } from '@/ui/layout/ChoiceSelect';
 import { cn } from '@/ui/cn';
 import { useCount } from '@/ui/format';
@@ -40,12 +40,10 @@ export function EntityToolbar<T extends Entity, P extends object, C>({
     // wrapped rows at desktop spacing cost 24 px of a screen that has 732 px for records.
     <div className="entity-toolbar sticky top-0 z-10 space-y-2 border-b bg-surface px-3 py-2 @lg:space-y-3 @lg:pe-6 @lg:ps-0 @lg:py-4">
       <div className="flex w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-2 @lg:gap-y-3">
-        <div className="flex min-w-0 flex-1 basis-auto items-center gap-2 @lg:flex-none">
-          {/* ADR 0031: from 1024 px the title group sits in the shell header; here only on a phone. */}
-          <div className="flex min-w-0 flex-1 items-center gap-2 lg:hidden">
-            <EntityTitle config={config} controller={c} />
-          </div>
-          <EntityTitlePortal config={config} controller={c} />
+        {/* The title group sits in the shell header at every width (ADR 0031). Below 1024 px this
+            group would hold Create alone on a row of its own, so Create joins the controls there. */}
+        <EntityTitlePortal config={config} controller={c} />
+        <div className="flex min-w-0 flex-1 basis-auto items-center gap-2 max-lg:hidden @lg:flex-none">
           <Button
             className={cn('shrink-0', c.railOpen && 'xl:hidden')}
             onClick={() => c.navigate({ new: '1' })}
@@ -100,8 +98,8 @@ function EntityToolbarControls<T extends Entity, P extends object, C>({
   const { count, filtered } = narrowing(config, c);
   const shown = useCount();
   return (
-    <div className="flex min-w-0 flex-[2_1_30rem] flex-wrap items-center gap-2">
-      <div className="flex min-w-0 flex-1 basis-56">
+    <div className="flex min-w-0 flex-[2_1_30rem] flex-wrap items-center gap-2 max-lg:flex-nowrap">
+      <div className="flex min-w-0 flex-1 basis-56 max-lg:basis-0">
         <EntitySearch
           key={c.searchReset}
           query={c.state.q}
@@ -113,23 +111,23 @@ function EntityToolbarControls<T extends Entity, P extends object, C>({
           was `shrink-0`, which on a module carrying a period as well as a sort (KPIs) made the
           group 509 px wide inside a 390 px screen — the sort clipped mid-word and Filter and Clear
           rendered past the edge, where nothing could reach them. */}
-      <div className="ms-auto flex min-w-0 flex-wrap items-center gap-2">
+      <div className="ms-auto flex min-w-0 flex-wrap items-center gap-2 max-lg:shrink-0 max-lg:flex-nowrap">
         {!covered && <EntityListSettings config={config} controller={c} />}
         <Button
           variant={count ? 'secondary' : 'outline'}
-          className="shrink-0"
+          className="shrink-0 max-lg:rounded-full max-lg:px-2.5"
           aria-label={count ? t('filtersActive', { count }) : t('filter')}
           onClick={() => c.setFiltersOpen(true)}
         >
           <SlidersHorizontal className="size-4" aria-hidden={true} />
-          <span>{t('filter')}</span>
+          <span className="max-lg:hidden">{t('filter')}</span>
           {count > 0 && <span className="tabular-nums">{shown(count)}</span>}
         </Button>
         {!covered && (
           <Button
             variant="ghost"
             size="icon"
-            className={cn('shrink-0 text-text-muted', !filtered && 'invisible')}
+            className={cn('shrink-0 text-text-muted', !filtered && 'invisible max-lg:hidden')}
             aria-label={t('clear')}
             title={t('clear')}
             onClick={() => c.clearFilters()}
@@ -137,6 +135,7 @@ function EntityToolbarControls<T extends Entity, P extends object, C>({
             <X aria-hidden={true} className="size-4" />
           </Button>
         )}
+        <PhoneCreate create={() => c.navigate({ new: '1' })} />
       </div>
     </div>
   );
@@ -149,25 +148,51 @@ function EntityListSettings<T extends Entity, P extends object, C>({
   config,
   controller: c,
 }: Surface<T, P, C>) {
-  const t = useTranslations('common');
   return (
     <>
       <EntityModes config={config} controller={c} />
       {config.filters.sort && (
-        <div className="min-w-0 max-w-44">
-          <ChoiceSelect
-            label={t('sort')}
-            value={c.state.sort}
-            items={config.filters.sort.options.map((option) => ({
-              value: option.id,
-              text: option.label,
-              label: option.label,
-            }))}
-            onChange={(sort) => c.navigate({ sort }, true)}
-          />
+        <div className="min-w-0 max-w-44 max-lg:hidden">
+          <EntitySort config={config} controller={c} />
         </div>
       )}
       <EntitySelectionControl config={config} controller={c} />
     </>
+  );
+}
+// Below 1024 px Create is a round icon at the end of the controls row (the title row it sat on is
+// gone: the title is in the shell header there).
+function PhoneCreate({ create }: { create: () => void }) {
+  const t = useTranslations('common');
+  return (
+    <Button
+      size="icon"
+      className="shrink-0 rounded-full lg:hidden"
+      aria-label={t('create')}
+      title={t('create')}
+      onClick={create}
+    >
+      <Plus className="size-5" strokeWidth={2.25} aria-hidden={true} />
+    </Button>
+  );
+}
+// The list's order: in the bar from 1024 px, and in the filter sheet below it (EntityPage).
+export function EntitySort<T extends Entity, P extends object, C>({
+  config,
+  controller: c,
+}: Surface<T, P, C>) {
+  const t = useTranslations('common');
+  if (!config.filters.sort) return null;
+  return (
+    <ChoiceSelect
+      label={t('sort')}
+      value={c.state.sort}
+      items={config.filters.sort.options.map((option) => ({
+        value: option.id,
+        text: option.label,
+        label: option.label,
+      }))}
+      onChange={(sort) => c.navigate({ sort }, true)}
+    />
   );
 }

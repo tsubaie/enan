@@ -6,8 +6,9 @@ import { Button } from '@/ui/primitives/button';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/ui/primitives/dialog';
 import { cn } from '@/ui/cn';
 import { useEntityController } from './use-entity-controller';
+import { useSheetDismiss } from './use-sheet-dismiss';
 import { EntityNavigationProvider } from './navigation';
-import { EntityToolbar } from './EntityControls';
+import { EntityToolbar, EntitySort } from './EntityControls';
 import { EntityOutside } from './EntityOutside';
 import { EntityFacets } from './EntityFacets';
 import { EntityViews, EntityStats } from './EntityViews';
@@ -15,6 +16,7 @@ import { EntityModeHeader } from './EntityModes';
 import { EntityList } from './EntityList';
 import { EntityContent, EntityDetailSkeleton } from './EntityContent';
 import type { Entity, EntityPageProps } from './types';
+import type { Surface } from './surface';
 export function EntityPage<T extends Entity, P extends object, C>(props: EntityPageProps<T, P, C>) {
   return (
     <EntityNavigationProvider>
@@ -62,8 +64,10 @@ function EntityRail<T extends Entity, P extends object, C>({
 function EntitySurface<T extends Entity, P extends object, C>(props: EntityPageProps<T, P, C>) {
   const t = useTranslations('common');
   const root = useRef<HTMLElement>(null);
+  const sheet = useRef<HTMLElement>(null);
   const c = useEntityController(props, root);
   const panel = c.state.id || c.state.creating;
+  const dismiss = useSheetDismiss(sheet, Boolean(panel), c.close);
   return (
     <section
       ref={root}
@@ -75,47 +79,69 @@ function EntitySurface<T extends Entity, P extends object, C>(props: EntityPageP
     >
       <div className="entity-workspace flex min-h-0 flex-1 overflow-hidden lg:gap-6 lg:ps-6">
         {c.railOpen && <EntityRail config={props} controller={c} />}
-        <div
-          data-entity-list
-          className={cn('@container min-w-0 flex-1 overflow-y-auto', panel && 'hidden lg:block')}
-        >
+        <div data-entity-list className="@container min-w-0 flex-1 overflow-y-auto">
           <EntityToolbar config={props} controller={c} />
           <EntityModeHeader config={props} controller={c} />
           <EntityStats config={props} controller={c} />
           <EntityList config={props} controller={c} />
         </div>
         {/* EP-B23 (ADR 0031): behind an open record the whole window blurs and dims a little, so the
-            record alone is in focus. It only paints: clicks still reach the list beneath it. */}
+            record alone is in focus. From 1024 px it only paints: clicks still reach the list
+            beneath it. Below that the record is a sheet, and tapping the dimmed page above it
+            closes it, as any sheet closes; the sheet's own close button is the keyboard's way. */}
         {panel && (
-          <div
-            aria-hidden={true}
-            className="entity-backdrop pointer-events-none fixed inset-0 z-[29] hidden lg:block"
+          <button
+            type="button"
+            tabIndex={-1}
+            aria-label={t('close')}
+            className="entity-backdrop fixed inset-0 z-[29] cursor-default max-lg:z-[39] lg:pointer-events-none"
+            onClick={dismiss}
           />
         )}
         {panel && (
-          <aside className="entity-detail min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain bg-surface lg:fixed lg:inset-y-2 lg:end-2 lg:z-30 lg:w-[clamp(480px,46%,880px)] lg:rounded-[20px] lg:border lg:[box-shadow:var(--shadow-slideover)]">
+          <aside
+            ref={sheet}
+            className="entity-detail min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain bg-surface lg:fixed lg:inset-y-2 lg:end-2 lg:z-30 lg:w-[clamp(480px,46%,880px)] lg:rounded-[20px] lg:border lg:[box-shadow:var(--shadow-slideover)]"
+          >
             <EntityOutside config={props} controller={c} />
             {/* A module's record and create form load on first use. Their own boundary keeps that
                 wait inside the panel; without it the route's loading screen replaced the whole page
                 the first time a record was opened. */}
             <Suspense fallback={<EntityDetailSkeleton />}>
-              <EntityContent config={props} controller={c} />
+              <EntityContent config={props} controller={{ ...c, close: dismiss }} />
             </Suspense>
           </aside>
         )}
       </div>
-      <Dialog open={c.filtersOpen} onOpenChange={c.setFiltersOpen}>
-        <DialogContent sheet className="max-h-[85dvh] overflow-y-auto">
-          <DialogTitle>{t('filter')}</DialogTitle>
-          <DialogDescription>{t('filterDescription')}</DialogDescription>
-          <EntityFacets config={props} controller={c} />
-          <h2 className="border-t pt-4 font-medium">{t('views')}</h2>
-          <EntityViews config={props} controller={c} />
-          <Button variant="outline" onClick={() => c.clearFilters()}>
-            {t('clear')}
-          </Button>
-        </DialogContent>
-      </Dialog>
+      <EntityFilterSheet config={props} controller={c} />
     </section>
+  );
+}
+// Filters, views and, below 1024 px, the sort, in one sheet.
+function EntityFilterSheet<T extends Entity, P extends object, C>({
+  config,
+  controller: c,
+}: Surface<T, P, C>) {
+  const t = useTranslations('common');
+  return (
+    <Dialog open={c.filtersOpen} onOpenChange={c.setFiltersOpen}>
+      <DialogContent sheet className="max-h-[85dvh] overflow-y-auto">
+        <DialogTitle>{t('filter')}</DialogTitle>
+        <DialogDescription>{t('filterDescription')}</DialogDescription>
+        {/* Below 1024 px the toolbar has no room for the sort, so it opens here with the filters. */}
+        {config.filters.sort && (
+          <div className="grid gap-2 lg:hidden">
+            <h2 className="font-medium">{t('sort')}</h2>
+            <EntitySort config={config} controller={c} />
+          </div>
+        )}
+        <EntityFacets config={config} controller={c} />
+        <h2 className="border-t pt-4 font-medium">{t('views')}</h2>
+        <EntityViews config={config} controller={c} />
+        <Button variant="outline" onClick={() => c.clearFilters()}>
+          {t('clear')}
+        </Button>
+      </DialogContent>
+    </Dialog>
   );
 }

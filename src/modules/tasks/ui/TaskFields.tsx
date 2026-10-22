@@ -140,7 +140,9 @@ function TaskProperties({
         {owners.error && <ErrorPanel error={owners.error} retry={() => void owners.refetch()} />}
       </div>
       <Property label={t('dueDate')} quiet={quiet} empty={!draft.dueDate}>
-        <span className="flex min-w-0 items-center gap-2">
+        {/* The relative note wraps under the date where the row cannot hold both, rather than
+            running out of the value column. */}
+        <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           <span className="min-w-0">
             <DueDateField
               name="dueDate"

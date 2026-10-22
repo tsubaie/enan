@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 import { Ellipsis } from 'lucide-react';
 import { navigation } from '@/core/modules/client';
 import type { NavEntry } from '@/core/modules/manifest';
+import { LanguageToggle } from '@/ui/layout/LanguageToggle';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/ui/primitives/dialog';
 // ADMIN-B19: the bar carries four destinations and a way to the rest. Seven entries were drawn as
 // seven 44 px slots with no gap between them while their labels ran to 84 px, so at every width a
@@ -15,7 +16,7 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/ui/prim
 // what ADMIN-B19 asks for; what changed is that the bar's last slot is a door rather than a
 // seventh label nobody could read.
 const CARRIED = 4;
-// A menu holding one entry is worse than the entry, so the door only appears once it saves a slot.
+// When every destination fits, the door still holds the language (it is not in a phone's header).
 function split(entries: NavEntry[]): { bar: NavEntry[]; behind: NavEntry[] } {
   if (entries.length <= CARRIED + 1) return { bar: entries, behind: [] };
   return { bar: entries.slice(0, CARRIED), behind: entries.slice(CARRIED) };
@@ -27,46 +28,43 @@ export function MobileNav({ role }: { role: string }) {
   const t = useTranslations('common');
   const path = usePathname();
   const [open, setOpen] = useState(false);
-  const { bar, behind } = split(navigation(role));
+  const { bar, behind } = split(
+    [...navigation(role)].sort((a, b) => (a.phoneOrder ?? a.order) - (b.phoneOrder ?? b.order)),
+  );
   const elsewhere = behind.some((entry) => isCurrent(path, entry.href));
   return (
     <>
       {bar.map((entry) => (
         <BarLink key={entry.href} entry={entry} path={path} />
       ))}
-      {behind.length > 0 && (
-        <>
-          <button
-            type="button"
-            aria-expanded={open}
-            aria-current={elsewhere ? 'page' : undefined}
-            className="group/nav flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-3xl px-3 text-text-muted transition-colors duration-150 hover:bg-[var(--nav-hover)] hover:text-text aria-[current=page]:bg-[var(--nav-selected)] aria-[current=page]:text-text"
-            onClick={() => setOpen(true)}
-          >
-            <Ellipsis
-              className="size-5 shrink-0 group-aria-[current=page]/nav:text-accent"
-              aria-hidden={true}
-            />
-            <span className="min-w-0 truncate">{t('navMore')}</span>
-          </button>
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogContent sheet className="max-h-[85dvh] overflow-y-auto">
-              <DialogTitle>{t('navMore')}</DialogTitle>
-              <DialogDescription>{t('navMoreDescription')}</DialogDescription>
-              <nav className="grid gap-1">
-                {behind.map((entry) => (
-                  <SheetLink
-                    key={entry.href}
-                    entry={entry}
-                    path={path}
-                    close={() => setOpen(false)}
-                  />
-                ))}
-              </nav>
-            </DialogContent>
-          </Dialog>
-        </>
-      )}
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-current={elsewhere ? 'page' : undefined}
+        className="group/nav flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-3xl px-3 text-text-muted transition-colors duration-150 hover:bg-[var(--nav-hover)] hover:text-text aria-[current=page]:bg-[var(--nav-selected)] aria-[current=page]:text-text"
+        onClick={() => setOpen(true)}
+      >
+        <Ellipsis
+          className="size-5 shrink-0 group-aria-[current=page]/nav:text-accent"
+          aria-hidden={true}
+        />
+        <span className="max-w-full min-w-0 truncate">{t('navMore')}</span>
+      </button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent sheet className="max-h-[85dvh] overflow-y-auto">
+          <DialogTitle>{t('navMore')}</DialogTitle>
+          <DialogDescription>{t('navMoreDescription')}</DialogDescription>
+          <nav className="grid gap-1">
+            {behind.map((entry) => (
+              <SheetLink key={entry.href} entry={entry} path={path} close={() => setOpen(false)} />
+            ))}
+          </nav>
+          <div className="flex min-h-11 items-center justify-between gap-3 border-t px-3 pt-3">
+            <span className="text-text-muted">{t('language')}</span>
+            <LanguageToggle />
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
@@ -87,7 +85,8 @@ function BarLink({ entry, path }: { entry: NavEntry; path: string }) {
         className="size-5 shrink-0 group-aria-[current=page]/nav:text-accent"
         aria-hidden={true}
       />
-      <span className="min-w-0 truncate">{t(entry.key)}</span>
+      {/* Capped at the slot: the column centres it, so without a cap it is as wide as its text. */}
+      <span className="max-w-full min-w-0 truncate">{t(entry.phoneKey ?? entry.key)}</span>
     </IntentLink>
   );
 }

@@ -1,5 +1,6 @@
 'use client';
 import { useTranslations } from 'next-intl';
+import { X } from 'lucide-react';
 import { Button } from '@/ui/primitives/button';
 import { ErrorPanel } from '@/ui/layout/ErrorPanel';
 import { EntityPanel } from './EntityPanel';
@@ -37,7 +38,12 @@ export function EntityContent<T extends Entity, P extends object, C>({
 }: Surface<T, P, C>) {
   const t = useTranslations('common');
   if (c.state.creating)
-    return config.renderers.create({ cancel: c.close, pending: c.creating, submit: c.submit });
+    return (
+      <>
+        <CreateSheetBar close={c.close} />
+        {config.renderers.create({ cancel: c.close, pending: c.creating, submit: c.submit })}
+      </>
+    );
   if (c.detail.pending) return <EntityDetailSkeleton />;
   if (c.detail.error || !c.detail.data)
     return (
@@ -62,5 +68,28 @@ export function EntityContent<T extends Entity, P extends object, C>({
       focus={c.state.focus}
       setFocus={(key) => c.navigate({ focus: key }, true)}
     />
+  );
+}
+// Below 1024 px the create form opens in the same sheet as a record, so it carries the same top:
+// the handle that says it can be pulled down, and the round close at the end edge (EntityPanel's
+// bar). From 1024 px the form's own Cancel is the way out.
+function CreateSheetBar({ close }: { close: () => void }) {
+  const t = useTranslations('common');
+  return (
+    <div className="panel-bar sticky top-0 z-20 flex min-h-12 items-center px-3 pt-4 pb-2 lg:hidden">
+      <span
+        aria-hidden={true}
+        className="absolute inset-x-0 top-1.5 mx-auto h-1 w-9 rounded-full bg-text-muted/40"
+      />
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label={t('close')}
+        onClick={close}
+        className="ms-auto size-9 rounded-full bg-surface-raised"
+      >
+        <X className="size-4" />
+      </Button>
+    </div>
   );
 }

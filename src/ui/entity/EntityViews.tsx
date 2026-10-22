@@ -5,6 +5,7 @@ import { cn } from '@/ui/cn';
 import { useCount } from '@/ui/format';
 import type { Entity, View } from './types';
 import type { Surface } from './surface';
+import { CountCircle } from '@/ui/primitives/count-circle';
 const toneInk: Record<string, string> = {
   danger: 'text-danger',
   accent: 'text-accent',
@@ -46,15 +47,9 @@ export function EntityViews<T extends Entity, P extends object, C>({
                 />
               )}
               <span className="min-w-0 flex-1 truncate text-start">{view.label}</span>
-              <span
-                key={c.list.counts[view.id] ?? 0}
-                className={cn(
-                  'count-tick text-xs font-normal tabular-nums',
-                  active ? 'text-accent' : 'text-text-muted',
-                )}
-              >
+              <CountCircle key={c.list.counts[view.id] ?? 0} current={active}>
                 {count(c.list.counts[view.id] ?? 0)}
-              </span>
+              </CountCircle>
             </Button>
           </Fragment>
         );
@@ -92,6 +87,8 @@ export function EntityStats<T extends Entity, P extends object, C>({
         'grid snap-x scroll-px-3 grid-flow-col auto-cols-max gap-2 overflow-x-auto border-b px-3 py-2',
         '@lg:grid-flow-row @lg:auto-cols-auto @lg:snap-none @lg:overflow-x-visible @lg:py-3',
         featured.length === 5 ? '@lg:grid-cols-5' : '@lg:grid-cols-4',
+        // Below 1024 px the view menu in the shell header carries the same views and counts.
+        'max-lg:hidden',
         c.railOpen && 'xl:hidden',
       )}
     >

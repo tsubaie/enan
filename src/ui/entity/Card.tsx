@@ -26,6 +26,7 @@ export function CardTitle({
     <span className="flex min-w-0 items-center gap-2.5">
       <span
         dir="auto"
+        data-card-title
         className={cn(
           'plaintext line-clamp-2 min-w-0 text-nav leading-snug font-normal whitespace-normal',
           done && 'text-text-muted line-through',
@@ -41,6 +42,7 @@ export function CardExcerpt({ children }: { children: ReactNode }) {
   return (
     <span
       dir="auto"
+      data-card-excerpt
       className="plaintext line-clamp-1 max-w-full min-w-0 self-start text-sm font-extralight whitespace-normal text-text-muted"
     >
       {children}
@@ -49,7 +51,10 @@ export function CardExcerpt({ children }: { children: ReactNode }) {
 }
 export function CardFacts({ children }: { children: ReactNode }) {
   return (
-    <span className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs font-light text-text-muted empty:hidden">
+    <span
+      data-card-facts
+      className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs font-light text-text-muted empty:hidden"
+    >
       {children}
     </span>
   );

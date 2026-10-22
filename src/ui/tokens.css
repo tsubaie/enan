@@ -60,6 +60,9 @@
   --font-display: var(--display-stack);
 }
 :root {
+  /* One card height for every list below the list's 32rem (.entity-card-row): a one-line name
+     over one line of facts, with the trail beside them. */
+  --card-phone-height: 4.5rem;
   /* ADR 0030, the paper theme: a cool grey paper ground, a near-white sheet for surfaces, near-black
      ink, and moss as the marker -- the sage of the night theme taken down until it clears 4.5:1
      on the sheet, so the two themes share one marker hue at two depths. */
@@ -796,6 +799,48 @@ main:has(.home-page)::-webkit-scrollbar {
     --panel-slide: -100%;
   }
 }
+/* Below 1024 px a record is a sheet risen from the bottom, the way iOS presents one: the page
+   stays in view above it, dimmed, and the sheet's top corners round into the screen's. It covers
+   the bottom bar: while a record is open, the record is the task. */
+@media (max-width: 1023.98px) {
+  .entity-detail {
+    position: fixed;
+    inset-inline: 0;
+    inset-block: max(3.5rem, calc(env(safe-area-inset-top) + 2.75rem)) 0;
+    z-index: 40;
+    border-top-width: 1px;
+    border-radius: 28px 28px 0 0;
+    padding-bottom: env(safe-area-inset-bottom);
+    box-shadow: var(--shadow-slideover);
+    animation: rise-sheet 340ms var(--ease-rise);
+    transition: translate 200ms var(--ease-rise);
+  }
+  .entity-backdrop {
+    background: color-mix(in oklch, var(--color-scrim), transparent 45%);
+    animation: backdrop-in 220ms ease-out both;
+  }
+  /* The bar is drawn by the shell, above the page the sheet lives in, so it would float over the
+     sheet's foot; while a record is open there is nothing to navigate to without closing it. */
+  body:has(.entity-page-open) .mobile-navigation {
+    display: none;
+  }
+  /* Solid, not glass: the page's own glass under the sheet leaves nothing for a second blur to
+     sample here, so the rows behind read through. An iOS sheet is opaque for the same reason. */
+  .dark .entity-detail {
+    background: var(--elevated);
+    backdrop-filter: none;
+  }
+}
+@keyframes rise-sheet {
+  from {
+    translate: 0 100%;
+  }
+}
+@keyframes backdrop-in {
+  from {
+    opacity: 0;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .entity-detail {
     animation: none;
@@ -1102,6 +1147,90 @@ main:has(.home-page)::-webkit-scrollbar {
 /* The strip above it is one block and rises as one, ahead of the tiles it summarises. */
 [data-entity-stats] {
   animation: rise 300ms var(--ease-rise) backwards;
+}
+/* Below the list's 32rem a card is one compact shape on every list: the name on one line, under it
+   the facts that decide what to do (a task's due date, a note's date and type, someone's open and
+   late tasks), and the trail at the end of the same row (a task's owner, a note's type). Anything a
+   module marks `data-card-more`, and the excerpt, is the record's to show; the sheet carries it. */
+@container (width < 32rem) {
+  .entity-card-row {
+    flex-wrap: nowrap;
+    align-items: center;
+    height: var(--card-phone-height);
+  }
+  .entity-card-row .entity-card-open {
+    flex-basis: 0;
+    padding-block: 0.75rem;
+  }
+  .entity-card-row [data-card-trail] {
+    width: auto;
+    max-width: 45%;
+    flex-shrink: 0;
+    margin: 0;
+    margin-inline-end: 0.875rem;
+  }
+  .entity-card-row [data-card-title] {
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+  }
+  .entity-card-row [data-card-excerpt],
+  .entity-card-row [data-card-more] {
+    display: none;
+  }
+  .entity-card-row [data-card-facts] {
+    flex-wrap: nowrap;
+    overflow: hidden;
+  }
+  /* On one line the facts keep their own widths and only the last gives way, with an ellipsis,
+     so none is drawn over its neighbour. */
+  .entity-card-row [data-card-facts] > * {
+    flex-shrink: 0;
+  }
+  .entity-card-row [data-card-facts] > :last-child {
+    flex-shrink: 1;
+  }
+}
+/* On a touch screen below 1024 px the list's toolbar draws its controls at 36 px, the way iOS draws
+   a search field and the glyphs of a toolbar, so the row sits lighter over the cards. Every button
+   keeps a 44 px target: a transparent margin of 4 px around it takes the touch (Apple's minimum),
+   and the 8 px between controls keeps two targets from overlapping. With a pointer the bar is
+   already the 32 px compact step above. */
+@media (max-width: 1023.98px) and (pointer: coarse) {
+  .entity-toolbar :is([data-slot='select-trigger'], button[data-slot='button']) {
+    min-height: 2.25rem;
+    height: 2.25rem;
+  }
+  /* The search field's 1 px border sits outside its input, so the input gives those 2 px back. */
+  .entity-toolbar input {
+    min-height: calc(2.25rem - 2px);
+    height: calc(2.25rem - 2px);
+  }
+  .entity-toolbar button[data-slot='button'] {
+    position: relative;
+    min-width: 2.25rem;
+  }
+  .entity-toolbar button[data-slot='button'][data-size^='icon'] {
+    width: 2.25rem;
+  }
+  .entity-toolbar button[data-slot='button']::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
+  }
+}
+/* Narrow, the strip scrolls sideways; its ends fade so a reading cut by the edge reads as "more
+   this way" rather than as clipped. The fade is shorter than the strip's padding plus a gap, so a
+   reading at rest is never dimmed. */
+@container (width < 32rem) {
+  [data-entity-stats] {
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      #000 1.25rem,
+      #000 calc(100% - 1.25rem),
+      transparent
+    );
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .home-headline,

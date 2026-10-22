@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useRef, type ReactNode, type RefObject } from 'react';
 import { useTranslations } from 'next-intl';
-import { ChevronLeft, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { Button } from '@/ui/primitives/button';
 import { cn } from '@/ui/cn';
 import { ErrorPanel } from '@/ui/layout/ErrorPanel';
@@ -182,14 +182,16 @@ function PanelToolbar({
   return (
     <div
       className={cn(
-        'panel-bar sticky top-0 z-20 flex min-h-12 items-center gap-1 px-3 py-2',
+        'panel-bar sticky top-0 z-20 flex min-h-12 items-center gap-1 px-3 py-2 max-lg:pt-4',
         scrolled && 'panel-bar-scrolled',
       )}
     >
-      <Button variant="ghost" size="sm" onClick={close} className="lg:hidden">
-        <ChevronLeft className="size-4 rtl:rotate-180" />
-        {t('back')}
-      </Button>
+      {/* Below 1024 px the record is a sheet risen from the bottom, and the handle says it can be
+          pulled down (use-sheet-dismiss). */}
+      <span
+        aria-hidden={true}
+        className="absolute inset-x-0 top-1.5 mx-auto h-1 w-9 rounded-full bg-text-muted/40 lg:hidden"
+      />
       <div className="flex min-w-0 flex-1 items-center gap-2 ps-1 text-xs text-text-muted">
         {name && <bdi className="min-w-0 truncate text-sm font-medium text-text">{name}</bdi>}
       </div>
@@ -199,7 +201,7 @@ function PanelToolbar({
         size="icon-sm"
         aria-label={t('close')}
         onClick={close}
-        className="hidden rounded-full lg:inline-flex"
+        className="rounded-full max-lg:size-9 max-lg:bg-surface-raised"
       >
         <X className="size-4" />
       </Button>

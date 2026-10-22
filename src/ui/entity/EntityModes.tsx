@@ -70,11 +70,16 @@ export function EntityModeHeader<T extends Entity, P extends object, C>({
   if (!mode) return null;
   const current = c.facets[mode.key] ?? '';
   return (
-    <div className="px-3 pt-1 pb-1">
+    // Centred over the list: it rewrites every figure below it, so it belongs to the whole column.
+    <div className="flex justify-center px-3 pt-1 pb-1">
       <div
         role="group"
         aria-label={mode.label}
-        className={cn(segmentedTrack, 'w-fit max-w-full')}
+        // Below 1024 px it spans the column like the cards under it, every option an equal share.
+        className={cn(
+          segmentedTrack,
+          'w-fit max-w-full max-lg:grid max-lg:w-full max-lg:auto-cols-fr max-lg:grid-flow-col',
+        )}
       >
         {mode.options.map((option) => (
           <Button
@@ -83,7 +88,7 @@ export function EntityModeHeader<T extends Entity, P extends object, C>({
             aria-pressed={option.id === current}
             className={cn(
               segmentedItem,
-              'min-h-0',
+              'min-h-0 max-lg:min-w-0 max-lg:px-1.5',
               option.id === current && segmentedItemOn,
             )}
             onClick={() => c.navigate({ [mode.key]: option.id, id: null, sel: null }, true)}

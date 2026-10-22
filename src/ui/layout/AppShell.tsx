@@ -26,7 +26,7 @@ export function AppShell({
     // material (Apple: glass is for navigation, never for content, and never glass on glass).
     <div className="flex h-dvh flex-col overflow-hidden bg-bg lg:grid lg:grid-cols-[240px_minmax(0,1fr)]">
       <Sidebar user={user} workspace={workspace} />
-      <div className="app-canvas flex min-h-0 min-w-0 flex-col bg-surface lg:m-2 lg:overflow-hidden lg:rounded-2xl lg:border">
+      <div className="app-canvas flex min-h-0 min-w-0 flex-1 flex-col bg-surface lg:m-2 lg:overflow-hidden lg:rounded-2xl lg:border">
         <ShellHeader user={user} />
         {/* Below 1024 px the bar floats over this column as a glass capsule, so the page reserves
             the ground it takes — the safe area, the gap under the capsule, the capsule and the gap
