@@ -50,5 +50,6 @@ One decision per file. Format: **Status**, **Context**, **Decision**, **Conseque
 | 0044 | The runtime image is the standalone output | accepted |
 | 0045 | Slow read-only handlers run outside the write lock | accepted |
 | 0046 | The ع-horse mark | accepted |
+| 0047 | The ع-horse mark, redrawn | accepted |
 
 Open decisions awaiting an ADR: license (see roadmap); chart library confirmation (`recharts`).
