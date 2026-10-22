@@ -102,6 +102,8 @@ const afterwards = createAuthMiddleware(async (ctx) => {
       ctx.setCookie(name, value, { path: '/', sameSite: 'lax', maxAge: 31536000 }),
     );
   if (guards[ctx.path]?.throttle !== 'login') return;
+  // A busy hasher's "try again" (429) is not a wrong password, so it fills no bucket.
+  if (ctx.context.returned instanceof APIError && ctx.context.returned.statusCode === 429) return;
   const email = Email.safeParse(ctx.body).data?.email;
   if (!email) return;
   const ip = ctx.request ? clientIp(ctx.request) : null;
@@ -207,6 +209,8 @@ const codes = () =>
 async function googleProvider(): Promise<BetterAuthOptions['socialProviders']> {
   const google = await googleClient(db()).catch((error: Error) => {
     logger.warn({ err: error }, 'The saved Google client cannot be read; Google sign-in is off');
+    // Not kept: the next request builds again, so a passing failure does not last until a restart.
+    resetAuth();
     return null;
   });
   if (!google) return {};

@@ -5,6 +5,7 @@ import { env } from '@/core/config/env';
 import { WallpaperChoice } from '@/core/config/wallpapers';
 import { SignInMethodsStatus, SignInMethodsWrite } from '@/core/config/sign-in-schema';
 import { signInMethods } from '@/core/auth/methods';
+import { after } from 'next/server';
 import { resetAuth } from '@/core/auth/better-auth';
 import { GoogleSettingsWrite, GoogleStatus } from '@/core/config/google-schema';
 import { googleStatus, removeGoogle, saveGoogle } from '@/core/auth/google-settings';
@@ -116,7 +117,8 @@ export const googleSave = defineHandler({
   response: google,
   handler: async (input, ctx) => {
     const data = await saveGoogle(ctx.db, authenticated(ctx).user.id, input);
-    resetAuth();
+    // After the commit, so a request in between cannot rebuild Better Auth from the old client.
+    after(resetAuth);
     return { data };
   },
 });
@@ -126,7 +128,8 @@ export const googleRemove = defineHandler({
   response: google,
   handler: async (_, ctx) => {
     const data = await removeGoogle(ctx.db, authenticated(ctx).user.id);
-    resetAuth();
+    // After the commit, so a request in between cannot rebuild Better Auth from the old client.
+    after(resetAuth);
     return { data };
   },
 });
