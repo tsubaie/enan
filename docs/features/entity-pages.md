@@ -278,8 +278,10 @@ Twelve top-level props is the ceiling (`07-coding-guidelines.md`); related optio
 - EP-B25 A detail panel is a record before it is a form. A property renders as a fact and takes
   its control's chrome on hover or focus-within, so the panel reads as something written rather
   than as a page of inputs; the control keeps its shape and hit area, so nothing moves when the
-  chrome returns. Where there is no pointer to hover with the chrome stays, because on touch it is
-  the only thing saying a value can be changed. A value nobody has set is muted, so the eye
+  chrome returns. A record panel reads the same on touch (the owner's choice, so a record looks
+  alike on a phone and a desktop), and a tap focuses the control and brings its chrome back; any
+  other quiet row on touch (an inline editor such as the objectives in Admin) keeps its chrome,
+  because there it is the only thing saying a value can be changed. A value nobody has set is muted, so the eye
   catches what the record says instead of filtering placeholders out of it. Create forms opt out:
   there the job is to fill the fields in and every one of them should look ready. Both row
   components carry the signal, `Property` for a label beside its value and `Field` for a label

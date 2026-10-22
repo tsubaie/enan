@@ -1282,9 +1282,70 @@ main:has(.home-page)::-webkit-scrollbar {
 /* EP-B25: a record is read far more often than it is edited, so the panel reads as a record and
    becomes a form on contact. A property's control keeps its shape and its hit area and drops only
    its chrome, so nothing moves when it comes back; the row restores on hover and on focus-within,
-   which covers the keyboard. Touch reads the same as a pointer at rest (the owner's choice, so a
-   record looks alike on a phone and a desktop); a tap focuses the control and its chrome returns. */
-.property-quiet
+   which covers the keyboard. At rest the chrome is dropped wherever there is a pointer to hover
+   with, and in a record panel on touch as well, so a record looks alike on a phone and a desktop
+   (the owner's choice) and a tap brings the chrome back. Elsewhere on touch (an inline editor such
+   as the objectives in Admin) the chrome stays, the only sign that a value can be changed. */
+@media (hover: hover) {
+  .property-quiet
+    :is(
+      [data-slot='select-trigger'],
+      [data-slot='popover-trigger'],
+      [data-slot='input'],
+      [data-slot='textarea'],
+      [data-slot='native-select']
+    ):not([data-property-action]) {
+    border-color: transparent;
+    background: transparent;
+  }
+  /* The chevron is an affordance, not information: it belongs to the hovered state. */
+  .property-quiet [data-slot='select-trigger'] > svg:last-child {
+    opacity: 0;
+  }
+  /* On a property sheet an empty text value is a row like any other: no outline until it is
+     pointed at or focused, and a faint "Add…" where the value would be, saying what a press does
+     (docs/design-system.md § Records). */
+  .property-sheet .property-quiet.property-empty:not(:hover, :focus-within) [data-slot='input'] {
+    border-color: transparent;
+    background: transparent;
+  }
+}
+/* The same three at rest in a record panel, on any screen. */
+.entity-detail
+  .property-quiet
+  :is(
+    [data-slot='select-trigger'],
+    [data-slot='popover-trigger'],
+    [data-slot='input'],
+    [data-slot='textarea'],
+    [data-slot='native-select']
+  ):not([data-property-action]),
+.entity-detail
+  .property-sheet
+  .property-quiet.property-empty:not(:hover, :focus-within)
+  [data-slot='input'] {
+  border-color: transparent;
+  background: transparent;
+}
+.entity-detail .property-quiet [data-slot='select-trigger'] > svg:last-child {
+  opacity: 0;
+}
+.property-quiet [data-slot='select-trigger'] > svg:last-child {
+  transition: opacity 120ms ease;
+}
+/* Pointed at or focused, the chrome comes back, on every screen. The leading `:is()` lifts these to
+   the specificity of the record panel's rule above, which they follow, so they win there too. */
+:is(.entity-detail, :root)
+  .property-quiet:hover
+  :is(
+    [data-slot='select-trigger'],
+    [data-slot='popover-trigger'],
+    [data-slot='input'],
+    [data-slot='textarea'],
+    [data-slot='native-select']
+  ):not([data-property-action]),
+:is(.entity-detail, :root)
+  .property-quiet:focus-within
   :is(
     [data-slot='select-trigger'],
     [data-slot='popover-trigger'],
@@ -1292,26 +1353,14 @@ main:has(.home-page)::-webkit-scrollbar {
     [data-slot='textarea'],
     [data-slot='native-select']
   ):not([data-property-action]) {
-  border-color: transparent;
-  background: transparent;
-}
-.property-quiet:hover
-  :is(
-    [data-slot='select-trigger'],
-    [data-slot='popover-trigger'],
-    [data-slot='input'],
-    [data-slot='textarea'],
-    [data-slot='native-select']
-  ),
-.property-quiet:focus-within
-  :is(
-    [data-slot='select-trigger'],
-    [data-slot='popover-trigger'],
-    [data-slot='input'],
-    [data-slot='textarea'],
-    [data-slot='native-select']
-  ) {
   border-color: var(--color-border);
+}
+:is(.entity-detail, :root) .property-quiet:hover [data-slot='select-trigger'] > svg:last-child,
+:is(.entity-detail, :root)
+  .property-quiet:focus-within
+  [data-slot='select-trigger']
+  > svg:last-child {
+  opacity: 1;
 }
 /* A picker with nothing set still says so in words ("No date", "Unassigned"), so it can lose its
    chrome and stay readable. An empty text field has no words at all, and taking its outline away
@@ -1320,27 +1369,10 @@ main:has(.home-page)::-webkit-scrollbar {
 .property-quiet.property-empty :is([data-slot='input'], [data-slot='textarea']) {
   border-color: var(--color-border);
 }
-/* The chevron is an affordance, not information: it belongs to the hovered state. */
-.property-quiet [data-slot='select-trigger'] > svg:last-child {
-  opacity: 0;
-  transition: opacity 120ms ease;
-}
-.property-quiet:hover [data-slot='select-trigger'] > svg:last-child,
-.property-quiet:focus-within [data-slot='select-trigger'] > svg:last-child {
-  opacity: 1;
-}
-
 /* A date reads as a fact, so at rest it is as wide as the date. The selects keep their column so
    the values below them stay aligned. */
 .property-quiet [data-slot='popover-trigger']:not([data-property-action]) {
   width: auto;
-}
-/* On a property sheet an empty text value is a row like any other: no outline until it is pointed
-   at or focused, and a faint "Add…" where the value would be, saying what a press does
-   (docs/design-system.md § Records). */
-.property-sheet .property-quiet.property-empty:not(:hover, :focus-within) [data-slot='input'] {
-  border-color: transparent;
-  background: transparent;
 }
 
 /* Values line up on the sheet's start edge whatever script they are typed in: an email or a Latin
