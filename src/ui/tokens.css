@@ -524,6 +524,23 @@ html[data-wallpaper='sky'] {
   background: rgb(5 5 15 / 0.28);
   backdrop-filter: blur(18px);
 }
+/* A sheet (the filters, the phone's More) is the record panel's material: the same frosted glass
+   over the same blurred and lightly dimmed page (EP-B23), so every surface that rises over a list
+   reads as one family. */
+.dark [data-slot='dialog-content'][data-sheet] {
+  background-color: rgb(36 36 40 / 0.58);
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 35%), var(--frost-grain);
+  backdrop-filter: blur(64px) saturate(170%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.14),
+    0 30px 80px -20px rgb(0 0 0 / 0.7);
+  --tw-ring-color: rgb(255 255 255 / 0.12);
+}
+:has(> [data-slot='dialog-content'][data-sheet]) > [data-slot='dialog-overlay'] {
+  background: color-mix(in oklch, var(--color-scrim), transparent 65%);
+  backdrop-filter: blur(10px) saturate(120%);
+}
 /* No browser clear button in the field: Escape clears and closes, as Spotlight does. */
 .search-palette input[type='search']::-webkit-search-cancel-button {
   appearance: none;
@@ -653,7 +670,7 @@ main:has(.home-page)::-webkit-scrollbar {
     ) {
     backdrop-filter: none;
   }
-  .dark .entity-detail {
+  .dark :is(.entity-detail, [data-slot='dialog-content'][data-sheet]) {
     background: var(--elevated);
     background-image: none;
   }
