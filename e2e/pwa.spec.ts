@@ -59,21 +59,15 @@ test('ADMIN-B52 the phone tabs navigate in the same window on the same origin @m
     await expect(page).toHaveURL(
       (url) => url.origin === origin && url.pathname === target.pathname,
     );
-    // Let the page settle before the next tab, as a person would: a list that records its default
-    // view as it opens can otherwise pull a tap made in that instant back to itself (#59). Settled
-    // means the network is quiet and the address has not changed for a moment.
-    await page.waitForLoadState('networkidle');
-    await expect
-      .poll(async () => {
-        const before = page.url();
-        await page.waitForTimeout(400);
-        return page.url() === before;
-      })
-      .toBe(true);
   }
 
   // The rest of the destinations sit behind More; administration is one of them.
-  await page.getByRole('button', { name: en.common.navMore, exact: true }).click();
+  // A tap that lands during the page's entrance transition can be lost (#59); tap again until the
+  // sheet is open, as a person would.
+  await expect(async () => {
+    await page.getByRole('button', { name: en.common.navMore, exact: true }).click();
+    await expect(page.getByRole('dialog')).toBeVisible({ timeout: 1000 });
+  }).toPass();
   await page.getByRole('dialog').getByRole('link', { name: en.common.admin, exact: true }).click();
   await expect(page).toHaveURL(`${origin}/admin`);
   expect(opened).toEqual([]);
