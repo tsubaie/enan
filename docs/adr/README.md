@@ -53,5 +53,6 @@ One decision per file. Format: **Status**, **Context**, **Decision**, **Conseque
 | 0047 | The ع-horse mark, redrawn | accepted |
 | 0048 | The product is named Enan | accepted |
 | 0049 | An install may supply its own Arabic faces | accepted |
+| 0050 | The phone layout | accepted |
 
 Open decisions awaiting an ADR: license (see roadmap); chart library confirmation (`recharts`).
