@@ -30,6 +30,8 @@ describe('entity keyboard', () => {
     const { root, options } = setup();
     root.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }));
     expect(options.openBulk).toHaveBeenCalledTimes(1);
+    // x reads the selection from the address bar, which the page keeps in step (EP-A05).
+    window.history.replaceState(null, '', '/notes?sel=a');
     root.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', bubbles: true }));
     expect(options.select).toHaveBeenCalledTimes(1);
     expect(options.navigate).toHaveBeenCalledWith({ sel: '' }, true);

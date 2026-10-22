@@ -47,3 +47,14 @@ export function clearEntityFilters(keys: string[]) {
     ['sel', null],
   ]);
 }
+
+// EP-A05: the selection with one row turned on or off, starting from the selection the address
+// bar holds now. The controller's `selected` comes from useSearchParams, which Next 16.4 updates a
+// render after the history entry is written, so two quick toggles that started from it would each
+// overwrite the other and keep only the last row.
+export function toggleSelection(search: string, id: string, on?: boolean) {
+  const current = (new URLSearchParams(search).get('sel') ?? '').split(',').filter(Boolean);
+  const selected = on ?? !current.includes(id);
+  const next = current.filter((entry) => entry !== id);
+  return (selected ? [...next, id] : next).join(',');
+}

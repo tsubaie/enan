@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useEffectEvent, type RefObject } from 'react';
 import type { Entity } from './types';
+import { toggleSelection } from './url-state';
 type Options = {
   items: Entity[];
   focused: number;
@@ -89,10 +90,7 @@ function selectFocused(options: Options) {
   const item = options.items[options.focused];
   if (!item || !options.selectable) return;
   options.select();
-  const selected = options.selected.includes(item.id)
-    ? options.selected.filter((id) => id !== item.id)
-    : [...options.selected, item.id];
-  options.navigate({ sel: selected.join(',') }, true);
+  options.navigate({ sel: toggleSelection(window.location.search, item.id) }, true);
 }
 
 // EP-B06 moved focus along one axis, which is the whole list when rows are lines. A grid has two
