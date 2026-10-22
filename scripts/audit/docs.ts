@@ -16,6 +16,10 @@ export function scanTestNames(file: string, text: string): TestName[] {
     /\b(?:it|test)(?:\.each\([^)]*\))?\(\s*(?:'([^']*)'|"([^"]*)"|`([^`]*)`)/gu,
   ))
     names.push({ file, name: match[1] ?? match[2] ?? match[3] ?? '' });
+  // The updater is Go (ADR 0051): its scenarios are named subtests, t.Run("ADMIN-B56 …", …).
+  if (file.endsWith('_test.go'))
+    for (const match of text.matchAll(/\bt\.Run\(\s*"([^"]*)"/gu))
+      names.push({ file, name: match[1] ?? '' });
   return names;
 }
 function specFindings(
@@ -150,7 +154,7 @@ export async function collectAdr(root: string) {
 }
 async function collectTests(root: string) {
   const tests: TestName[] = [];
-  for (const file of tracked(root).filter(isTestSource))
+  for (const file of tracked(root).filter((f) => isTestSource(f) || f.endsWith('_test.go')))
     tests.push(...scanTestNames(file, await read(join(root, file))));
   return tests;
 }

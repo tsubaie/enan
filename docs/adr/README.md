@@ -54,5 +54,6 @@ One decision per file. Format: **Status**, **Context**, **Decision**, **Conseque
 | 0048 | The product is named Enan | accepted |
 | 0049 | An install may supply its own Arabic faces | accepted |
 | 0050 | Releases, channel tags, and migrations the previous release can run on | accepted |
+| 0051 | Installs update themselves through an opt-in updater service | accepted |
 
 Open decisions awaiting an ADR: license (see roadmap); chart library confirmation (`recharts`).
