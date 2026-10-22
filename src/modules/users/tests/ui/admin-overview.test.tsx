@@ -80,7 +80,7 @@ describe('ADMIN-B39 administration overview', () => {
       within(maintenance)
         .getAllByRole('link')
         .map((link) => link.getAttribute('href')),
-    ).toEqual(['/admin/backups', '/admin/jobs', '/admin/audit']);
+    ).toEqual(['/admin/backups', '/admin/updates', '/admin/jobs', '/admin/audit']);
     expect(within(maintenance).getByText(en.admin.overviewJobsClear)).toBeTruthy();
     const content = screen.getByRole('region', { name: en.admin.groupContent });
     expect(
@@ -88,7 +88,7 @@ describe('ADMIN-B39 administration overview', () => {
         .getAllByRole('link')
         .map((link) => link.getAttribute('href')),
     ).toEqual(['/admin/tasks', '/admin/notes', '/admin/objectives']);
-    expect(screen.getAllByRole('link')).toHaveLength(9);
+    expect(screen.getAllByRole('link')).toHaveLength(10);
   });
   it('ADMIN-B39 says nothing about health until the lists it reads have arrived', () => {
     healthy();

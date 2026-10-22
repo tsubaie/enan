@@ -13,6 +13,14 @@ export async function countAdmins(database: Database) {
     .where(and(eq(users.role, 'admin'), eq(users.isActive, true), isNull(users.deletedAt)));
   return row?.count ?? 0;
 }
+// ADMIN-B59: who hears about updates.
+export async function selectAdminIds(database: Database) {
+  const rows = await database
+    .select({ id: users.id })
+    .from(users)
+    .where(and(eq(users.role, 'admin'), eq(users.isActive, true), isNull(users.deletedAt)));
+  return rows.map((row) => row.id);
+}
 export async function updateUser(
   database: Database,
   userId: string,

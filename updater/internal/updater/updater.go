@@ -91,6 +91,10 @@ func (u *Updater) Open() (func(), error) {
 			return nil, err
 		}
 	}
+	// Enan runs as its own user and leaves commands here (ADMIN-B58); the volume holds nothing else.
+	if err := os.Chmod(u.Config.CommandsDir, os.ModeSticky|0o777); err != nil {
+		return nil, err
+	}
 	lock, err := os.OpenFile(u.store.path("lock"), os.O_CREATE|os.O_RDWR, 0o644)
 	if err != nil {
 		return nil, err
@@ -123,6 +127,7 @@ func (u *Updater) save() error { return u.store.write("state.json", u.state) }
 
 func (u *Updater) publish() {
 	u.status.Paused = u.state.Paused
+	u.status.IntervalSeconds = int(u.Config.Interval.Seconds())
 	if err := u.store.write("status.json", u.status); err != nil {
 		u.Log.Error("writing status", "error", err)
 	}
@@ -133,8 +138,13 @@ func (u *Updater) finish(ctx context.Context, outcome string, alertKey string) {
 	u.status.State = outcome
 	u.status.FinishedAt = u.now()
 	u.publish()
-	if err := u.store.appendHistory(u.status); err != nil {
-		u.Log.Error("writing history", "error", err)
+	// A condition that persists (an update held back, the same failed check) is one history entry,
+	// not one per interval: a release held for days would otherwise push everything else out.
+	repeat := alertKey != "" && u.state.Alerted[alertKey]
+	if !repeat {
+		if err := u.store.appendHistory(u.status); err != nil {
+			u.Log.Error("writing history", "error", err)
+		}
 	}
 	u.Log.Info("outcome", "state", outcome, "step", u.status.Step, "error", u.status.Error)
 	if outcome == Checked || u.Notifier == nil {
@@ -230,7 +240,8 @@ func (u *Updater) Check(ctx context.Context) {
 		u.publish()
 		return
 	}
-	u.status = Status{Channel: u.status.Channel, Running: u.status.Running, UpdaterUpdate: u.status.UpdaterUpdate, LastCheckAt: u.now(), StartedAt: u.now()}
+	u.status = Status{Channel: u.status.Channel, Running: u.status.Running, UpdaterUpdate: u.status.UpdaterUpdate, LastCheckAt: u.now(), StartedAt: u.now(), State: Checking}
+	u.publish()
 	u.status.Step = "check"
 	app, err := u.app(ctx)
 	if err != nil {

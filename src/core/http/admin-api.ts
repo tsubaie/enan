@@ -11,6 +11,13 @@ import { auditEntries, cancelJob, readJob } from '@/core/db/admin-repo';
 import { Job } from '@/core/jobs/types';
 import { JobKind } from '@/core/jobs/registry';
 import { AppError } from './errors';
+import {
+  queueCommand,
+  readUpdates,
+  UpdaterCommand,
+  UpdaterHealth,
+  UpdaterStatus,
+} from '@/core/updates/updater';
 const Empty = z.strictObject({});
 const Connection = z.object({
   state: z.string(),
@@ -136,5 +143,46 @@ export const jobAction = defineHandler({
         authenticated(ctx).user.id,
       ),
     };
+  },
+});
+// ADMIN-B57: the updater's status and history as it wrote them, and whether this app can leave it
+// commands. Files, not the database, so no transaction.
+export const updates = defineHandler({
+  guard: 'admin',
+  input: Empty,
+  response: z.object({
+    data: z.object({
+      health: UpdaterHealth,
+      status: UpdaterStatus.nullable(),
+      history: z.array(UpdaterStatus),
+      commands: z.boolean(),
+    }),
+  }),
+  transaction: false,
+  handler: async () => ({ data: await readUpdates() }),
+});
+// ADMIN-B58: Check now, Pause, Resume and Retry are left for the updater, which acts within its
+// poll. Refused while there is no updater to read them, and written to the audit log.
+export const updateCommand = defineHandler({
+  guard: 'admin',
+  input: z.strictObject({ command: UpdaterCommand }),
+  response: z.object({ data: z.object({ command: UpdaterCommand }) }),
+  status: 202,
+  handler: async (input, ctx) => {
+    const { health, commands } = await readUpdates();
+    if (health === 'not_running' || !commands)
+      throw new AppError('conflict', { reason: 'updater_not_running' });
+    await writeAudit(
+      ctx.db,
+      authenticated(ctx).user.id,
+      `update_${input.command}`,
+      'updater',
+      null,
+      {
+        command: input.command,
+      },
+    );
+    await queueCommand(input.command);
+    return { data: { command: input.command } };
   },
 });

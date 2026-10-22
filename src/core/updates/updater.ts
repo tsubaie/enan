@@ -1,0 +1,116 @@
+import 'server-only';
+import { randomUUID } from 'node:crypto';
+import { access, readFile, rename, writeFile, constants } from 'node:fs/promises';
+import { join } from 'node:path';
+import { z } from 'zod';
+import { env } from '@/core/config/env';
+
+// ADMIN-B57, ADR 0051: what the updater service writes on its status volume, read as it is. The
+// app never talks to Docker; it reads these files and leaves commands in the other volume.
+const Image = z.object({
+  digest: z.string().optional(),
+  version: z.string().optional(),
+  revision: z.string().optional(),
+  schema: z.number().optional(),
+  contract: z.number().optional(),
+});
+export const UpdaterStatus = z.object({
+  channel: z.string().default(''),
+  running: Image.optional(),
+  candidate: Image.optional(),
+  state: z.string(),
+  step: z.string().optional(),
+  error: z.string().optional(),
+  backup: z.string().optional(),
+  restoreCommand: z.string().optional(),
+  log: z.string().optional(),
+  startedAt: z.string().optional(),
+  finishedAt: z.string().optional(),
+  lastCheckAt: z.string().optional(),
+  paused: z.boolean().default(false),
+  updaterUpdate: z.string().optional(),
+  intervalSeconds: z.number().int().positive().default(900),
+});
+export type UpdaterStatus = z.infer<typeof UpdaterStatus>;
+
+// The updater's health as the page reports it: `running` means it checked recently enough.
+export const UpdaterHealth = z.enum(['running', 'stalled', 'not_running', 'unreadable']);
+export type UpdaterHealth = z.infer<typeof UpdaterHealth>;
+
+// Three intervals and five minutes without a check, the same limit as the updater's HEALTHCHECK.
+export function stalledAfter(status: UpdaterStatus) {
+  return (3 * status.intervalSeconds + 5 * 60) * 1000;
+}
+
+export function healthOf(status: UpdaterStatus | null, now: Date): UpdaterHealth {
+  if (!status) return 'not_running';
+  const last = status.lastCheckAt ? Date.parse(status.lastCheckAt) : NaN;
+  if (Number.isNaN(last) || now.getTime() - last > stalledAfter(status)) return 'stalled';
+  return 'running';
+}
+
+async function readText(path: string) {
+  try {
+    return await readFile(path, 'utf8');
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return null;
+    throw error;
+  }
+}
+
+export function parseHistory(text: string | null): UpdaterStatus[] {
+  if (!text) return [];
+  const entries: UpdaterStatus[] = [];
+  for (const line of text.split('\n')) {
+    if (!line.trim()) continue;
+    try {
+      const entry = UpdaterStatus.safeParse(JSON.parse(line));
+      if (entry.success) entries.push(entry.data);
+    } catch {
+      // A line cut short by a crash is skipped; the rest of the history still reads.
+    }
+  }
+  return entries.reverse();
+}
+
+async function writable(dir: string) {
+  try {
+    await access(dir, constants.W_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function readUpdates(now = new Date()) {
+  const dir = env().UPDATER_STATUS_DIR;
+  const [text, history, commands] = await Promise.all([
+    readText(join(dir, 'status.json')),
+    readText(join(dir, 'history.jsonl')),
+    writable(env().UPDATER_COMMANDS_DIR),
+  ]);
+  let status: UpdaterStatus | null = null;
+  let health: UpdaterHealth = 'not_running';
+  if (text !== null) {
+    try {
+      const parsed = UpdaterStatus.safeParse(JSON.parse(text));
+      status = parsed.success ? parsed.data : null;
+    } catch {
+      status = null;
+    }
+    health = status ? healthOf(status, now) : 'unreadable';
+  }
+  return { health, status, history: parseHistory(history), commands };
+}
+
+export const UpdaterCommand = z.enum(['check', 'pause', 'resume', 'retry']);
+export type UpdaterCommand = z.infer<typeof UpdaterCommand>;
+
+// ADMIN-B58: a command is a file the updater picks up within its poll and then deletes. Written
+// under a temporary name and renamed, so the updater never reads half of one.
+export async function queueCommand(command: UpdaterCommand) {
+  const dir = env().UPDATER_COMMANDS_DIR;
+  const name = `${Date.now()}-${randomUUID()}.json`;
+  await writeFile(join(dir, `.${name}.tmp`), JSON.stringify({ command }));
+  await rename(join(dir, `.${name}.tmp`), join(dir, name));
+}

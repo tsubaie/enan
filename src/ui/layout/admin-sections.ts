@@ -4,6 +4,7 @@ import {
   ListChecks,
   ListTodo,
   NotebookTabs,
+  RefreshCw,
   SlidersHorizontal,
   Target,
   Users,
@@ -40,6 +41,7 @@ export const adminSections: {
     group: 'groupMaintenance',
     pages: [
       { page: 'backups', icon: DatabaseBackup },
+      { page: 'updates', icon: RefreshCw },
       { page: 'jobs', icon: ListChecks },
       { page: 'audit', icon: History },
     ],

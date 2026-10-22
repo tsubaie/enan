@@ -254,6 +254,8 @@ docker compose exec updater enan-updater retry     # try an image that failed be
 docker compose exec updater enan-updater rollback  # go back to the image the last update replaced
 ```
 
+Administrators see the same in **Administration → Updates**: the running version, the last check, any failed or held update with its backup and restore command, and Check now, Pause and Try again. Failures and installs also arrive as notifications in Enan, besides the webhook.
+
 The updater is given the Docker socket, which is equivalent to root on the host. It listens on no port and talks only to the image registry and your webhook; the app itself never gets the socket. The updater does not replace itself: when a newer updater is out, it says so once, and you run `docker compose --profile autoupdate pull updater && docker compose --profile autoupdate up -d updater`.
 
 The app listens on `127.0.0.1:3000` only. To use it beyond localhost, put it behind a reverse proxy that terminates TLS and set an `https://` `APP_URL`. Production refuses to start without one.

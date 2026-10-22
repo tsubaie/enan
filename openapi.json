@@ -937,6 +937,141 @@
         ],
         "type": "object"
       },
+      "getAdminUpdatesResponse": {
+        "$defs": {
+          "__schema0": {
+            "additionalProperties": false,
+            "properties": {
+              "backup": {
+                "type": "string"
+              },
+              "candidate": {
+                "$ref": "#/$defs/__schema1"
+              },
+              "channel": {
+                "default": "",
+                "type": "string"
+              },
+              "error": {
+                "type": "string"
+              },
+              "finishedAt": {
+                "type": "string"
+              },
+              "intervalSeconds": {
+                "default": 900,
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991,
+                "type": "integer"
+              },
+              "lastCheckAt": {
+                "type": "string"
+              },
+              "log": {
+                "type": "string"
+              },
+              "paused": {
+                "default": false,
+                "type": "boolean"
+              },
+              "restoreCommand": {
+                "type": "string"
+              },
+              "running": {
+                "$ref": "#/$defs/__schema1"
+              },
+              "startedAt": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "step": {
+                "type": "string"
+              },
+              "updaterUpdate": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "channel",
+              "state",
+              "paused",
+              "intervalSeconds"
+            ],
+            "type": "object"
+          },
+          "__schema1": {
+            "additionalProperties": false,
+            "properties": {
+              "contract": {
+                "type": "number"
+              },
+              "digest": {
+                "type": "string"
+              },
+              "revision": {
+                "type": "string"
+              },
+              "schema": {
+                "type": "number"
+              },
+              "version": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "additionalProperties": false,
+            "properties": {
+              "commands": {
+                "type": "boolean"
+              },
+              "health": {
+                "enum": [
+                  "running",
+                  "stalled",
+                  "not_running",
+                  "unreadable"
+                ],
+                "type": "string"
+              },
+              "history": {
+                "items": {
+                  "$ref": "#/$defs/__schema0"
+                },
+                "type": "array"
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/__schema0"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "health",
+              "status",
+              "history",
+              "commands"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
       "getAdminUsersResponse": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -2877,7 +3012,12 @@
                         "task.overdue",
                         "note.mentioned",
                         "kpi.off_target",
-                        "job.finished"
+                        "job.finished",
+                        "update.installed",
+                        "update.failed",
+                        "update.rollback_failed",
+                        "update.blocked",
+                        "update.stalled"
                       ],
                       "type": "string"
                     },
@@ -6407,6 +6547,53 @@
             },
             "required": [
               "updatedCount"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "postAdminUpdatesBody": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "command": {
+            "enum": [
+              "check",
+              "pause",
+              "resume",
+              "retry"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "command"
+        ],
+        "type": "object"
+      },
+      "postAdminUpdatesResponse": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "additionalProperties": false,
+            "properties": {
+              "command": {
+                "enum": [
+                  "check",
+                  "pause",
+                  "resume",
+                  "retry"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "command"
             ],
             "type": "object"
           }
@@ -12751,6 +12938,170 @@
           }
         ],
         "x-idempotency-key": "required"
+      }
+    },
+    "/api/v1/admin/updates": {
+      "get": {
+        "operationId": "getAdminUpdates",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/getAdminUpdatesResponse"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "validation_failed"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "internal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "ai_unavailable"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "postAdminUpdates",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/postAdminUpdatesBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/postAdminUpdatesResponse"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "validation_failed"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "rule_violation"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "internal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "ai_unavailable"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
       }
     },
     "/api/v1/admin/users": {

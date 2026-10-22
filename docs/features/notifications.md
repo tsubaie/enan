@@ -70,6 +70,9 @@ Indexes: `(user_id, read_at, created_at desc)` for the feed; a unique partial in
   - `job.finished` — an AI job the reader asked for reached `succeeded` or, its attempts spent,
     `failed` (ADR 0010). Its subject is the note or task the job ran on. System and scheduled jobs
     have nobody waiting and emit nothing.
+  - `update.installed`, `update.failed`, `update.rollback_failed`, `update.blocked`,
+    `update.stalled` — what the updater did (ADMIN-B59), for every active administrator, owned by
+    the users module; scheduled, with no actor.
 - NOTIF-B05 **Time-derived kinds come from the scheduler**, never from a request, and are keyed so
   a re-run on the same day writes nothing new (ADR 0010 dedup keys). `task.due_today` and
   `task.overdue` are the two, from the `tasks.reminders` job at 04:00 UTC each day.
