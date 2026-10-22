@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { releaseStaleLock, withBackupLock } from '../maintenance';
-import { createBackup } from '../dump';
+import { createBackup, deleteBackup, pruneBackups } from '../dump';
 import { names, workspace, writeTree } from './fixtures/archive';
 const config = vi.hoisted(() => ({ BACKUP_DIR: '', FILES_DIR: '' }));
 vi.mock('@/core/config/env', () => ({ env: () => config }));
@@ -36,4 +36,12 @@ it('ADMIN-B31 the server removes at start a lock its own pid left, so a restore 
   await leftBy(process.ppid);
   await releaseStaleLock();
   await expect(names(space.backups)).resolves.toContain('.lock');
+});
+it('ADMIN-B31 a backup is neither deleted nor pruned while a restore or a backup holds the lock', async () => {
+  const id = crypto.randomUUID();
+  // The lock is checked before the folder is read, so any folder stands in for the backup.
+  await writeTree(space.backups, { [`${id}/manifest.json`]: '{}', '.lock': String(process.ppid) });
+  await expect(deleteBackup(id)).rejects.toMatchObject({ code: 'conflict' });
+  expect(await pruneBackups(1)).toEqual([]);
+  await expect(names(space.backups)).resolves.toContain(id);
 });

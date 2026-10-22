@@ -18,7 +18,7 @@ Global rules:
 | Identifiers | UUID v7 generated in the app by `core/db/ids.ts` (single generator), stored as `text`. Ordering of ids is not used for business logic or authorization. |
 | Timestamps | `timestamptz` in this document; stored as `integer` milliseconds since the epoch (`mode: 'timestamp_ms'`), read and written as `Date`, so the API emits ISO strings. `updated_at` set by the repo update helper. One default expression for `now()`, used everywhere. |
 | Revision | Optimistic concurrency token. Every update to an entity row is `… WHERE id = $1 AND revision = $2` and sets `revision = revision + 1`. Zero rows → 409. |
-| Soft delete and provenance | `deleted_at` plus `deleted_op_id`. A delete operation allocates one op id, writes it to the root row and every cascaded row, and records it in `audit_log`. Restore takes an op id and restores exactly the rows carrying it whose other constraints still hold; rows deleted earlier by another op stay deleted. Purge hard-deletes rows whose `deleted_at` is older than `retention.trash_days`, children before parents, links first; when `retention.trash_days` is 0 the purge deletes nothing and the trash is kept (ADMIN-B48). |
+| Soft delete and provenance | `deleted_at` plus `deleted_op_id`. A delete operation allocates one op id, writes it to the root row and every cascaded row, and records it in `audit_log`. Restore takes an op id and restores exactly the rows carrying it whose other constraints still hold; rows deleted earlier by another op stay deleted. Purge (`system.trash_purge`) hard-deletes rows whose `deleted_at` is older than `retention.trash_days`, with the rows that are their parts (a link with `ON DELETE CASCADE`), and only while no other row, live or trashed, links to them, so a purge never changes another row; children go before parents and a note before the people it lists; when `retention.trash_days` is 0 the purge deletes nothing and the trash is kept (ADMIN-B48). |
 | Archive | `archived_at` where the spec allows; reversible; independent of delete. |
 | Enums | `text` with a `CHECK` generated from the Zod enum. No database enum types. |
 | Dates | `date` for business dates; interpreted in the workspace timezone. |
@@ -108,7 +108,7 @@ Indexes: `(status, run_after, priority desc)`, `(kind, status)`, `(entity_type, 
 `id, job_id fk cascade, attempt int, lease_owner, started_at, finished_at, status (running|succeeded|failed|abandoned), error text`. Unique `(job_id, attempt)`.
 
 ### schedules
-`id, kind, cron text, timezone text, payload jsonb, enabled boolean, last_occurrence timestamptz null, created_at, updated_at`. Seeded rows (migration `0004_seed_schedules`, times in UTC): `system.backup` (daily 02:00), `system.prune` (daily 03:00), `system.notifications_purge` (daily 03:15), and (migration `0006`) `tasks.reminders` (daily 04:00).
+`id, kind, cron text, timezone text, payload jsonb, enabled boolean, last_occurrence timestamptz null, created_at, updated_at`. Seeded rows (migration `0004_seed_schedules`, times in UTC): `system.backup` (daily 02:00), `system.prune` (daily 03:00), `system.trash_purge` (daily 03:30, migration 0013), `system.notifications_purge` (daily 03:15), and (migration `0006`) `tasks.reminders` (daily 04:00).
 
 ### ai_credentials
 

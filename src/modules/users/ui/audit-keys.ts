@@ -30,6 +30,7 @@ export const ActionKey = z.enum([
   'update_pause',
   'update_resume',
   'update_retry',
+  'purge',
 ]);
 export const EntityKey = z.enum([
   'task',
@@ -52,4 +53,5 @@ export const EntityKey = z.enum([
   'tag',
   'wallpaper',
   'updater',
+  'trash',
 ]);

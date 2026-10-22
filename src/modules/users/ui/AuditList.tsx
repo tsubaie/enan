@@ -88,7 +88,7 @@ function useDays(rows: Entry[]) {
 const icons: [RegExp, LucideIcon, 'danger' | 'success' | 'neutral'][] = [
   [/^ai\./u, Sparkles, 'neutral'],
   [/download/u, Download, 'neutral'],
-  [/delete|remove/u, Trash2, 'danger'],
+  [/delete|remove|purge/u, Trash2, 'danger'],
   [/archive/u, Archive, 'neutral'],
   [/restore|undo|reopen/u, RotateCcw, 'neutral'],
   [/complete/u, CircleCheck, 'success'],

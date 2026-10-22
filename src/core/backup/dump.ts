@@ -1,6 +1,6 @@
 import 'server-only';
 import { createWriteStream } from 'node:fs';
-import { mkdir, stat, writeFile, rename, readdir, readFile, rm } from 'node:fs/promises';
+import { mkdir, open, stat, writeFile, rename, readdir, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { create } from 'tar';
@@ -18,10 +18,22 @@ import { snapshotDatabase } from './database';
 import { isRestoreWorkspace } from './swap';
 import { withBackupLock } from './maintenance';
 import { appVersion } from '@/core/config/version';
+import { AppError } from '@/core/http/errors';
 // A restore in progress keeps its staging and retired directories inside FILES_DIR; they are
 // never part of a backup.
 function outsideRestoreWorkspace(path: string) {
   return !isRestoreWorkspace(path.replace(/^\.\//u, '').split('/')[0] ?? '');
+}
+// ADMIN-B12: written data can sit in memory for seconds before it reaches the disk, while deleting
+// older backups (the pruning after this one) may reach it first. A power cut then could leave no
+// usable backup, so the new one is flushed, file by file and folder by folder, before it counts.
+async function flush(path: string) {
+  const handle = await open(path, 'r');
+  try {
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
 }
 async function writeBackup(backupId: string, staging: string, signal: AbortSignal) {
   await mkdir(env().FILES_DIR, { recursive: true });
@@ -80,7 +92,10 @@ async function writeOnce(backupId: string, signal: AbortSignal) {
   await mkdir(staging, { recursive: true });
   try {
     const manifest = await writeBackup(backupId, staging, signal);
+    for (const name of [...manifestFiles, 'manifest.json']) await flush(join(staging, name));
+    await flush(staging);
     await rename(staging, directory);
+    await flush(root);
     return manifest;
   } catch (error) {
     await rm(staging, { recursive: true, force: true });
@@ -105,8 +120,13 @@ export async function listBackups() {
 }
 // ADMIN-B12 ADMIN-B48: keeps the `keep` newest backups and deletes the older ones; 0 keeps every
 // backup. Only backups that verify are counted or removed, so a folder this code cannot read as a
-// backup is never deleted. Returns the ids removed.
+// backup is never deleted. Returns the ids removed. ADMIN-B31: under the backup lock, so a restore
+// never loses the backup it is reading; while one runs nothing is pruned, and the next backup does it.
 export async function pruneBackups(keep: number) {
+  const lock = await withBackupLock(() => prune(keep));
+  return lock.acquired ? lock.value : [];
+}
+async function prune(keep: number) {
   if (keep <= 0) return [];
   const root = env().BACKUP_DIR;
   await mkdir(root, { recursive: true });
@@ -127,8 +147,13 @@ export async function pruneBackups(keep: number) {
 }
 // ADMIN-B12: deletes one backup for good. Only a folder whose manifest names it counts as a backup;
 // anything else is left alone and answered false. The checksums are not read, so a damaged
-// backup can be deleted too.
+// backup can be deleted too. ADMIN-B31: refused (409) while a backup or a restore holds the lock.
 export async function deleteBackup(backupId: string) {
+  const lock = await withBackupLock(() => remove(backupId));
+  if (!lock.acquired) throw new AppError('conflict', { reason: 'backup_running' });
+  return lock.value;
+}
+async function remove(backupId: string) {
   const directory = resolveInside(env().BACKUP_DIR, backupId);
   try {
     const raw = await readFile(join(directory, 'manifest.json'), 'utf8');

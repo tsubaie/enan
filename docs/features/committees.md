@@ -15,7 +15,7 @@ See `03-data-model.md` § committees. Invariants:
 
 - COMM-I01 Name unique among non-deleted, case-insensitive (unique index; 409 `unique` mapped to `fieldErrors.name`).
 - COMM-I02 Archiving does not touch linked tasks, notes, or meetings.
-- COMM-I03 Soft delete keeps `committee_id` on tasks, notes, meetings (chip renders "archived"); purge nulls them.
+- COMM-I03 Soft delete keeps `committee_id` on tasks, notes, meetings (chip renders "archived"); a committee they still name is never purged, and stays in the trash until none does (ADMIN-B48).
 
 ## Behaviors
 

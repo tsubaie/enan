@@ -292,6 +292,14 @@ it('TASKS-B02 undoing a forced completion restores only the rows that completion
   expect(byId.get(open.id)).toBe('inbox');
   expect(byId.get(already.id)).toBe('completed');
 });
+it('TASKS-B02 completing a completed task is refused and leaves its completion date alone', async () => {
+  const task = await create('File the report', { status: 'inbox' });
+  const { task: done } = await run((ctx) => service.completeTask(ctx, task.id, 1));
+  await expect(
+    run((ctx) => service.completeTask(ctx, task.id, done.revision)),
+  ).rejects.toMatchObject({ code: 'conflict', details: { reason: 'state' } });
+  expect((await run((ctx) => service.getTask(ctx, task.id))).completedAt).toBe(done.completedAt);
+});
 it('TASKS-B02 undo is refused once a completed row has moved on, and writes nothing', async () => {
   const task = await create('Sign the minutes', { status: 'inbox' });
   const { task: done, opId } = await run((ctx) => service.completeTask(ctx, task.id, 1));
