@@ -4,9 +4,10 @@ import { join } from 'node:path';
 import { env } from '@/core/config/env';
 // ADMIN-B51 (ADR 0049): an install may supply its own Arabic faces. Files in FONTS_DIR named
 // `text-<weight>.woff2` and `display-<weight>.woff2` become the Arabic text and display faces; they
-// cover the Arabic block only, so Latin stays in Inter, and any weight they lack falls through to
-// Noto Sans Arabic. With no such files nothing changes. The names are the whole contract, so a
-// request can only ever reach a font file in that one directory.
+// cover the Arabic block only, so Latin stays in Inter. A weight they lack is drawn in their
+// nearest weight; only Arabic characters they do not contain fall through to Noto Sans Arabic.
+// With no such files nothing changes. The names are the whole contract, so a request can only ever
+// reach a font file in that one directory.
 const NAME = /^(text|display)-([1-9]00)\.woff2$/u;
 const ARABIC = 'U+0600-06FF, U+0750-077F, U+0870-08FF, U+FB50-FDFF, U+FE70-FEFF, U+200C-200F';
 export const fontsPath = '/api/v1/fonts';
