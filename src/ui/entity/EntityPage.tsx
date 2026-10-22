@@ -128,16 +128,21 @@ function EntityFilterSheet<T extends Entity, P extends object, C>({
       <DialogContent sheet className="max-h-[85dvh] overflow-y-auto">
         <DialogTitle>{t('filter')}</DialogTitle>
         <DialogDescription>{t('filterDescription')}</DialogDescription>
+        {/* The views come first: picking one is the commonest reason to open the sheet. */}
+        <h2 className="font-medium">{t('views')}</h2>
+        <EntityViews config={config} controller={c} />
         {/* Below 1024 px the toolbar has no room for the sort, so it opens here with the filters. */}
         {config.filters.sort && (
-          <div className="grid gap-2 lg:hidden">
+          <div className="grid gap-2 border-t pt-4 lg:hidden">
             <h2 className="font-medium">{t('sort')}</h2>
             <EntitySort config={config} controller={c} />
           </div>
         )}
-        <EntityFacets config={config} controller={c} />
-        <h2 className="border-t pt-4 font-medium">{t('views')}</h2>
-        <EntityViews config={config} controller={c} />
+        {config.filters.facets?.length ? (
+          <div className={config.filters.sort ? 'lg:border-t lg:pt-4' : 'border-t pt-4'}>
+            <EntityFacets config={config} controller={c} />
+          </div>
+        ) : null}
         <Button variant="outline" onClick={() => c.clearFilters()}>
           {t('clear')}
         </Button>
