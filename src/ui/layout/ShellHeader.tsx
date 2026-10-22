@@ -27,7 +27,7 @@ export function ShellHeader({ user }: { user: { name: string; email: string; rol
   const apple = useApplePlatform();
   useSearchShortcut(openSearchPalette);
   return (
-    <header className="flex min-h-14 shrink-0 items-center gap-2 border-b px-4 lg:px-6">
+    <header className="flex min-h-[calc(3.5rem+env(safe-area-inset-top))] shrink-0 items-center gap-2 border-b px-4 pt-[env(safe-area-inset-top)] lg:px-6">
       <PhoneMark />
       {/* The page's title, at the header's leading edge from 1024 px, the way a macOS window titles
           its toolbar. A list page renders its title group here (EntityTitle); a page without one
