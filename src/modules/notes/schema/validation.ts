@@ -211,7 +211,19 @@ export const NoteAiApply = z
   );
 export const NoteAiRestore = z.strictObject({ jobId: z.uuid() });
 
-// NOTES-B08: shared by manual editing and applying refined content.
+// NOTES-B08: shared by manual editing and applying refined content. A mention ends where the
+// name does (no letter or digit follows; a diacritic may), and at one `@` the longest matching name wins, so
+// "@Ali Hassan" mentions Ali Hassan and not also Ali.
 export function derivedParticipants(content: string, candidates: { id: string; name: string }[]) {
-  return candidates.filter((item) => content.includes(`@${item.name}`)).map((item) => item.id);
+  const names = [...new Set(candidates.map((item) => item.name).filter(Boolean))].sort(
+    (a, b) => b.length - a.length,
+  );
+  const claimed = new Map<number, string>();
+  for (const name of names) {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+    for (const match of content.matchAll(new RegExp(`@${escaped}(?![\\p{L}\\p{N}])`, 'gu')))
+      if (!claimed.has(match.index)) claimed.set(match.index, name);
+  }
+  const mentioned = new Set(claimed.values());
+  return candidates.filter((item) => mentioned.has(item.name)).map((item) => item.id);
 }

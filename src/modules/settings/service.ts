@@ -12,6 +12,7 @@ import { z } from 'zod';
 import { settingsRegistry, isSettingKey, type SettingKey } from '@/core/config/settings';
 import { getSetting, readSettings, writeSetting } from '@/core/db/settings-repo';
 import { db, withTransaction } from '@/core/db/client';
+import { getPerson } from '@/modules/people';
 import { createHash } from 'node:crypto';
 import {
   Wallpaper,
@@ -76,6 +77,8 @@ export const updateSetting = transactional(async function updateSetting(
   const parsed = z.json().parse(item.schema.parse(value));
   if (key === 'workspace.wallpaper') await requireWallpaperChoice(ctx.db, parsed);
   if (key === 'auth.sign_in_methods') await requireAvailable(ctx.db, SignInMethods.parse(parsed));
+  if (key === 'workspace.principal_person_id' && typeof parsed === 'string')
+    await requirePerson(ctx, parsed);
   await writeWorkspaceSetting(ctx, key, parsed);
   await writeAudit(ctx.db, ctx.user.id, 'update', 'setting', null, { key, value: parsed });
   return { key, value: parsed, default: z.json().parse(item.default), type: item.schema.def.type };
@@ -87,6 +90,15 @@ function writeWorkspaceSetting(
   value: z.infer<ReturnType<typeof z.json>>,
 ) {
   return writeSetting(ctx.db, key, z.custom<never>().parse(value), ctx.user.id);
+}
+// The principal is drawn on Home for everyone, so it must name a person who exists and is not in
+// the trash; one trashed between the picker's list and the save is refused here.
+async function requirePerson(ctx: Context, personId: string) {
+  await getPerson(ctx, personId).catch((error: unknown) => {
+    if (error instanceof AppError && error.code === 'not_found')
+      throw new AppError('rule_violation', { reason: 'unknown_person' });
+    throw error;
+  });
 }
 // ADMIN-B47: the setting may name a built-in wallpaper or an uploaded one that still exists.
 async function requireWallpaperChoice(database: Database, value: unknown) {

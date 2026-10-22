@@ -58,6 +58,9 @@ No new tables. The account is a view over two that exist:
   the same `Password` schema registration uses. On success every **other** session is revoked and
   the current one is kept, and `password_changed_at` is set. A reader changing their password
   should not be signed out of the tab they changed it in, and should be signed out everywhere else.
+  A wrong current password, here or for an email change (ACCT-B01), counts as a failed login on the
+  account's email (ADMIN-B20): after five in fifteen minutes both checks answer 429, so a stolen
+  session cannot guess its way to a new password.
 - ACCT-B03 **Sessions.** The reader sees their active sessions with last-seen time, IP and user
   agent (the columns `sessions` already carries), the current one marked. Any other session can be
   revoked individually, and "Sign out everywhere else" revokes all of them.

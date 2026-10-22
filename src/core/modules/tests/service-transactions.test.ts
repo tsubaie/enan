@@ -8,9 +8,10 @@ declare global {
   }
 }
 // Exports that only read, or that open their transaction themselves (setup takes a handle,
-// manageTags predates the wrapper, and the wallpaper upload and delete do slow work outside it). Everything else a service exports writes and must be atomic.
+// manageTags predates the wrapper, the wallpaper upload and delete do slow work outside it, and
+// the account's email and password changes wrap one to throw after a recorded failure commits). Everything else a service exports writes and must be atomic.
 const exempt: Record<string, string[]> = {
-  account: ['getAccount', 'readerTheme', 'readerLocale'],
+  account: ['getAccount', 'readerTheme', 'readerLocale', 'changeEmail', 'changePassword'],
   committees: [
     'listCommittees',
     'getCommittee',

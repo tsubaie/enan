@@ -62,6 +62,13 @@ it('ADMIN-B33 an aborted backup leaves no staging directory behind', async () =>
   await expect(createBackup(id, controller.signal)).rejects.toThrow();
   expect(await names(space.backups)).toEqual([]);
 });
+it('ADMIN-B33 a staging copy a crashed backup left is removed by the next backup', async () => {
+  const crashed = `.${crypto.randomUUID()}-${crypto.randomUUID()}`;
+  await writeTree(space.backups, { [`${crashed}/enan.db`]: 'half a copy', '.maintenance': 'kept' });
+  const id = crypto.randomUUID();
+  await createBackup(id);
+  expect((await names(space.backups)).sort()).toEqual(['.maintenance', id].sort());
+});
 it('ADMIN-B31 a backup never captures a restore workspace, and restores round-trip', async () => {
   await addUser('kept@example.test');
   const id = crypto.randomUUID();

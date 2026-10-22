@@ -3,7 +3,8 @@ import { transactional } from '@/core/db/transaction';
 import { currentSessionHash, currentUser, type Context } from '@/core/auth/session';
 import { db } from '@/core/db/client';
 import { AppError } from '@/core/http/errors';
-import { hashPassword, verifyPassword } from '@/core/auth/password';
+import { hashPassword } from '@/core/auth/password';
+import { checkCurrentPassword } from '@/core/auth/login';
 import {
   userById,
   userByEmail,
@@ -107,7 +108,11 @@ export const patchAccount = transactional(async function patchAccount(
 // ACCT-B01: the address is lowercased by the schema and the unique index is the real guard; this
 // check exists so the reader gets a field error instead of a constraint violation. The email is
 // half of the sign-in credentials, so changing it needs the current password, as ACCT-B02 does.
-export const changeEmail = transactional(async function changeEmail(
+// A wrong current password is answered after the attempt it recorded commits (ADMIN-B20): the
+// work returns `null` inside its savepoint, and the caller throws a committing error.
+const wrongPassword = () =>
+  new AppError('validation_failed', { fieldErrors: { current: ['password_incorrect'] } }, true);
+const emailChange = transactional(async function changeEmail(
   ctx: Context,
   revision: number,
   email: string,
@@ -116,8 +121,7 @@ export const changeEmail = transactional(async function changeEmail(
   const user = await userById(ctx.db, ctx.user.id);
   if (!user) throw new AppError('not_found');
   checkRevision(user.revision, revision);
-  if (!(await verifyPassword(user.passwordHash, current)))
-    throw new AppError('validation_failed', { fieldErrors: { current: ['password_incorrect'] } });
+  if (!(await checkCurrentPassword(ctx.db, user, current))) return null;
   if (email === user.email) return getAccount(ctx);
   const taken = await userByEmail(ctx.db, email);
   if (taken) throw new AppError('validation_failed', { fieldErrors: { email: ['email_taken'] } });
@@ -132,19 +136,23 @@ export const changeEmail = transactional(async function changeEmail(
   );
   return getAccount(ctx);
 });
+export async function changeEmail(...args: Parameters<typeof emailChange>) {
+  const account = await emailChange(...args);
+  if (!account) throw wrongPassword();
+  return account;
+}
 // ACCT-B02: the current password is required, and on success every other session is revoked while
 // the one making the request survives. Signing the reader out of the tab they just used to change
 // their password would be a punishment for doing the right thing; leaving the other devices signed
 // in would defeat the point of changing it.
-export const changePassword = transactional(async function changePassword(
+const passwordChange = transactional(async function changePassword(
   ctx: Context,
   current: string,
   next: string,
 ) {
   const user = await userById(ctx.db, ctx.user.id);
   if (!user) throw new AppError('not_found');
-  if (!(await verifyPassword(user.passwordHash, current)))
-    throw new AppError('validation_failed', { fieldErrors: { current: ['password_incorrect'] } });
+  if (!(await checkCurrentPassword(ctx.db, user, current))) return null;
   await updateUserAccount(ctx.db, ctx.user.id, {
     passwordHash: await hashPassword(next),
     passwordChangedAt: new Date(),
@@ -166,6 +174,11 @@ export const changePassword = transactional(async function changePassword(
   );
   return { revoked };
 });
+export async function changePassword(...args: Parameters<typeof passwordChange>) {
+  const result = await passwordChange(...args);
+  if (!result) throw wrongPassword();
+  return result;
+}
 export const signOutOthers = transactional(async function signOutOthers(ctx: Context) {
   const revoked = await revokeOtherSessions(
     ctx.db,

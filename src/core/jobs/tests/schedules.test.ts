@@ -40,3 +40,20 @@ it('ADMIN-B55 a schedule for a job kind this release does not know is left alone
   await scheduleDue(new Date('2026-10-21T13:00:00Z'));
   expect(await db().select().from(jobs).where(eq(jobs.kind, 'future.kind'))).toEqual([]);
 });
+it('ADMIN-B12 a schedule that cannot be queued skips itself only: the backup is still queued', async () => {
+  // Without isolation its failure would undo every other schedule queued in the same run.
+  await db()
+    .insert(schedules)
+    .values({
+      id: '00000000-0000-7000-8000-00000000bad0',
+      kind: 'system.prune',
+      cron: 'not a cron expression',
+      timezone: 'UTC',
+      payload: {},
+    });
+  await scheduleDue(new Date('2026-10-22T03:00:00Z'));
+  const backups = await db().select().from(jobs).where(eq(jobs.kind, 'system.backup'));
+  expect(backups.some((job) => job.dedupKey?.startsWith('system.backup:2026-10-2'))).toBe(true);
+  const [bad] = await db().select().from(schedules).where(eq(schedules.cron, 'not a cron expression'));
+  expect(bad?.lastOccurrence).toBeNull();
+});

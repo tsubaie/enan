@@ -1,5 +1,5 @@
 import 'server-only';
-import { and, eq, gt, lte, isNull, or, sql, desc, count, inArray, lt, ne } from 'drizzle-orm';
+import { and, eq, gt, lte, isNull, or, sql, desc, count, inArray, lt, ne, max, not } from 'drizzle-orm';
 import {
   jobs,
   jobAttempts,
@@ -244,6 +244,27 @@ export async function publish(
       .where(and(eq(jobAttempts.jobId, job.id), eq(jobAttempts.attempt, job.attempt)));
   });
 }
+// ADMIN-B33: a job stopped by a shutdown is retried later whatever its kind and however many
+// attempts it used: the interrupted attempt is given back and its row removed, so the next claim
+// reuses its number (one row per attempt number).
+function afterFailure(
+  current: Claimed,
+  job: Claimed,
+  error: string,
+  retry: boolean,
+  retryAfterMs: number | undefined,
+) {
+  const interrupted = error === 'shutdown' && !current.cancelRequested;
+  const status = current.cancelRequested
+    ? 'cancelled'
+    : interrupted || (retry && job.attempt < job.maxAttempts)
+      ? 'queued'
+      : 'failed';
+  const backoff = [30000, 120000, 480000][job.attempt - 1] ?? 480000;
+  const asked = Number.isFinite(retryAfterMs) ? (retryAfterMs ?? 0) : 0;
+  const delay = interrupted ? 0 : Math.max(backoff, asked);
+  return { interrupted, status, delay };
+}
 // `effect` runs in the same transaction, once, when the job has failed for good.
 export async function fail(
   job: Claimed,
@@ -255,15 +276,7 @@ export async function fail(
   await withTransaction(db(), async (database) => {
     const [current] = await database.select().from(jobs).where(fence(job));
     if (!current) return;
-    const status = current.cancelRequested
-      ? 'cancelled'
-      : retry && job.attempt < job.maxAttempts
-        ? 'queued'
-        : 'failed';
-    const delay = Math.max(
-      [30000, 120000, 480000][job.attempt - 1] ?? 480000,
-      Number.isFinite(retryAfterMs) ? (retryAfterMs ?? 0) : 0,
-    );
+    const { interrupted, status, delay } = afterFailure(current, job, error, retry, retryAfterMs);
     const rows = await database
       .update(jobs)
       .set({
@@ -272,14 +285,18 @@ export async function fail(
         runAfter: new Date(Date.now() + delay),
         finishedAt: status === 'queued' ? null : new Date(),
         leaseExpiresAt: null,
+        ...(interrupted ? { attempt: job.attempt - 1 } : {}),
       })
       .where(fence(job))
       .returning();
     if (!rows.length) return;
-    await database
-      .update(jobAttempts)
-      .set({ status: 'failed', error, finishedAt: new Date() })
-      .where(and(eq(jobAttempts.jobId, job.id), eq(jobAttempts.attempt, job.attempt)));
+    const attempt = and(eq(jobAttempts.jobId, job.id), eq(jobAttempts.attempt, job.attempt));
+    if (interrupted) await database.delete(jobAttempts).where(attempt);
+    else
+      await database
+        .update(jobAttempts)
+        .set({ status: 'failed', error, finishedAt: new Date() })
+        .where(attempt);
     if (status === 'failed') await effect(database);
   });
 }
@@ -302,6 +319,28 @@ export async function prune(database: Database) {
   await database
     .delete(signInCodes)
     .where(lt(signInCodes.createdAt, new Date(Date.now() - 86400000)));
+  // Finished jobs older than 30 days, with their attempts (cascade): they carry copies of note and
+  // task text in payload and result. The newest success of each kind stays, since a job's
+  // "since my last run" (lastSucceeded) reads it.
+  const newest = await database
+    .select({ kind: jobs.kind, finishedAt: max(jobs.finishedAt) })
+    .from(jobs)
+    .where(eq(jobs.status, 'succeeded'))
+    .groupBy(jobs.kind);
+  const kept = newest.flatMap((row) =>
+    row.finishedAt
+      ? [and(eq(jobs.kind, row.kind), eq(jobs.status, 'succeeded'), eq(jobs.finishedAt, row.finishedAt))]
+      : [],
+  );
+  await database
+    .delete(jobs)
+    .where(
+      and(
+        inArray(jobs.status, ['succeeded', 'failed', 'cancelled']),
+        lt(jobs.finishedAt, new Date(Date.now() - 30 * 86400000)),
+        ...(kept.length ? [not(or(...kept) ?? sql`false`)] : []),
+      ),
+    );
 }
 export async function dueSchedules(database: Database) {
   return database.select().from(schedules).where(eq(schedules.enabled, true));

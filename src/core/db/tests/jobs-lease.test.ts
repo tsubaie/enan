@@ -5,7 +5,7 @@ import { migrateDatabase } from '../migrate';
 import { clearDatabase } from '../reset';
 import { jobs, jobAttempts } from '../system-schema';
 import { busyTimeoutMs } from '../client';
-import { claim, enqueue, fail, renew } from '../jobs-repo';
+import { claim, enqueue, fail, prune, renew } from '../jobs-repo';
 beforeAll(() => migrateDatabase());
 beforeEach(() => clearDatabase());
 afterAll(() => closeDatabase());
@@ -107,4 +107,40 @@ it('NOTIF-B04 a failure effect runs once, when the job has failed for good, not 
   await fail(second, 'boom', true, undefined, effect);
   expect(finals).toEqual(['told']);
   expect((await stored(job.id))?.status).toBe('failed');
+});
+it('ADMIN-B33 a job stopped by a shutdown on its last attempt is queued again with that attempt given back', async () => {
+  const job = await enqueueWith('last-try');
+  const maxAttempts = (await stored(job.id))?.maxAttempts ?? 1;
+  await db().update(jobs).set({ attempt: maxAttempts - 1 }).where(eq(jobs.id, job.id));
+  const claimed = await claim('runner', kind, 1, 4);
+  if (!claimed) throw new Error('not claimed');
+  expect(claimed.attempt).toBe(maxAttempts);
+  await fail(claimed, 'shutdown', true);
+  expect(await stored(job.id)).toMatchObject({ status: 'queued', attempt: maxAttempts - 1 });
+  expect(await attemptRow(job.id, maxAttempts)).toBeUndefined();
+  // The restarted runner claims it under the same attempt number.
+  expect((await claim('restarted', kind, 1, 4))?.attempt).toBe(maxAttempts);
+});
+it('ADMIN-B12 the prune removes finished jobs past 30 days and their attempts, keeping the newest success of each kind', async () => {
+  const day = 86400000;
+  const finished = async (key: string, status: 'succeeded' | 'failed', daysAgo: number) => {
+    const job = await enqueueWith(key);
+    await claim('runner', kind, 1, 4);
+    await db()
+      .update(jobs)
+      .set({ status, finishedAt: new Date(Date.now() - daysAgo * day), leaseExpiresAt: null })
+      .where(eq(jobs.id, job.id));
+    return job.id;
+  };
+  const oldest = await finished('a', 'succeeded', 90);
+  const newestOld = await finished('b', 'succeeded', 60);
+  const failed = await finished('c', 'failed', 45);
+  const recent = await finished('d', 'failed', 3);
+  const queued = (await enqueueWith('e')).id;
+  await withTransaction(db(), (database) => prune(database));
+  const left = (await db().select().from(jobs)).map((job) => job.id).sort();
+  expect(left).toEqual([newestOld, recent, queued].sort());
+  expect(await attemptRow(oldest, 1)).toBeUndefined();
+  expect(await attemptRow(failed, 1)).toBeUndefined();
+  expect(await attemptRow(newestOld, 1)).toBeDefined();
 });
