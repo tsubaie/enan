@@ -173,12 +173,10 @@ Twelve top-level props is the ceiling (`07-coding-guidelines.md`); related optio
   Filter and Clear rendered off the end, where nothing could reach them. A wrapped line is the cost
   of keeping every control reachable, and it is the right one: a control the reader cannot press is
   not a saving.
-- EP-B32 The bar is one wrapping row, not two fixed ones. The title and the controls are two flex
-  items that share a line wherever the list is wide enough to hold both and stack where it is not, so
-  a desktop list opens with a 67 px header and a phone still gets the two-row form, without either
-  width being written down. The title takes only the width it needs once there is a row to share, so
-  the spare goes to the controls rather than to the gap after the heading; below that it grows again,
-  which is what holds Create against the end edge of a phone.
+- EP-B32 The title group sits in the shell header at every width (EP-B07), so the list bar is a row
+  of controls with no heading of its own. On a desktop it is one line of search, sort, layout,
+  selection, Filter and Create; below 1024 px it is one row of search, Filter and a round Create at
+  the end edge, with the sort in the filter sheet and selecting left to the desktop.
 - EP-B31 A column that names one of the module's sorts orders by it from its own header, and one
   that does not stays plain text: a header that looks orderable and is not is worse than one that
   never offered. This is the thing a table is expected to do and the sort dropdown could never be —

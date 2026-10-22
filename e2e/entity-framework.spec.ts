@@ -311,10 +311,11 @@ for (const locale of ['en', 'ar'] as const) {
     await expect(panel).toHaveCount(0);
     await expect(list).toBeVisible();
     await expect(page.locator(`[data-row-id="${id}"]`)).toBeVisible();
-    // The list is the overdue view, whichever control names it at this width.
+    // The list is the overdue view, whichever control names it at this width: the rail, or the
+    // view summary in the shell header (EP-B07).
     await expect(
       page
-        .locator('.entity-rail, .entity-toolbar')
+        .locator('.entity-rail, header')
         .getByRole('button', {
           name: new RegExp(m.tasks.overdue, 'u'),
         })
@@ -616,11 +617,11 @@ test('EP-B30 opening a record requests no page, and a changed list query keeps i
   for (const id of ids) await trash(page, 'tasks', id);
 });
 
-// EP-B32: the bar is one wrapping row. Where the list is wide the title and the controls share a
-// line; on a phone they stack and Create holds the end edge. Neither width is written down, so
-// the test reads geometry rather than classes, in both directions.
+// EP-B32: the title group sits in the shell header at every width (EP-B07), so the list bar is a
+// row of controls with no heading of its own. On a phone that row holds search and Create side by
+// side, with Create at the end edge. The test reads geometry rather than classes, both directions.
 for (const locale of ['en', 'ar'] as const) {
-  test(`EP-B32 the bar's title and controls share a line where there is room and stack where there is not (${locale})`, async ({
+  test(`EP-B32 the bar is one row of controls and the title is in the header (${locale})`, async ({
     page,
   }) => {
     const m = locale === 'ar' ? ar : en;
@@ -630,35 +631,28 @@ for (const locale of ['en', 'ar'] as const) {
     // hidden `<div id="S:…">` beside what is on screen, so for a moment there are two bars.
     const toolbar = page.locator('.entity-toolbar:visible');
     await expect(toolbar).toBeVisible();
+    await expect(page.getByRole('banner').getByRole('heading', { level: 1 })).toBeVisible();
+    await expect(toolbar.getByRole('heading', { level: 1 })).toHaveCount(0);
     const search = toolbar.getByRole('textbox', { name: m.tasks.searchList, exact: true });
+    const searchBox = await search.boundingBox();
+    const barBox = await toolbar.boundingBox();
+    if (!searchBox || !barBox) throw new Error('The bar did not lay out');
     if (wide(page)) {
-      // EP-B07 (ADR 0031): from 1024 px the title group is in the shell header, so the bar is one
-      // line of controls and carries no heading of its own.
-      await expect(page.getByRole('banner').getByRole('heading', { level: 1 })).toBeVisible();
-      await expect(toolbar.getByRole('heading', { level: 1 })).toHaveCount(0);
-      const searchBox = await search.boundingBox();
-      const barBox = await toolbar.boundingBox();
-      if (!searchBox || !barBox) throw new Error('The bar did not lay out');
       expect(barBox.height).toBeLessThanOrEqual(80);
       return;
     }
-    const title = toolbar.getByRole('heading', { level: 1 });
-    const titleBox = await title.boundingBox();
-    const searchBox = await search.boundingBox();
-    const barBox = await toolbar.boundingBox();
-    if (!titleBox || !searchBox || !barBox) throw new Error('The bar did not lay out');
-    {
-      // Two rows: the controls sit below the title, and Create holds the end edge of the phone.
-      expect(searchBox.y).toBeGreaterThanOrEqual(titleBox.y + titleBox.height - 1);
-      const create = await toolbar
-        .getByRole('button', { name: m.common.create, exact: true })
-        .boundingBox();
-      if (!create) throw new Error('Create is not in the bar');
-      const rtl = locale === 'ar';
-      const gap = rtl ? create.x - barBox.x : barBox.x + barBox.width - (create.x + create.width);
-      expect(gap).toBeGreaterThanOrEqual(0);
-      expect(gap).toBeLessThanOrEqual(24);
-    }
+    // One row: Create shares search's line and holds the end edge of the phone.
+    const create = await toolbar
+      .getByRole('button', { name: m.common.create, exact: true })
+      .boundingBox();
+    if (!create) throw new Error('Create is not in the bar');
+    expect(
+      Math.abs(create.y + create.height / 2 - (searchBox.y + searchBox.height / 2)),
+    ).toBeLessThan(4);
+    const rtl = locale === 'ar';
+    const gap = rtl ? create.x - barBox.x : barBox.x + barBox.width - (create.x + create.width);
+    expect(gap).toBeGreaterThanOrEqual(0);
+    expect(gap).toBeLessThanOrEqual(24);
   });
 }
 
@@ -745,9 +739,11 @@ test('EP-B35 the strip and the view summary appear only where the rail is not sh
     await expect(strip).toBeHidden();
     await expect(summary).toBeHidden();
   } else {
-    // No rail at this width, so the strip and the summary are simply there.
+    // No rail at this width, so the summary is simply there; the strip is too from 1024 px, while
+    // a phone leaves the views to the summary alone (EP-B40).
     await expect(rail).toBeHidden();
-    await expect(strip).toBeVisible();
+    if (wide(page)) await expect(strip).toBeVisible();
+    else await expect(strip).toBeHidden();
     await expect(summary).toBeVisible();
     await summary.click();
     await expect(page.locator('[data-slot="dialog-content"]')).toBeVisible();
