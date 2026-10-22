@@ -321,7 +321,8 @@ export async function prune(database: Database) {
     .where(lt(signInCodes.createdAt, new Date(Date.now() - 86400000)));
   // Finished jobs older than 30 days, with their attempts (cascade): they carry copies of note and
   // task text in payload and result. The newest success of each kind stays, since a job's
-  // "since my last run" (lastSucceeded) reads it.
+  // "since my last run" (lastSucceeded) reads it, and so does a job a note refinement still names:
+  // that link has no delete rule, and restoring a discarded refinement reads the job's result.
   const newest = await database
     .select({ kind: jobs.kind, finishedAt: max(jobs.finishedAt) })
     .from(jobs)
@@ -338,6 +339,7 @@ export async function prune(database: Database) {
       and(
         inArray(jobs.status, ['succeeded', 'failed', 'cancelled']),
         lt(jobs.finishedAt, new Date(Date.now() - 30 * 86400000)),
+        sql`not exists (select 1 from note_refinements r where r.job_id = ${jobs.id})`,
         ...(kept.length ? [not(or(...kept) ?? sql`false`)] : []),
       ),
     );

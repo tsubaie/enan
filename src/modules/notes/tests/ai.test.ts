@@ -1,6 +1,7 @@
 import { beforeAll, beforeEach, afterAll, expect, it, vi } from 'vitest';
 import { sql } from 'drizzle-orm';
-import { db, closeDatabase } from '@/core/db/client';
+import { db, closeDatabase, withTransaction } from '@/core/db/client';
+import { prune } from '@/core/db/jobs-repo';
 import { migrateDatabase } from '@/core/db/migrate';
 import { writeSetting } from '@/core/db/settings-repo';
 import { createTask } from '@/modules/tasks';
@@ -325,4 +326,32 @@ it('ADMIN-B36 a direct note apply that fails after creating a task leaves no tas
   expect(unchanged.tasks).toHaveLength(0);
   expect(unchanged.content).toBe('draft content');
   expect(unchanged.tags).toEqual([]);
+});
+it('ADMIN-B12 the nightly prune keeps an old refine job a refinement still names, and still succeeds', async () => {
+  const note = await harness.note('Plan', { content: 'Review the draft.' });
+  const kept = await finishedJob(db(), actorId(), 'notes.refine', note.id, note.revision, refinement);
+  await insertRefinement(db(), {
+    id: id(),
+    noteId: note.id,
+    jobId: kept.id,
+    noteRevision: note.revision,
+    contentHash: 'fixture',
+    capabilityVersion: 1,
+    refinedContent: refinement.refined_content,
+    suggestedTasks: refinement.suggested_tasks,
+    suggestedTags: refinement.suggested_tags,
+    summaryOfChanges: refinement.summary_of_changes,
+    status: 'discarded',
+    createdBy: actorId(),
+  });
+  // Past the 30 days: the referenced one is the oldest, so only the reference keeps it; of the
+  // two others the newest success stays and the older one goes.
+  const old = new Date(Date.now() - 40 * 86400000).getTime();
+  const gone = await finishedJob(db(), actorId(), 'notes.refine', note.id, note.revision, refinement);
+  const newest = await finishedJob(db(), actorId(), 'notes.refine', note.id, note.revision, refinement);
+  for (const [job, age] of [[kept, 3000], [gone, 2000], [newest, 1000]] as const)
+    await db().run(sql`update jobs set finished_at = ${old - age} where id = ${job.id}`);
+  await withTransaction(db(), (database) => prune(database));
+  const left = await db().all<{ id: string }>(sql`select id from jobs where kind = ${kept.kind}`);
+  expect(left.map((row) => row.id).sort()).toEqual([kept.id, newest.id].sort());
 });
