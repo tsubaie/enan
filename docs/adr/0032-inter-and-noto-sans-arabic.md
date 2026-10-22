@@ -1,6 +1,6 @@
 # ADR 0032 — Inter and Noto Sans Arabic carry the whole interface
 
-**Status:** accepted (2026-10-18). Supersedes the font choices of ADR 0030 (IBM Plex Sans Arabic for text, Noto Naskh Arabic and Newsreader for titles) and the "system face first" line of ADR 0031.
+**Status:** accepted (2026-10-18); extended by ADR 0049, which lets an install supply its own Arabic faces. Supersedes the font choices of ADR 0030 (IBM Plex Sans Arabic for text, Noto Naskh Arabic and Newsreader for titles) and the "system face first" line of ADR 0031.
 
 ## Context
 
