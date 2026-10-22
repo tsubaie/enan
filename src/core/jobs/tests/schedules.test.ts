@@ -14,6 +14,7 @@ it('ADMIN-B12 NOTIF-B10 ADMIN-B59 a migrated database schedules the backup, prun
     'system.backup',
     'system.notifications_purge',
     'system.prune',
+    'system.trash_purge',
     'tasks.reminders',
     // ADMIN-B59: update notifications, every five minutes.
     'users.updates',

@@ -108,7 +108,7 @@ Indexes: `(status, run_after, priority desc)`, `(kind, status)`, `(entity_type, 
 `id, job_id fk cascade, attempt int, lease_owner, started_at, finished_at, status (running|succeeded|failed|abandoned), error text`. Unique `(job_id, attempt)`.
 
 ### schedules
-`id, kind, cron text, timezone text, payload jsonb, enabled boolean, last_occurrence timestamptz null, created_at, updated_at`. Seeded rows (migration `0004_seed_schedules`, times in UTC): `system.backup` (daily 02:00), `system.prune` (daily 03:00), `system.notifications_purge` (daily 03:15), and (migration `0006`) `tasks.reminders` (daily 04:00).
+`id, kind, cron text, timezone text, payload jsonb, enabled boolean, last_occurrence timestamptz null, created_at, updated_at`. Seeded rows (migration `0004_seed_schedules`, times in UTC): `system.backup` (daily 02:00), `system.prune` (daily 03:00), `system.trash_purge` (daily 03:30, migration 0013), `system.notifications_purge` (daily 03:15), and (migration `0006`) `tasks.reminders` (daily 04:00).
 
 ### ai_credentials
 
