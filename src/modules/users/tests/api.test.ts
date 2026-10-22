@@ -50,7 +50,7 @@ const meta = (handler: { meta: Meta }) => ({
 });
 const writeHeaders = (origin = env().APP_URL) => ({
   Origin: origin,
-  'X-Requested-With': 'ExecutiveOS',
+  'X-Requested-With': 'Enan',
   'Content-Type': 'application/json',
 });
 function request(

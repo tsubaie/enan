@@ -2,6 +2,7 @@ import 'server-only';
 import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from 'node:crypto';
 import { env } from '@/core/config/env';
 import { AppError } from '@/core/http/errors';
+// The salt keeps the product's former name: saved keys were encrypted under it (ADR 0048).
 function encryptionKey() {
   return Buffer.from(
     hkdfSync('sha256', env().SESSION_SECRET, 'ExecutiveOS', 'ai-credentials-v1', 32),

@@ -1,4 +1,4 @@
-# ExecutiveOS documentation
+# Enan documentation
 
 This folder is the specification. Implementation follows it; when they disagree, fix one or the other in the same PR.
 
@@ -6,12 +6,12 @@ This folder is the specification. Implementation follows it; when they disagree,
 
 | # | Document | Purpose |
 |---|---|---|
-| 01 | [Vision and scope](01-vision-and-scope.md) | What ExecutiveOS is, who it is for, what v1 contains, what it deliberately excludes |
+| 01 | [Vision and scope](01-vision-and-scope.md) | What Enan is, who it is for, what v1 contains, what it deliberately excludes |
 | 02 | [Architecture](02-architecture.md) | Stack, module layout, request flow, jobs, AI, deployment |
 | 03 | [Data model](03-data-model.md) | Every table, column, enum, relation, and invariant |
 | 04 | [API conventions](04-api-conventions.md) | Route shape, validation, errors, pagination, auth |
 | 05 | [UI guidelines](05-ui-guidelines.md) | Design system, entity page framework, mobile, i18n and RTL, accessibility |
-| — | [Design system](design-system.md) | Materials, colour, type, shape, components and record patterns: how ExecutiveOS looks |
+| — | [Design system](design-system.md) | Materials, colour, type, shape, components and record patterns: how Enan looks |
 | 06 | [AI integration](06-ai-integration.md) | Provider layer, jobs, prompts, structured outputs, safety, cost |
 | 07 | [Coding guidelines](07-coding-guidelines.md) | Hard rules, naming, file limits, forbidden patterns |
 | 08 | [Testing strategy](08-testing-strategy.md) | Test layers, what each feature must have, fixtures, CI |

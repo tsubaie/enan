@@ -1,7 +1,7 @@
 import 'server-only';
 import { withTransaction, type Database } from './client';
 type Arg = string | number | boolean | bigint | object | null | undefined;
-const marker = Symbol.for('executiveos.transactional');
+const marker = Symbol.for('enan.transactional');
 /**
  * 07-coding-guidelines § Data access: the service opens the transaction. A public service method
  * wrapped here is atomic however it is called. From a script or another module with the pool it

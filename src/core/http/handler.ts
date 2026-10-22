@@ -80,7 +80,7 @@ async function inputFor(request: Request, source?: 'body' | 'query' | 'form') {
     throw new AppError('validation_failed');
   }
 }
-// ExecutiveOS#79: every API response says how long the origin spent on it (`Server-Timing`), split into the
+// Every API response says how long the origin spent on it (`Server-Timing`), split into the
 // session check and the transaction that ran the handler, so a slow response can be placed at the
 // edge or at the origin from the browser's own network panel.
 function serverTiming(started: number, marks: { auth?: number; db?: number }) {

@@ -19,7 +19,7 @@ vi.mock('@/core/config/env', async (original) => {
 });
 const disposable = testPool();
 // A sibling file in the same directory whose name does not end in `_test.db`.
-const keptPath = join(dirname(databasePath(env().DATABASE_URL)), 'executiveos_kept.db');
+const keptPath = join(dirname(databasePath(env().DATABASE_URL)), 'enan_kept.db');
 const kept = openClient(`file:${keptPath}`, 2);
 async function marked(source: DatabaseClient) {
   const [row] = await databaseFor(source).all<{ present: number }>(
@@ -64,7 +64,7 @@ it('the browser reset wipes a _test.db file and rebuilds it from the migrations'
 it('the browser reset keeps any file whose name does not end in _test.db', async () => {
   await mark(kept);
   expect(await resetDisposableDatabase(kept)).toEqual({
-    name: 'executiveos_kept.db',
+    name: 'enan_kept.db',
     reset: false,
   });
   expect(await marked(kept)).toBe(true);

@@ -1,6 +1,6 @@
 import 'server-only';
-import { mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { existsSync, mkdirSync, renameSync } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { createClient, type Client } from '@libsql/client';
 import { is } from 'drizzle-orm';
@@ -49,8 +49,21 @@ function prime(client: Client, connections: number) {
   primed.catch((error: Error) => logger.error({ err: error }, 'Database pragmas failed'));
   return primed.then(() => undefined);
 }
+// ADMIN-B50: a volume from before the rename to Enan still holds executiveos.db. The first open of
+// enan.db in that directory takes it over, the -wal and -shm files first and the database last, so
+// an interrupted move finishes on the next start.
+const formerName = 'executiveos.db';
+function adoptFormerDatabase(path: string) {
+  if (basename(path) !== 'enan.db' || existsSync(path)) return;
+  const former = join(dirname(path), formerName);
+  if (!existsSync(former)) return;
+  for (const suffix of ['-wal', '-shm', ''])
+    if (existsSync(former + suffix)) renameSync(former + suffix, path + suffix);
+  logger.info({ from: former, to: path }, 'Database renamed to the Enan file name');
+}
 export function openClient(url: string, connections = concurrency) {
   mkdirSync(dirname(databasePath(url)), { recursive: true });
+  adoptFormerDatabase(databasePath(url));
   const client = createClient({ url, concurrency: connections, timeout: busyTimeoutMs });
   return Object.assign(client, { primed: prime(client, connections), connections });
 }
@@ -72,7 +85,7 @@ type Shared = {
   // is refused at once instead of waiting on its own lock.
   holding: AsyncLocalStorage<true>;
 };
-const sharedKey = Symbol.for('executiveos.db');
+const sharedKey = Symbol.for('enan.db');
 function shared(): Shared {
   const host = globalThis as { [sharedKey]?: Shared }; // cast: the process-wide slot this module owns
   host[sharedKey] ??= {

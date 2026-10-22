@@ -40,7 +40,7 @@ async function api(
         method,
         headers: {
           'Content-Type': 'application/json',
-          'X-Requested-With': 'ExecutiveOS',
+          'X-Requested-With': 'Enan',
           'Idempotency-Key': key ?? crypto.randomUUID(),
         },
         ...(body ? { body: JSON.stringify(body) } : {}),
@@ -344,7 +344,7 @@ test('NOTES-A12 NOTES-B20 ADMIN-B08 an administrator adds a note type and makes 
     await page.evaluate(async () => {
       const headers = {
         'Content-Type': 'application/json',
-        'X-Requested-With': 'ExecutiveOS',
+        'X-Requested-With': 'Enan',
         'Idempotency-Key': crypto.randomUUID(),
       };
       await fetch('/api/v1/admin/settings', {

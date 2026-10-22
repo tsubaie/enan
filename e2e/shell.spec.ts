@@ -104,7 +104,7 @@ test('ACCT-B04 the header language toggle reloads the page in the other language
     await page.evaluate(async () => {
       const headers = {
         'Content-Type': 'application/json',
-        'X-Requested-With': 'ExecutiveOS',
+        'X-Requested-With': 'Enan',
       };
       const account = await (await fetch('/api/v1/account', { headers })).json();
       await fetch('/api/v1/account', {

@@ -1,4 +1,4 @@
-# Contributing to ExecutiveOS
+# Contributing to Enan
 
 Thank you for helping. This project is built to be extended module by module, so most contributions follow the same path.
 

@@ -90,7 +90,7 @@ async function api(page: Page, resource: string, path: string, method = 'GET', b
         method,
         headers: {
           'Content-Type': 'application/json',
-          'X-Requested-With': 'ExecutiveOS',
+          'X-Requested-With': 'Enan',
           'Idempotency-Key': crypto.randomUUID(),
         },
         ...(body ? { body: JSON.stringify(body) } : {}),

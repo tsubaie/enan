@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { ComponentProps, FocusEvent, MouseEvent, TouchEvent } from 'react';
-// ExecutiveOS#79: a link that loads its page only when the reader shows intent: a pointer over it, focus on
+// A link that loads its page only when the reader shows intent: a pointer over it, focus on
 // it, or a finger on it. Next's default prefetches every link as it enters the viewport, so a page
 // of links (the menu, Home's sections and rows) set off fifteen or more page loads at once, twice
 // each, and on a slow connection they queued in front of the navigation the reader actually made.

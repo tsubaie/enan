@@ -29,7 +29,7 @@ async function api(page: Page, path: string, method = 'GET', body?: object, key?
         method,
         headers: {
           'Content-Type': 'application/json',
-          'X-Requested-With': 'ExecutiveOS',
+          'X-Requested-With': 'Enan',
           'Idempotency-Key': key ?? crypto.randomUUID(),
         },
         ...(body ? { body: JSON.stringify(body) } : {}),

@@ -42,7 +42,7 @@ export async function backupDownload(
   return new Response(body, {
     headers: {
       'Content-Type': 'application/x-tar',
-      'Content-Disposition': `attachment; filename="executiveos-backup-${day}.tar"`,
+      'Content-Disposition': `attachment; filename="enan-backup-${day}.tar"`,
       'Cache-Control': 'no-store',
     },
   });

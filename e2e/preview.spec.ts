@@ -70,7 +70,7 @@ for (const locale of ['en', 'ar'])
           method: 'DELETE',
           headers: {
             'Content-Type': 'application/json',
-            'X-Requested-With': 'ExecutiveOS',
+            'X-Requested-With': 'Enan',
             'Idempotency-Key': crypto.randomUUID(),
           },
           body: JSON.stringify({ revision }),
@@ -112,7 +112,7 @@ test('ADMIN-A01 setup cannot run a second time; origin guard and private session
     };
     const repeat = await fetch('/api/v1/setup', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'ExecutiveOS' },
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'Enan' },
       body: JSON.stringify(body),
     });
     const origin = await fetch('/api/v1/people', {
@@ -182,7 +182,7 @@ test('idempotency replay returns one entity; changed payload with the same key c
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Requested-With': 'ExecutiveOS',
+          'X-Requested-With': 'Enan',
           'Idempotency-Key': key,
         },
         body: JSON.stringify(input),
@@ -206,7 +206,7 @@ test('idempotency replay returns one entity; changed payload with the same key c
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
-          'X-Requested-With': 'ExecutiveOS',
+          'X-Requested-With': 'Enan',
           'Idempotency-Key': crypto.randomUUID(),
         },
         body: JSON.stringify({ revision }),

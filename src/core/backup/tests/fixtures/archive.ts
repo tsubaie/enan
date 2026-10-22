@@ -114,7 +114,7 @@ export async function newerDatabase() {
   await rm(dir, { recursive: true, force: true });
   return bytes;
 }
-// A valid SQLite file that is not an ExecutiveOS database.
+// A valid SQLite file that is not an Enan database.
 export async function plainDatabase() {
   const dir = await mkdtemp(join(tmpdir(), 'eos-plain-'));
   const path = join(dir, 'plain.db');

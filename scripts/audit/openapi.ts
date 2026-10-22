@@ -185,7 +185,7 @@ export async function buildDocument(root: string) {
   const paths = await collectPaths(root);
   return stableJson({
     openapi: '3.1.0',
-    info: { title: 'ExecutiveOS API', version },
+    info: { title: 'Enan API', version },
     servers: [{ url: '/' }],
     components: {
       securitySchemes: { session: { type: 'apiKey', in: 'cookie', name: 'eos_session' } },

@@ -33,7 +33,7 @@ const personId = await cleanup.evaluate(async () => {
     if (/^(Preview|Idempotency) [0-9a-f-]{36}$/.test(person.fullName))
       await fetch('/api/v1/people/' + person.id, {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'ExecutiveOS' },
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'Enan' },
         body: JSON.stringify({ revision: person.revision }),
       });
   return data.find((person) => person.fullName === 'Leila Haddad').id;

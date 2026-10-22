@@ -62,7 +62,7 @@ async function call(handler: Handler, method: string, path: string, options: Opt
   if (method !== 'GET') {
     headers.Origin = options.origin ?? env().APP_URL;
     if (options.requestedWith !== null)
-      headers['X-Requested-With'] = options.requestedWith ?? 'ExecutiveOS';
+      headers['X-Requested-With'] = options.requestedWith ?? 'Enan';
   }
   if (options.key !== null) headers['Idempotency-Key'] = options.key ?? id();
   const request = new Request(new URL(`/api/v1${path}`, env().APP_URL), {

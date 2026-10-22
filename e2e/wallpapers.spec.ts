@@ -17,7 +17,7 @@ function api(page: Page, path: string, method = 'GET', body?: object) {
         credentials: 'same-origin',
         headers: {
           'Content-Type': 'application/json',
-          'X-Requested-With': 'ExecutiveOS',
+          'X-Requested-With': 'Enan',
           'Idempotency-Key': crypto.randomUUID(),
         },
         ...(body ? { body: JSON.stringify(body) } : {}),
@@ -194,13 +194,13 @@ test('ADMIN-B47 an uploaded image becomes the wallpaper and its accent, a small 
       expect(
         (
           await other.get('/api/v1/admin/wallpapers', {
-            headers: { 'X-Requested-With': 'ExecutiveOS' },
+            headers: { 'X-Requested-With': 'Enan' },
           })
         ).status(),
       ).toBe(403);
       const attempt = await other.post('/api/v1/admin/wallpapers', {
         headers: {
-          'X-Requested-With': 'ExecutiveOS',
+          'X-Requested-With': 'Enan',
           Origin: laneBaseURL(),
           'Idempotency-Key': crypto.randomUUID(),
         },

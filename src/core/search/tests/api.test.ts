@@ -49,7 +49,7 @@ afterAll(() => closeDatabase());
 const search = (query: Record<string, string>) =>
   searchApi(
     new Request(new URL(`/api/v1/search?${new URLSearchParams(query)}`, env().APP_URL), {
-      headers: { 'X-Requested-With': 'ExecutiveOS' },
+      headers: { 'X-Requested-With': 'Enan' },
     }),
   );
 type Hit = { module: string; id: string; title: string; href: string; rank: 0 | 1 };

@@ -1,8 +1,8 @@
 # 01 — Vision and scope
 
-## What ExecutiveOS is
+## What Enan is
 
-ExecutiveOS is a self-hosted operating surface for an executive and the small team around them. It answers, from one screen: what needs my decision, what is overdue, what did we agree in the last meeting, how are our KPIs and initiatives doing, and what should I do next.
+Enan is a self-hosted operating surface for an executive and the small team around them. It answers, from one screen: what needs my decision, what is overdue, what did we agree in the last meeting, how are our KPIs and initiatives doing, and what should I do next.
 
 It is opinionated software. It is not a general project-management tool, not a CRM, and not a chat app. It models the way an executive office actually works: recurring bodies (committees and boards), meetings that produce documents, notes and actions, a scorecard of KPIs, and a portfolio of initiatives.
 
@@ -76,7 +76,7 @@ These are listed so that agents do not build toward them speculatively. Do not a
 
 | Term | Meaning |
 |---|---|
-| Installation | One deployed ExecutiveOS instance and its database |
+| Installation | One deployed Enan instance and its database |
 | Workspace | Synonym for installation in UI copy; there is exactly one |
 | Principal | The executive the workspace serves; a `people` row referenced in settings |
 | Member | Any authenticated user |

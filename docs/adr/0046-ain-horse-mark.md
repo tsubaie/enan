@@ -1,6 +1,6 @@
 # ADR 0046 — The ع-horse mark
 
-**Status:** accepted (2026-10-21). Supersedes the Sadu mark of ADR 0036; its sage accent, and ADR 0037, stand.
+**Status:** accepted (2026-10-21); its traced path is superseded by ADR 0047, which redraws the same mark. Supersedes the Sadu mark of ADR 0036; its sage accent, and ADR 0037, stand.
 
 ## Context
 

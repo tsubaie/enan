@@ -204,7 +204,7 @@ docker compose up -d --build
 docker compose logs app | grep SETUP_TOKEN
 ```
 
-Open http://localhost:3000 and finish setup with that token. Migrations run on start. To upgrade, `git pull` and run `docker compose up -d --build` again.
+Open http://localhost:3000 and finish setup with that token. Migrations run on start. To upgrade, run `git pull` in the folder you installed from, then `docker compose up -d --build` again. A clone in a new folder starts with new, empty volumes, because Compose names the volumes after the folder.
 
 The app listens on `127.0.0.1:3000` only. To use it beyond localhost, put it behind a reverse proxy that terminates TLS and set an `https://` `APP_URL`. Production refuses to start without one.
 
@@ -236,7 +236,7 @@ The whole office lives in one SQLite file on the `data` volume. Uploaded files a
 
 ```bash
 docker compose exec app pnpm backup:create
-docker compose exec app pnpm backup:restore /var/lib/executiveos/backups/BACKUP_ID --confirm
+docker compose exec app pnpm backup:restore /var/lib/enan/backups/BACKUP_ID --confirm
 ```
 
 A restore replaces the database and the uploaded files, so it requires `--confirm`. Keep a copy of `SESSION_SECRET` with your backups, because a backup cannot decrypt a saved AI key without it.

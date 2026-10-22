@@ -9,7 +9,7 @@ import { availableParallelism } from 'node:os';
 // about one lane per 3 cores, from 2 to 6 (22 cores: 6 lanes, 5.3 → 2.9 min). Inside a worker,
 // E2E_LANE (set by e2e/fixtures/test.ts) picks the lane every helper below defaults to; the audits
 // that run after the suite (a11y, perf) keep using lane 0, whose addresses are the historical ones.
-const DEFAULT_DATABASE = 'file:./tmp/executiveos_test.db';
+const DEFAULT_DATABASE = 'file:./tmp/enan_test.db';
 // E2E_FIRST_PORT moves every lane's port (default 3000), so a second checkout or agent can run the
 // suite beside one already serving on the historical ports; it also names the credentials files
 // apart. Point DATABASE_URL_TEST, FILES_DIR and BACKUP_DIR elsewhere too when doing so.

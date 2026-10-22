@@ -38,7 +38,7 @@ const headersFor = (call: Call) => {
   if (call.method && call.method !== 'GET') {
     headers.set('Origin', call.origin ?? env().APP_URL);
     if (call.requestedWith !== null)
-      headers.set('X-Requested-With', call.requestedWith ?? 'ExecutiveOS');
+      headers.set('X-Requested-With', call.requestedWith ?? 'Enan');
     if (call.key !== null) headers.set('Idempotency-Key', call.key ?? id());
   }
   return headers;

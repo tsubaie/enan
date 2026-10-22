@@ -12,7 +12,7 @@ async function createTask(page: Page, title: string) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Requested-With': 'ExecutiveOS',
+        'X-Requested-With': 'Enan',
         'Idempotency-Key': crypto.randomUUID(),
       },
       body: JSON.stringify({ title }),
@@ -27,7 +27,7 @@ async function trashTask(page: Page, task: { id: string; revision: number }) {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
-        'X-Requested-With': 'ExecutiveOS',
+        'X-Requested-With': 'Enan',
         'Idempotency-Key': crypto.randomUUID(),
       },
       body: JSON.stringify({ revision: task.revision }),
@@ -41,7 +41,7 @@ async function createNote(page: Page, title: string, content: string) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Requested-With': 'ExecutiveOS',
+          'X-Requested-With': 'Enan',
           'Idempotency-Key': crypto.randomUUID(),
         },
         body: JSON.stringify({ title, content }),
@@ -58,7 +58,7 @@ async function trashNote(page: Page, note: { id: string; revision: number }) {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
-        'X-Requested-With': 'ExecutiveOS',
+        'X-Requested-With': 'Enan',
         'Idempotency-Key': crypto.randomUUID(),
       },
       body: JSON.stringify({ revision: note.revision }),

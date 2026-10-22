@@ -11,7 +11,7 @@ export function checkOrigin(request: Request) {
   }
   if (
     origin !== new URL(env().APP_URL).origin ||
-    request.headers.get('x-requested-with') !== 'ExecutiveOS'
+    request.headers.get('x-requested-with') !== 'Enan'
   )
     throw new AppError('forbidden', { reason: 'origin' });
 }

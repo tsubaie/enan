@@ -71,7 +71,7 @@ Insights and daily briefing · Relationships cadence (extends People) · Daily c
 | Decision | Owner | Needed by | Recommendation |
 |---|---|---|---|
 | License | maintainer | decided 2026-09-07 | Apache-2.0 (`LICENSE`, `NOTICE` committed) |
-| Product name and domain | maintainer | Phase 6 | keep "ExecutiveOS" pending trademark check |
+| Product name and domain | maintainer | Phase 6 | keep "Enan" pending trademark check |
 | Maintainer's own hosting target | maintainer | Phase 1 | A small Linux server with Docker; images are built in CI, never on the server |
 | Legacy code reuse rights | maintainer | decided 2026-09-07 | statement recorded in `NOTICE` |
 | Comments in 1.0 | maintainer | Phase 5 | keep; the table is small and specified |

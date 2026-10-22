@@ -42,7 +42,7 @@ function call(handler: Handler, method: string, path: string, options: Call = {}
     url.searchParams.set(name, value);
   const headers: Record<string, string> = {
     Origin: options.origin ?? env().APP_URL,
-    'X-Requested-With': 'ExecutiveOS',
+    'X-Requested-With': 'Enan',
     'Content-Type': 'application/json',
   };
   if (options.key !== null) headers['Idempotency-Key'] = options.key ?? id();

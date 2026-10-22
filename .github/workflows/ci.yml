@@ -22,8 +22,8 @@ concurrency:
 # repository's pull requests at a self-hosted runner you also use for anything else: a pull
 # request from a fork runs its own code there. See docs/08-testing-strategy.md § CI.
 env:
-  DATABASE_URL: file:${{ github.workspace }}/tmp/executiveos_test.db
-  DATABASE_URL_TEST: file:${{ github.workspace }}/tmp/executiveos_test.db
+  DATABASE_URL: file:${{ github.workspace }}/tmp/enan_test.db
+  DATABASE_URL_TEST: file:${{ github.workspace }}/tmp/enan_test.db
   SESSION_SECRET: ci-only-session-secret-0123456789abcdefghij
   # ADMIN-B22: the recovery suite needs a configured token, and it must clear the entropy floor.
   RECOVERY_TOKEN: ci-only-recovery-token-0123456789abcdefghij
@@ -133,8 +133,8 @@ jobs:
       - name: Use the container's workspace for the data paths
         run: |
           {
-            echo "DATABASE_URL=file:$GITHUB_WORKSPACE/tmp/executiveos_test.db"
-            echo "DATABASE_URL_TEST=file:$GITHUB_WORKSPACE/tmp/executiveos_test.db"
+            echo "DATABASE_URL=file:$GITHUB_WORKSPACE/tmp/enan_test.db"
+            echo "DATABASE_URL_TEST=file:$GITHUB_WORKSPACE/tmp/enan_test.db"
             echo "FILES_DIR=$GITHUB_WORKSPACE/tmp/files"
             echo "BACKUP_DIR=$GITHUB_WORKSPACE/tmp/backups"
           } >> "$GITHUB_ENV"
@@ -182,8 +182,8 @@ jobs:
       - name: Use the container's workspace for the data paths
         run: |
           {
-            echo "DATABASE_URL=file:$GITHUB_WORKSPACE/tmp/executiveos_test.db"
-            echo "DATABASE_URL_TEST=file:$GITHUB_WORKSPACE/tmp/executiveos_test.db"
+            echo "DATABASE_URL=file:$GITHUB_WORKSPACE/tmp/enan_test.db"
+            echo "DATABASE_URL_TEST=file:$GITHUB_WORKSPACE/tmp/enan_test.db"
             echo "FILES_DIR=$GITHUB_WORKSPACE/tmp/files"
             echo "BACKUP_DIR=$GITHUB_WORKSPACE/tmp/backups"
           } >> "$GITHUB_ENV"
@@ -250,7 +250,7 @@ jobs:
           push: false
           # Loaded into the runner's Docker so the smoke test below runs it too.
           load: true
-          tags: executiveos-ci:pr
+          tags: enan-ci:pr
       - if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         uses: docker/login-action@v3
         with:
@@ -279,7 +279,7 @@ jobs:
       # (README § Backups): db:migrate, backup:create, backup:restore.
       - name: Smoke-test the production image
         env:
-          IMAGE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && format('ghcr.io/{0}:{1}', github.repository, github.sha) || 'executiveos-ci:pr' }}
+          IMAGE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && format('ghcr.io/{0}:{1}', github.repository, github.sha) || 'enan-ci:pr' }}
         run: |
           set -eu
           name=ci-exos-smoke-run${{ github.run_number }}-${{ github.run_attempt }}
@@ -290,11 +290,11 @@ jobs:
           trap cleanup EXIT
           for v in data files backups; do docker volume create "$name-$v" >/dev/null; done
           docker run -d --name "$name" --platform linux/amd64 -p 127.0.0.1::3000 \
-            -v "$name-data:/var/lib/executiveos/data" \
-            -v "$name-files:/var/lib/executiveos/files" \
-            -v "$name-backups:/var/lib/executiveos/backups" \
-            -e DATABASE_URL=file:/var/lib/executiveos/data/executiveos.db \
-            -e FILES_DIR=/var/lib/executiveos/files -e BACKUP_DIR=/var/lib/executiveos/backups \
+            -v "$name-data:/var/lib/enan/data" \
+            -v "$name-files:/var/lib/enan/files" \
+            -v "$name-backups:/var/lib/enan/backups" \
+            -e DATABASE_URL=file:/var/lib/enan/data/enan.db \
+            -e FILES_DIR=/var/lib/enan/files -e BACKUP_DIR=/var/lib/enan/backups \
             -e SESSION_SECRET=ci-smoke-only-session-secret-0123456789abcdef \
             -e APP_URL=http://localhost:3000 -e JOBS_ENABLED=false "$IMAGE"
           port=$(docker port "$name" 3000/tcp | head -n 1 | sed 's/.*://')
@@ -311,9 +311,9 @@ jobs:
           healthy
           docker exec "$name" pnpm db:migrate
           docker exec "$name" pnpm backup:create
-          backup=$(docker exec "$name" ls /var/lib/executiveos/backups | head -n 1)
+          backup=$(docker exec "$name" ls /var/lib/enan/backups | head -n 1)
           test -n "$backup" || { echo "::error::backup:create wrote no backup"; exit 1; }
-          docker exec "$name" pnpm backup:restore "/var/lib/executiveos/backups/$backup" --confirm
+          docker exec "$name" pnpm backup:restore "/var/lib/enan/backups/$backup" --confirm
           healthy
           docker image inspect "$IMAGE" --format 'image size: {{.Size}} bytes'
 
@@ -399,6 +399,10 @@ jobs:
             app=$($compose ps -q app)
             # The way back: a verified backup from the running version, before migrations touch it.
             docker exec "$app" pnpm backup:create
+            # ADR 0048: the image's data moved from /var/lib/executiveos to /var/lib/enan. An overlay
+            # that mounts a volume at the old path would otherwise sit beside the new mount, and the
+            # app would start on an empty database. Rewriting it is a no-op once done.
+            sed -i 's#/var/lib/executiveos\b#/var/lib/enan#g' "$overlay"
             sed -i "s#^\( *image: *\).*#\1$IMAGE#" "$overlay"
             $compose up -d
             app=$($compose ps -q app)
