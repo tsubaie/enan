@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveUrlState, changeUrl } from '../url-state';
+import { resolveUrlState, changeUrl, toggleSelection } from '../url-state';
 describe('Entity URL state', () => {
   it('EP-B01 create wins over detail and opening a row removes create', () => {
     expect(resolveUrlState(new URLSearchParams('new=1&id=old')).id).toBeNull();
@@ -41,4 +41,12 @@ describe('Entity URL state', () => {
       'id=a&focus=content&sel=a',
     );
   });
+});
+
+it('EP-A05 a toggle starts from the selection in the address bar and keeps the others', () => {
+  expect(toggleSelection('?view=all&sel=a,b', 'c')).toBe('a,b,c');
+  expect(toggleSelection('?sel=a,b,c', 'b')).toBe('a,c');
+  expect(toggleSelection('?sel=a', 'a', true)).toBe('a');
+  expect(toggleSelection('?sel=a', 'b', false)).toBe('a');
+  expect(toggleSelection('', 'a')).toBe('a');
 });

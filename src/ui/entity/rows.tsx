@@ -3,6 +3,7 @@ import { cn } from '@/ui/cn';
 import type { Entity } from './types';
 import type { Surface } from './surface';
 import type { Rendered } from './use-row-motion';
+import { toggleSelection } from './url-state';
 // The two things every arrangement of rows has to work out for itself, kept in one place so a list
 // and a table cannot drift apart on either: what selecting a row does to the URL, and whether this
 // row is the one that opens a group.
@@ -11,8 +12,7 @@ export function selectRow<T extends Entity, P extends object, C>(
   id: string,
   checked: boolean,
 ) {
-  const selected = checked ? [...c.selected, id] : c.selected.filter((entry) => entry !== id);
-  c.navigate({ sel: selected.join(',') }, true);
+  c.navigate({ sel: toggleSelection(window.location.search, id, checked) }, true);
 }
 // EP-B14: a heading only means something while the list is in the order the grouping describes.
 // Once the reader has chosen a sort of their own the rows no longer arrive grouped and the headings

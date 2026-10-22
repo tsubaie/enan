@@ -345,7 +345,9 @@ test('NOTES-A12 NOTES-B20 ADMIN-B08 an administrator adds a note type and makes 
     await page.goto('/notes?view=all');
     await selectView(page, 'en', /Sync meeting/);
     await expect(page).toHaveURL(new RegExp(`view=type%3A${id}`));
-    await page.getByRole('button', { name: en.common.create, exact: true }).click();
+    // The new type's view is empty, and an empty list offers its own Create beside the toolbar's;
+    // either opens the same form, so take the toolbar's, which is there whether or not it is empty.
+    await page.getByRole('button', { name: en.common.create, exact: true }).first().click();
     await expect(page.getByLabel(en.notes.type, { exact: true })).toContainText('Sync meeting');
   } finally {
     await page.evaluate(async () => {
