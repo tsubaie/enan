@@ -1,6 +1,6 @@
 # ADR 0031 — The night theme follows Apple's dark materials
 
-**Status:** accepted (2026-10-18); its night accent is superseded by ADR 0036, and its drawn indigo wallpaper by ADR 0037. Supersedes the night palette and the system font of ADR 0030; the rest of ADR 0030 (paper theme, display pair, named type scale, structure felt not seen, states as ink, the inset sheet, the framed shell) stands.
+**Status:** accepted (2026-10-18); its night accent is superseded by ADR 0036, and its drawn indigo wallpaper by ADR 0037; below 1024 px it is extended by ADR 0050 (the phone layout). Supersedes the night palette and the system font of ADR 0030; the rest of ADR 0030 (paper theme, display pair, named type scale, structure felt not seen, states as ink, the inset sheet, the framed shell) stands.
 
 ## Context
 
