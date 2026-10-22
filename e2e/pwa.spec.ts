@@ -1,0 +1,65 @@
+import { test, expect } from './fixtures/test';
+import { loginAs } from './fixtures/auth';
+import en from '../src/core/i18n/messages/en.json' with { type: 'json' };
+
+// ADMIN-B52: an installed web app on iOS keeps a navigation in its own window only when the target
+// is inside the manifest's scope; anything else opens an in-app Safari sheet. Playwright cannot run
+// a home-screen app, so this checks the inputs iOS decides on: the manifest, and that every tab is
+// a same-origin, same-window navigation inside its scope.
+test('ADMIN-B52 the manifest scopes the installed app to the whole origin', async ({
+  page,
+  request,
+}) => {
+  await page.goto('/login');
+  const href = await page.locator('link[rel="manifest"]').getAttribute('href');
+  expect(href).toBeTruthy();
+  const response = await request.get(href!);
+  expect(response.ok()).toBe(true);
+  const manifest = await response.json();
+  expect(manifest).toMatchObject({ id: '/', start_url: '/', scope: '/', display: 'standalone' });
+});
+
+test('ADMIN-B52 the phone tabs navigate in the same window on the same origin @mobile', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const origin = new URL(baseURL!).origin;
+  const opened: string[] = [];
+  context.on('page', (other) => opened.push(other.url()));
+  await loginAs(page, 'en');
+  await page.goto('/home');
+
+  const bar = page.locator('.mobile-navigation');
+  const links = bar.getByRole('link');
+  const count = await links.count();
+  expect(count).toBeGreaterThan(1);
+  for (let i = 0; i < count; i++) {
+    const link = links.nth(i);
+    expect(await link.getAttribute('target')).toBeNull();
+    const path = await link.getAttribute('href');
+    expect(path).toMatch(/^\/(?!\/)/);
+    await link.click();
+    await expect(page).toHaveURL(new URL(path!, origin).href);
+  }
+
+  // The rest of the destinations sit behind More; administration is one of them.
+  await page.getByRole('button', { name: en.common.navMore, exact: true }).click();
+  await page.getByRole('dialog').getByRole('link', { name: en.common.admin, exact: true }).click();
+  await expect(page).toHaveURL(`${origin}/admin`);
+  expect(opened).toEqual([]);
+});
+
+test('ADMIN-B52 the start address and a signed-out page redirect inside the scope', async ({
+  page,
+  baseURL,
+}) => {
+  const origin = new URL(baseURL!).origin;
+  await page.goto('/');
+  await expect(page).toHaveURL(`${origin}/login`);
+  await page.goto('/tasks');
+  await expect(page).toHaveURL(`${origin}/login`);
+  await loginAs(page, 'en');
+  await page.goto('/');
+  await expect(page).toHaveURL(`${origin}/home`);
+});
