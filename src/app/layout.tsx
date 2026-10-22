@@ -22,7 +22,8 @@ const arabic = Noto_Sans_Arabic({
 export const metadata = {
   title: 'Enan',
   description: 'Self-hosted operating surface for executive offices',
-  icons: { icon: { url: '/icon.svg', type: 'image/svg+xml' } },
+  // ADMIN-B52: iOS ignores SVG for the home-screen icon and needs an opaque PNG.
+  icons: { icon: { url: '/icon.svg', type: 'image/svg+xml' }, apple: '/apple-icon.png' },
 };
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const locale = await getLocale();
