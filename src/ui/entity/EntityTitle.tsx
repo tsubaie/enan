@@ -28,7 +28,7 @@ export function EntityTitle<T extends Entity, P extends object, C>({
       >
         <PanelLeftClose className="size-4 rtl:rotate-180" />
       </Button>
-      <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-2">
+      <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-2 max-lg:flex-nowrap">
         <h1 className="shrink-0 font-display text-xl leading-none font-semibold whitespace-nowrap">
           {config.title}
         </h1>
@@ -57,7 +57,8 @@ function EntityToolbarSummary<T extends Entity, P extends object, C>({
         variant="ghost"
         size="sm"
         className={cn(
-          'h-7 min-w-0 justify-start gap-1.5 px-1.5 text-sm font-normal text-text-muted',
+          // It gives way to the header's utilities, its view name ending in an ellipsis.
+          'h-7 min-w-0 shrink justify-start gap-1.5 px-1.5 text-sm font-normal text-text-muted',
           c.railOpen && 'xl:hidden',
         )}
         onClick={() => c.setFiltersOpen(true)}
@@ -75,7 +76,7 @@ function EntityToolbarSummary<T extends Entity, P extends object, C>({
             key={view.id}
             variant="ghost"
             size="sm"
-            className="h-7 gap-1.5 rounded-full px-2 text-xs font-normal text-text-muted"
+            className="h-7 gap-1.5 rounded-full px-2 text-xs font-normal text-text-muted max-lg:hidden"
             onClick={() => c.navigate({ view: view.id }, true)}
           >
             <span>{view.label}</span>

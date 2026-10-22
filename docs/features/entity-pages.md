@@ -83,12 +83,13 @@ Twelve top-level props is the ceiling (`07-coding-guidelines.md`); related optio
 
 ## Layout
 
-- EP-B38 The open record's bar carries a labelled Back at the start edge at every width, and from
-  1024 px a close cross at the end edge as well. Both do the same thing, and they say different
-  things about it: Back leaves the record, which is the whole screen on a phone and so the only
-  control there, while the cross dismisses a surface, which the panel only becomes once it is a
-  slide-over over the list. The two names are distinct to assistive technology (`Back`, `Close`) and
-  the start edge is logical, so RTL mirrors both without a second rule.
+- EP-B38 The open record's bar carries one way out at every width: a close cross at the end edge.
+  From 1024 px the record is a slide-over over the list and below it a sheet risen from the bottom
+  (the owner's choice, in place of a Back at the start edge), and a sheet is
+  dismissed rather than left. Below 1024 px the sheet also closes when it is pulled down from the
+  top of its content or when the dimmed page above it is tapped, and it slides down as it goes.
+  The cross is named `Close` to assistive technology, and the end edge is logical, so RTL mirrors
+  it without a second rule.
 - EP-B07 Desktop (≥ 1024 px): rail 208 px (collapsible, ≥ 1280 px), list, and the detail as a slide-over over the list at `clamp(480px, 46%, 880px)` of the window, running the full height of the viewport flush against its end edge, over the shell header as well as the page (EP-B26). The list keeps the width it had before the record opened: nothing resizes and no row moves under the click that opened it. 480 px stays the floor and 880 px the ceiling because that is the measure a property form reads at; the share is now of what the panel covers rather than of what it displaces. The list column opens with one sticky bar that carries the page title, the current view and its count (a button into the filter sheet where the rail is hidden), search, Filter, selection mode and the primary Create action; the page description is exposed to assistive technology only. Card lists place Create above the desktop views rail and use a compact search/sort/action toolbar; without a visible rail, the title/view and Create remain above it (EP-B22). Rows are 44 px single-line by default; group headers are 28 px; rail items 32 px with a divider before views marked `separated`. Views marked `featured` also show their count in a strip under the bar **where the rail is not showing them already** (EP-B35) (tinted by `tone` when the count is above zero: `accent` and `danger` for the app's own semantics, `good`, `warn` and `bad` for the status scale a scorecard reads in); views may carry an `icon` for the rail. While a panel or the create form is open the shell sidebar, the rail and the list soften with a light blur so only the open record reads sharp, and they stay soft for as long as the record is open (EP-B23). Colours do not change. Keyboard focus is the single exception: focus within one of those surfaces restores it, because tabbing into the list has to leave it readable. The pointer does not, so passing over the list on the way to something else does not flicker it back and forth. The panel bar shows the item's position in the loaded list ("3 of 11") when no save is in flight, as a control: previous and next move through the loaded list from the panel. This reverses the earlier rule that moving between items is done from the list alone. While a record is open the list is covered on its end side and, since EP-B23, stays softened, so sending the reader back to it for the commonest move in triage is the wrong cost. The bar also carries the record's name once the heading has scrolled out of view, so a long record always says which one it is.
 - EP-B08 Mobile: views `list` → `detail` → `create`, full screen, slide from the end side (`dir`-aware); rail as a bottom sheet with active-filter count. Back gesture and browser back both go to the previous view.
 - EP-B09 Direction: all animation and column order derive from `dir`.
@@ -99,7 +100,9 @@ Twelve top-level props is the ceiling (`07-coding-guidelines.md`); related optio
   EP-B26 no longer changes that width. Tiles stretch to their track row, so a short record and a
   long one align across it and a column of figures reads as a column. A group heading is its own
   list item spanning every track (EP-B14), which is also why headings are siblings of the rows
-  rather than blocks inside the first row of each group. Selection sits over the tile's own corner,
+  rather than blocks inside the first row of each group. A tile that would leave a hole beside it
+  spans its row instead: the only tile in its group at any column count, and the last tile of an
+  odd group where there are two columns. Selection sits over the tile's own corner,
   because a tile has no leading column to give it.
   A grid has two axes, so `↑/↓` move a whole track row and `←/→` move one tile, mirrored by `dir`
   (EP-B09); the track count is read from the list's computed columns, since the container query is
@@ -132,15 +135,9 @@ Twelve top-level props is the ceiling (`07-coding-guidelines.md`); related optio
   (EP-B31). A `filters.mode` is the same: EP-B28 already says it travels with the facets and is not
   one, and counting it was what made choosing a period light up "Filters · 1" and widen the button.
 - EP-B40 The bar and the readings above it are measured in rows of a phone, not in pixels of a
-  desktop. The featured readings are a single scrolling line below 1024 px (`@lg` on the list
-  container), each reading one row of name and figure, and the two-column grid returns with the
-  width to hold it: five readings in two columns is three rows and an orphan with a hole beside it,
-  which cost 198 px of the 732 px a 390 px phone has for records. The strip's snap positions are
-  inset by its own padding, or it rests scrolled by exactly that padding with its leading reading
-  cut off. The bar's own padding and the gap between its wrapped lines step down at the same width,
-  because three wrapped lines at desktop spacing is a row of records. Measured on a 390 px screen
-  with seeded data, this moves the first record of Tasks from 433 px to 284 px and of Notes from
-  287 px to 224 px.
+  desktop. Below 1024 px there is no featured strip: the view menu in the shell header carries the
+  same views and counts one tap away, so the first row under the one toolbar row is a record. From
+  1024 px, where the rail is hidden, the strip is a grid of the featured readings.
 - EP-B41 The list's search field names its module. Its placeholder and accessible name are the
   module's own words — "Search tasks", "Search notes" — through a required `searchLabel` on the page
   declaration, so beside the Filter button it reads as text against facets, and beside the workspace
@@ -176,12 +173,10 @@ Twelve top-level props is the ceiling (`07-coding-guidelines.md`); related optio
   Filter and Clear rendered off the end, where nothing could reach them. A wrapped line is the cost
   of keeping every control reachable, and it is the right one: a control the reader cannot press is
   not a saving.
-- EP-B32 The bar is one wrapping row, not two fixed ones. The title and the controls are two flex
-  items that share a line wherever the list is wide enough to hold both and stack where it is not, so
-  a desktop list opens with a 67 px header and a phone still gets the two-row form, without either
-  width being written down. The title takes only the width it needs once there is a row to share, so
-  the spare goes to the controls rather than to the gap after the heading; below that it grows again,
-  which is what holds Create against the end edge of a phone.
+- EP-B32 The title group sits in the shell header at every width (EP-B07), so the list bar is a row
+  of controls with no heading of its own. On a desktop it is one line of search, sort, layout,
+  selection, Filter and Create; below 1024 px it is one row of search, Filter and a round Create at
+  the end edge, with the sort in the filter sheet and selecting left to the desktop.
 - EP-B31 A column that names one of the module's sorts orders by it from its own header, and one
   that does not stays plain text: a header that looks orderable and is not is worse than one that
   never offered. This is the thing a table is expected to do and the sort dropdown could never be —
@@ -234,8 +229,8 @@ Twelve top-level props is the ceiling (`07-coding-guidelines.md`); related optio
   server, and reading it that way keeps the first client render agreeing with the markup instead of
   correcting it a frame later. Clearing filters does not clear it — that returns the reader to the
   unfiltered list, it does not take away the presentation they chose to read it in.
-- EP-B28 `filters.mode` is one reading the whole list is taken under: a wide capsule segmented
-  control heading the list, between the toolbar and the figures it rewrites, whose first option is the default and carries the empty value. It keeps URL state exactly
+- EP-B28 `filters.mode` is one reading the whole list is taken under: a capsule segmented control
+  centred over the list (below 1024 px it fills the width in equal segments) heading the list, between the toolbar and the figures it rewrites, whose first option is the default and carries the empty value. It keeps URL state exactly
   as a facet does — same key, same query, same clearing — but it is not a filter and must not be
   presented as one. A filter shortens the list; a mode changes what every row of it says, and
   something that rewrites every figure on the page does not belong behind a button that reports how
@@ -278,8 +273,10 @@ Twelve top-level props is the ceiling (`07-coding-guidelines.md`); related optio
 - EP-B25 A detail panel is a record before it is a form. A property renders as a fact and takes
   its control's chrome on hover or focus-within, so the panel reads as something written rather
   than as a page of inputs; the control keeps its shape and hit area, so nothing moves when the
-  chrome returns. Where there is no pointer to hover with the chrome stays, because on touch it is
-  the only thing saying a value can be changed. A value nobody has set is muted, so the eye
+  chrome returns. A record panel reads the same on touch (the owner's choice, so a record looks
+  alike on a phone and a desktop), and a tap focuses the control and brings its chrome back; any
+  other quiet row on touch (an inline editor such as the objectives in Admin) keeps its chrome,
+  because there it is the only thing saying a value can be changed. A value nobody has set is muted, so the eye
   catches what the record says instead of filtering placeholders out of it. Create forms opt out:
   there the job is to fill the fields in and every one of them should look ready. Both row
   components carry the signal, `Property` for a label beside its value and `Field` for a label
@@ -385,10 +382,10 @@ EP-B20 Notes and Tasks both select the shared card presentation. Completion/sele
 
 EP-B20 card density is compact: a 56px minimum opening target, flexible title, grouped trailing metadata and an unbordered secondary line only when the container is narrow. EP-B22 sorting is directly accessible beside search; filters and selection remain shared. Empty Clear filters reserves an icon slot without showing inactive text.
 
-EP-B07 (ADR 0031) the panel bar carries one way out and the save state, never a position or previous and next: on a phone the record is the whole screen and was reached by drilling in, so the way out is Back at the start edge; from 1024 px the record is a sheet over the list, so the way out is a close button at the end edge. One per width, never both. Moving between records is the list's job. The bar draws no rule or backing while the record's heading is in view; once content scrolls under it a backing in the sheet's own tone appears behind the controls, so nothing reads through behind the title, with a soft shadow for its lower edge rather than a rule (Apple's scroll edge effect). The panel never scrolls sideways.
+EP-B07 (ADR 0031) the panel bar carries one way out and the save state, never a position or previous and next: the record is a sheet at every width (a slide-over from 1024 px, a sheet risen from the bottom below it), so the way out is one close button at the end edge (EP-B38). Moving between records is the list's job. The bar draws no rule or backing while the record's heading is in view; once content scrolls under it a backing in the sheet's own tone appears behind the controls, so nothing reads through behind the title, with a soft shadow for its lower edge rather than a rule (Apple's scroll edge effect). The panel never scrolls sideways.
 
 EP-B26 (ADR 0031) from 1024 px the slide-over is a floating sheet: inset 8 px from the window's top, bottom and end edges with 20 px corners and a full rim, in the same frosted glass as the page, rather than a square full-height panel flush with the window. Its width rule is unchanged.
 
-EP-B07 (ADR 0031) from 1024 px the list bar's title group (the rail toggle, the title, and the current view where the rail is hidden) renders into the shell header's leading slot, so the bar carries search, sort, layout, selection, Filter and Create only; below 1024 px it stays at the head of the bar as EP-B32 describes.
+EP-B07 (ADR 0031) from 1024 px the list bar's title group (the rail toggle, the title, and the current view where the rail is hidden) renders into the shell header's leading slot at every width, so the bar carries search, sort, layout, selection, Filter and Create only; below 1024 px the sort moves into the filter sheet and Create is a round button at the end of the one toolbar row.
 
 EP-B07 featured summaries are quiet readings without a border, the figure in the display face, the current one on the raised ground (ADR 0030). Optional `featuredOrder` controls summary order independently from the views rail. Five summaries use five columns in wide containers; narrow containers use two columns.

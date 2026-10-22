@@ -8,7 +8,12 @@ import { EntityNavigationProvider } from '../navigation';
 import { EntityPanel } from '../EntityPanel';
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 afterEach(cleanup);
-const item = { id: '01a0a000-0000-7000-8000-000000000003', revision: 1, deletedAt: null, deletedOpId: null };
+const item = {
+  id: '01a0a000-0000-7000-8000-000000000003',
+  revision: 1,
+  deletedAt: null,
+  deletedOpId: null,
+};
 function mount() {
   const close = vi.fn();
   render(
@@ -32,25 +37,19 @@ function mount() {
   );
   return close;
 }
-it('EP-B38 the record offers a labelled way back and a cross, and both leave it', async () => {
+it('EP-B38 the record offers one way out, a close cross, and it leaves the record', async () => {
   const close = mount();
-  const back = screen.getByRole('button', { name: en.common.back });
   const cross = screen.getByRole('button', { name: en.common.close });
-  // Distinct accessible names for one action, so nothing is announced twice under one label.
-  expect(back).not.toBe(cross);
-  // Leaving settles pending saves first (EP-B11), so both exits land a tick later rather than
-  // on the press.
-  back.click();
-  await waitFor(() => expect(close).toHaveBeenCalledTimes(1));
+  // One control, so nothing offers the same action twice under two names.
+  expect(screen.queryByRole('button', { name: en.common.back })).toBeNull();
+  // Leaving settles pending saves first (EP-B11), so the exit lands a tick later.
   cross.click();
-  await waitFor(() => expect(close).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(close).toHaveBeenCalledTimes(1));
 });
-it('EP-B38 the way back is at the start edge and the cross at the end', () => {
+it('EP-B38 the cross is at the end edge of the bar', () => {
   mount();
-  const bar = screen.getByRole('button', { name: en.common.back }).parentElement;
-  const controls = [...(bar?.querySelectorAll('button') ?? [])];
-  const back = controls.findIndex((el) => el.textContent?.includes(en.common.back));
-  const cross = controls.findIndex((el) => el.getAttribute('aria-label') === en.common.close);
+  const cross = screen.getByRole('button', { name: en.common.close });
+  const controls = [...(cross.parentElement?.querySelectorAll('button') ?? [])];
   // Document order is the logical order, which is what makes the RTL mirror free.
-  expect(back).toBeLessThan(cross);
+  expect(controls.at(-1)).toBe(cross);
 });

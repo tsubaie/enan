@@ -28,10 +28,12 @@ for (const locale of ['en', 'ar']) {
     await expect(dialog.getByRole('heading', { name: title, exact: true })).toBeVisible();
     await page.goto(`/tasks?view=all&committeeId=${committeeId}`);
     await expect(page.getByText(title, { exact: true })).toBeVisible();
-    // The task's card names its committee as one of its facts (outside the committee's own list).
-    await expect(
-      page.getByRole('listitem').filter({ hasText: title }).getByText(name, { exact: true }),
-    ).toBeVisible();
+    // The task's card names its committee as one of its facts (outside the committee's own list);
+    // below 1024 px the card leaves it to the record.
+    if ((page.viewportSize()?.width ?? 0) >= 1024)
+      await expect(
+        page.getByRole('listitem').filter({ hasText: title }).getByText(name, { exact: true }),
+      ).toBeVisible();
     await page.goto(`/committees?view=all&q=${encodeURIComponent(name)}`);
     await page.getByRole('button', { name: m.common.create, exact: true }).click();
     await page.getByLabel(m.committees.name, { exact: true }).fill(name);

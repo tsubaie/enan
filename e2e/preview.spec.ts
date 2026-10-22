@@ -27,10 +27,9 @@ for (const locale of ['en', 'ar'])
     await expect(page.getByLabel(m.people.organization, { exact: true })).toHaveValue(
       'Preview Foundation',
     );
-    // Beside the list the record closes with a cross; on a phone its way out is the labelled
-    // Back (EP-B38).
+    // The record closes with its cross at every width (EP-B38).
     await page
-      .getByRole('button', { name: new RegExp(`^(${m.common.close}|${m.common.back})$`, 'u') })
+      .getByRole('button', { name: new RegExp(`^${m.common.close}$`, 'u') })
       .first()
       .click();
     await page.getByRole('button', { name: m.common.create, exact: true }).click();
@@ -40,11 +39,10 @@ for (const locale of ['en', 'ar'])
     await expect(page.getByRole('heading', { name: m.people.duplicateTitle })).toBeVisible();
     await page.getByRole('button', { name: m.common.cancel, exact: true }).click();
     await expect(page.getByRole('dialog')).toBeHidden();
-    // The surface still open here differs by width: beside the list it is the create form, which
-    // closes with its own cross, while on a phone the created record is already showing and its
-    // way out is the labelled Back (EP-B38). Either name dismisses what is in front of the list.
+    // Whatever is in front of the list (the create form beside it, the created record on a phone)
+    // closes with its cross (EP-B38).
     await page
-      .getByRole('button', { name: new RegExp(`^(${m.common.close}|${m.common.back})$`, 'u') })
+      .getByRole('button', { name: new RegExp(`^${m.common.close}$`, 'u') })
       .first()
       .click();
     await (await findRow(page, m.people.searchList, name)).click();

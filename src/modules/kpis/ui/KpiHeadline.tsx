@@ -149,18 +149,30 @@ function PeriodToggle({
     group.current?.querySelectorAll('button')[next]?.focus();
   }
   return (
-    <div ref={group} role="group" aria-label={t('measuredAgainst')} className={segmentedTrack}>
+    // KPIS-B08 shows three periods. Below 1024 px they share the record's width in three equal
+    // segments: as one unbreakable line the capsule outgrew a phone and set the width of the whole
+    // record, so every block below it ran off the sheet's edge.
+    <div
+      ref={group}
+      role="group"
+      aria-label={t('measuredAgainst')}
+      className={cn(segmentedTrack, 'max-w-full max-lg:grid max-lg:w-full max-lg:grid-cols-3')}
+    >
       {periods.map((period, index) => (
         <Button
           key={`${period.year}-${period.period}`}
           variant="ghost"
           size="sm"
           aria-pressed={index === chosen}
-          className={cn(segmentedItem, 'min-h-0', index === chosen && segmentedItemOn)}
+          className={cn(
+            segmentedItem,
+            'min-h-0 max-lg:min-w-0 max-lg:px-1.5 max-lg:text-xs',
+            index === chosen && segmentedItemOn,
+          )}
           onClick={() => choose(index)}
           onKeyDown={(event) => steer(event, index)}
         >
-          {labels.period(period, frequency)}
+          <span className="truncate">{labels.period(period, frequency)}</span>
         </Button>
       ))}
     </div>

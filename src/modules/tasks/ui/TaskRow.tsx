@@ -52,18 +52,21 @@ function TaskFacts({ task, inCommittee }: { task: Task; inCommittee: boolean }) 
   return (
     <CardFacts>
       <TaskDue task={task} />
-      {status && <span className={cardFact}>{t(task.status)}</span>}
-      {committee && (
-        <CardFact icon={Users} title={committee} className="text-accent">
-          {committee}
-        </CardFact>
-      )}
-      {note && (
-        <CardFact icon={NotebookPen} title={note.title}>
-          {note.deletedAt ? t('noteTrashed') : note.title}
-        </CardFact>
-      )}
-      <TaskProgress task={task} />
+      {/* data-card-more: left to the record below the list's 32rem (tokens.css). */}
+      <span data-card-more className="contents">
+        {status && <span className={cardFact}>{t(task.status)}</span>}
+        {committee && (
+          <CardFact icon={Users} title={committee} className="text-accent">
+            {committee}
+          </CardFact>
+        )}
+        {note && (
+          <CardFact icon={NotebookPen} title={note.title}>
+            {note.deletedAt ? t('noteTrashed') : note.title}
+          </CardFact>
+        )}
+        <TaskProgress task={task} />
+      </span>
     </CardFacts>
   );
 }

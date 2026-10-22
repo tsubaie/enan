@@ -34,9 +34,11 @@ export function PersonRow({ person }: { person: Person }) {
           <CardFacts>
             <CardWorkload open={stats.openTasks} late={stats.lateTasks} />
             {stats.notes > 0 && (
-              <CardFact icon={NotebookPen} className="tabular-nums">
-                {p('cardNotes', { count: stats.notes })}
-              </CardFact>
+              <span data-card-more className="contents">
+                <CardFact icon={NotebookPen} className="tabular-nums">
+                  {p('cardNotes', { count: stats.notes })}
+                </CardFact>
+              </span>
             )}
           </CardFacts>
         )}
@@ -49,11 +51,13 @@ export function PersonTrail({ person }: { person: Person }) {
   const t = useTranslations('common');
   return (
     <span className="flex flex-wrap items-center justify-end gap-2">
-      {person.tags.slice(0, 2).map((tag) => (
-        <Chip key={tag} tone="tag">
-          <bdi>{tag}</bdi>
-        </Chip>
-      ))}
+      <span data-card-more className="contents">
+        {person.tags.slice(0, 2).map((tag) => (
+          <Chip key={tag} tone="tag">
+            <bdi>{tag}</bdi>
+          </Chip>
+        ))}
+      </span>
       <Chip>{t(person.kind)}</Chip>
     </span>
   );

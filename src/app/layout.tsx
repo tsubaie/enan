@@ -8,6 +8,7 @@ import { Locale } from '@/core/config/defaults';
 import { workspaceWallpaper } from '@/modules/settings';
 import { readerTheme } from '@/modules/account';
 import { accentProperties } from '@/core/config/wallpaper-accent';
+import { customFonts, fontsPath } from '@/core/files/fonts';
 import '@/ui/tokens.css';
 const latin = Inter({ subsets: ['latin'], variable: '--font-inter' });
 // ADR 0032: two faces carry the whole interface on every device: Noto Sans Arabic for every
@@ -33,6 +34,8 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   // can know, so they ride on <html> as custom properties that tokens.css applies per theme.
   const wallpaper = await workspaceWallpaper();
   const theme = await readerTheme();
+  // ADMIN-B51: the install's own Arabic faces, only when it supplies some.
+  const ownFonts = (await customFonts()).length > 0;
   const wallpaperStyle: Record<string, string> = {
     ...(wallpaper.accent ? accentProperties(wallpaper.accent) : {}),
     ...(wallpaper.image ? { '--wallpaper-image': `url('${wallpaper.image}')` } : {}),
@@ -48,6 +51,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       suppressHydrationWarning
     >
       <body>
+        {ownFonts && <link rel="stylesheet" href={`${fontsPath}/faces.css`} precedence="default" />}
         <NextIntlClientProvider>
           <Providers nonce={nonce} theme={theme}>
             <a

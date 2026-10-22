@@ -42,7 +42,7 @@
   --color-scrim: var(--scrim);
   --radius-lg: 0.625rem;
   --radius-xl: 0.875rem;
-  --font-sans: 'Inter', var(--font-arabic), sans-serif;
+  --font-sans: 'Inter', var(--font-arabic-custom,) var(--font-arabic), sans-serif;
   /* ADR 0030: the named steps the restyle added between Tailwind's own, so a size is a decision
      made once here rather than a number written into a component. `meta` is a property label,
      `nav` an Arabic navigation label (Arabic letterforms sit smaller on the line than Latin ones),
@@ -60,6 +60,9 @@
   --font-display: var(--display-stack);
 }
 :root {
+  /* One card height for every list below the list's 32rem (.entity-card-row): a one-line name
+     over one line of facts, with the trail beside them. */
+  --card-phone-height: 4.5rem;
   /* ADR 0030, the paper theme: a cool grey paper ground, a near-white sheet for surfaces, near-black
      ink, and moss as the marker -- the sage of the night theme taken down until it clears 4.5:1
      on the sheet, so the two themes share one marker hue at two depths. */
@@ -114,7 +117,8 @@
   --ease-rise: cubic-bezier(0.22, 0.61, 0.36, 1);
   --step-rise: 70ms;
   /* Latin first in LTR; the Arabic face leads in RTL (below), the way the text stack does. */
-  --display-stack: 'Inter', var(--font-arabic), sans-serif;
+  /* ADMIN-B51: an install's own Arabic faces, when it supplies them, stand in front of Noto. */
+  --display-stack: 'Inter', var(--font-arabic-display-custom,) var(--font-arabic), sans-serif;
   /* The language toggle's flags, in their official colours: the same in every theme, because a
      flag is a mark, not a surface. */
   --flag-uk-blue: #012169;
@@ -219,6 +223,10 @@
     min-height: 32px;
     height: 32px;
     font-size: var(--text-meta);
+  }
+  /* An icon button stays a circle at the step's height. */
+  .entity-toolbar button[data-slot='button'][data-size^='icon']:not(.bg-primary) {
+    width: 32px;
   }
   .entity-toolbar
     :is([data-slot='select-trigger'], button[data-slot='button']:not(.bg-primary))
@@ -517,6 +525,23 @@ html[data-wallpaper='sky'] {
   background: rgb(5 5 15 / 0.28);
   backdrop-filter: blur(18px);
 }
+/* A sheet (the filters, the phone's More) is the record panel's material: the same frosted glass
+   over the same blurred and lightly dimmed page (EP-B23), so every surface that rises over a list
+   reads as one family. */
+.dark [data-slot='dialog-content'][data-sheet] {
+  background-color: rgb(36 36 40 / 0.58);
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 35%), var(--frost-grain);
+  backdrop-filter: blur(64px) saturate(170%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.14),
+    0 30px 80px -20px rgb(0 0 0 / 0.7);
+  --tw-ring-color: rgb(255 255 255 / 0.12);
+}
+:has(> [data-slot='dialog-content'][data-sheet]) > [data-slot='dialog-overlay'] {
+  background: color-mix(in oklch, var(--color-scrim), transparent 65%);
+  backdrop-filter: blur(10px) saturate(120%);
+}
 /* No browser clear button in the field: Escape clears and closes, as Spotlight does. */
 .search-palette input[type='search']::-webkit-search-cancel-button {
   appearance: none;
@@ -646,7 +671,7 @@ main:has(.home-page)::-webkit-scrollbar {
     ) {
     backdrop-filter: none;
   }
-  .dark .entity-detail {
+  .dark :is(.entity-detail, [data-slot='dialog-content'][data-sheet]) {
     background: var(--elevated);
     background-image: none;
   }
@@ -676,10 +701,16 @@ main:has(.home-page)::-webkit-scrollbar {
        own, so the order is what keeps English in Inter). Inter is named on its own, without the
        Arial-based fallback face next/font pairs with it: that face covers Arabic and would catch
        every Arabic character before Noto. */
-    font-family: 'Inter', var(--font-arabic), sans-serif;
+    font-family:
+      'Inter',
+      var(--font-arabic-custom,) var(--font-arabic),
+      sans-serif;
   }
   html[dir='rtl'] body {
-    font-family: 'Inter', var(--font-arabic), sans-serif;
+    font-family:
+      'Inter',
+      var(--font-arabic-custom,) var(--font-arabic),
+      sans-serif;
   }
   button:not(:disabled),
   a {
@@ -794,6 +825,45 @@ main:has(.home-page)::-webkit-scrollbar {
   }
   [dir='rtl'] .entity-detail {
     --panel-slide: -100%;
+  }
+}
+/* Below 1024 px a record is a sheet risen from the bottom, the way iOS presents one: the page
+   stays in view above it, dimmed, and the sheet's top corners round into the screen's. It covers
+   the bottom bar: while a record is open, the record is the task. */
+@media (max-width: 1023.98px) {
+  .entity-detail {
+    position: fixed;
+    inset-inline: 0;
+    inset-block: max(3.5rem, calc(env(safe-area-inset-top) + 2.75rem)) 0;
+    z-index: 40;
+    border-top-width: 1px;
+    border-radius: 28px 28px 0 0;
+    padding-bottom: env(safe-area-inset-bottom);
+    box-shadow: var(--shadow-slideover);
+    animation: rise-sheet 340ms var(--ease-rise);
+    transition: translate 200ms var(--ease-rise);
+  }
+  /* The desktop record's backdrop, value for value (EP-B23): it blurs and dims the page, so the
+     sheet's glass reads as the same material it is beside the list on a desktop. */
+  .entity-backdrop {
+    background: color-mix(in oklch, var(--color-scrim), transparent 65%);
+    backdrop-filter: blur(10px) saturate(120%);
+    animation: backdrop-in 220ms ease-out both;
+  }
+  /* The bar is drawn by the shell, above the page the sheet lives in, so it would float over the
+     sheet's foot; while a record is open there is nothing to navigate to without closing it. */
+  body:has(.entity-page-open) .mobile-navigation {
+    display: none;
+  }
+}
+@keyframes rise-sheet {
+  from {
+    translate: 0 100%;
+  }
+}
+@keyframes backdrop-in {
+  from {
+    opacity: 0;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1099,9 +1169,105 @@ main:has(.home-page)::-webkit-scrollbar {
 .entity-grid > *:nth-child(n + 7) {
   animation-delay: calc(var(--step-rise) * 3.2);
 }
+/* A tile alone on its row spans it (EntityList marks it): a group of one, such as a KPI objective
+   with a single measure, at every column count; the last of an odd group where there are two. */
+@container (width >= 42rem) {
+  .entity-grid > [data-group-tail='alone'] {
+    grid-column: 1 / -1;
+  }
+}
+@container (42rem <= width < 64rem) {
+  .entity-grid > [data-group-tail='odd'] {
+    grid-column: 1 / -1;
+  }
+}
 /* The strip above it is one block and rises as one, ahead of the tiles it summarises. */
 [data-entity-stats] {
   animation: rise 300ms var(--ease-rise) backwards;
+}
+/* Below the list's 32rem a card is one compact shape on every list: the name on one line, under it
+   the facts that decide what to do (a task's due date, a note's date and type, someone's open and
+   late tasks), and the trail at the end of the same row (a task's owner, a note's type). Anything a
+   module marks `data-card-more`, and the excerpt, is the record's to show; the sheet carries it. */
+@container (width < 32rem) {
+  .entity-card-row {
+    flex-wrap: nowrap;
+    align-items: center;
+    height: var(--card-phone-height);
+  }
+  .entity-card-row .entity-card-open {
+    flex-basis: 0;
+    padding-block: 0.75rem;
+  }
+  .entity-card-row [data-card-trail] {
+    width: auto;
+    max-width: 45%;
+    flex-shrink: 0;
+    margin: 0;
+    margin-inline-end: 0.875rem;
+  }
+  .entity-card-row [data-card-title] {
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+  }
+  .entity-card-row [data-card-excerpt],
+  .entity-card-row [data-card-more] {
+    display: none;
+  }
+  .entity-card-row [data-card-facts] {
+    flex-wrap: nowrap;
+    overflow: hidden;
+  }
+  /* On one line the facts keep their own widths and only the last gives way, with an ellipsis,
+     so none is drawn over its neighbour. */
+  .entity-card-row [data-card-facts] > * {
+    flex-shrink: 0;
+  }
+  .entity-card-row [data-card-facts] > :last-child {
+    flex-shrink: 1;
+  }
+}
+/* On a touch screen below 1024 px the list's toolbar draws its controls at 36 px, the way iOS draws
+   a search field and the glyphs of a toolbar, so the row sits lighter over the cards. Every button
+   keeps a 44 px target: a transparent margin of 4 px around it takes the touch (Apple's minimum),
+   and the 8 px between controls keeps two targets from overlapping. With a pointer the bar is
+   already the 32 px compact step above. */
+@media (max-width: 1023.98px) and (pointer: coarse) {
+  .entity-toolbar :is([data-slot='select-trigger'], button[data-slot='button']) {
+    min-height: 2.25rem;
+    height: 2.25rem;
+  }
+  /* The search field's 1 px border sits outside its input, so the input gives those 2 px back. */
+  .entity-toolbar input {
+    min-height: calc(2.25rem - 2px);
+    height: calc(2.25rem - 2px);
+  }
+  .entity-toolbar button[data-slot='button'] {
+    position: relative;
+    min-width: 2.25rem;
+  }
+  .entity-toolbar button[data-slot='button'][data-size^='icon'] {
+    width: 2.25rem;
+  }
+  .entity-toolbar button[data-slot='button']::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
+  }
+}
+/* Narrow, the strip scrolls sideways; its ends fade so a reading cut by the edge reads as "more
+   this way" rather than as clipped. The fade is shorter than the strip's padding plus a gap, so a
+   reading at rest is never dimmed. */
+@container (width < 32rem) {
+  [data-entity-stats] {
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      #000 1.25rem,
+      #000 calc(100% - 1.25rem),
+      transparent
+    );
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .home-headline,
@@ -1156,8 +1322,10 @@ main:has(.home-page)::-webkit-scrollbar {
 /* EP-B25: a record is read far more often than it is edited, so the panel reads as a record and
    becomes a form on contact. A property's control keeps its shape and its hit area and drops only
    its chrome, so nothing moves when it comes back; the row restores on hover and on focus-within,
-   which covers the keyboard. Where there is no pointer to hover with, the chrome stays: on touch
-   an uncoloured control would be the only thing telling a reader the value can be changed. */
+   which covers the keyboard. At rest the chrome is dropped wherever there is a pointer to hover
+   with, and in a record panel on touch as well, so a record looks alike on a phone and a desktop
+   (the owner's choice) and a tap brings the chrome back. Elsewhere on touch (an inline editor such
+   as the objectives in Admin) the chrome stays, the only sign that a value can be changed. */
 @media (hover: hover) {
   .property-quiet
     :is(
@@ -1170,55 +1338,83 @@ main:has(.home-page)::-webkit-scrollbar {
     border-color: transparent;
     background: transparent;
   }
-  .property-quiet:hover
-    :is(
-      [data-slot='select-trigger'],
-      [data-slot='popover-trigger'],
-      [data-slot='input'],
-      [data-slot='textarea'],
-      [data-slot='native-select']
-    ),
-  .property-quiet:focus-within
-    :is(
-      [data-slot='select-trigger'],
-      [data-slot='popover-trigger'],
-      [data-slot='input'],
-      [data-slot='textarea'],
-      [data-slot='native-select']
-    ) {
-    border-color: var(--color-border);
-  }
-  /* A picker with nothing set still says so in words ("No date", "Unassigned"), so it can lose its
-     chrome and stay readable. An empty text field has no words at all, and taking its outline away
-     would leave a label standing over a void. It keeps the outline, because that outline is the
-     affordance to add the value. */
-  .property-quiet.property-empty :is([data-slot='input'], [data-slot='textarea']) {
-    border-color: var(--color-border);
-  }
   /* The chevron is an affordance, not information: it belongs to the hovered state. */
   .property-quiet [data-slot='select-trigger'] > svg:last-child {
     opacity: 0;
-    transition: opacity 120ms ease;
   }
-  .property-quiet:hover [data-slot='select-trigger'] > svg:last-child,
-  .property-quiet:focus-within [data-slot='select-trigger'] > svg:last-child {
-    opacity: 1;
+  /* On a property sheet an empty text value is a row like any other: no outline until it is
+     pointed at or focused, and a faint "Add…" where the value would be, saying what a press does
+     (docs/design-system.md § Records). */
+  .property-sheet .property-quiet.property-empty:not(:hover, :focus-within) [data-slot='input'] {
+    border-color: transparent;
+    background: transparent;
   }
+}
+/* The same three at rest in a record panel, on any screen. */
+.entity-detail
+  .property-quiet
+  :is(
+    [data-slot='select-trigger'],
+    [data-slot='popover-trigger'],
+    [data-slot='input'],
+    [data-slot='textarea'],
+    [data-slot='native-select']
+  ):not([data-property-action]),
+.entity-detail
+  .property-sheet
+  .property-quiet.property-empty:not(:hover, :focus-within)
+  [data-slot='input'] {
+  border-color: transparent;
+  background: transparent;
+}
+.entity-detail .property-quiet [data-slot='select-trigger'] > svg:last-child {
+  opacity: 0;
+}
+.property-quiet [data-slot='select-trigger'] > svg:last-child {
+  transition: opacity 120ms ease;
+}
+/* Pointed at or focused, the chrome comes back, on every screen. The leading `:is()` lifts these to
+   the specificity of the record panel's rule above, which they follow, so they win there too. */
+:is(.entity-detail, :root)
+  .property-quiet:hover
+  :is(
+    [data-slot='select-trigger'],
+    [data-slot='popover-trigger'],
+    [data-slot='input'],
+    [data-slot='textarea'],
+    [data-slot='native-select']
+  ):not([data-property-action]),
+:is(.entity-detail, :root)
+  .property-quiet:focus-within
+  :is(
+    [data-slot='select-trigger'],
+    [data-slot='popover-trigger'],
+    [data-slot='input'],
+    [data-slot='textarea'],
+    [data-slot='native-select']
+  ):not([data-property-action]) {
+  border-color: var(--color-border);
+}
+:is(.entity-detail, :root) .property-quiet:hover [data-slot='select-trigger'] > svg:last-child,
+:is(.entity-detail, :root)
+  .property-quiet:focus-within
+  [data-slot='select-trigger']
+  > svg:last-child {
+  opacity: 1;
+}
+/* A picker with nothing set still says so in words ("No date", "Unassigned"), so it can lose its
+   chrome and stay readable. An empty text field has no words at all, and taking its outline away
+   would leave a label standing over a void. It keeps the outline, because that outline is the
+   affordance to add the value. */
+.property-quiet.property-empty :is([data-slot='input'], [data-slot='textarea']) {
+  border-color: var(--color-border);
 }
 /* A date reads as a fact, so at rest it is as wide as the date. The selects keep their column so
    the values below them stay aligned. */
 .property-quiet [data-slot='popover-trigger']:not([data-property-action]) {
   width: auto;
 }
-/* On a property sheet an empty text value is a row like any other: no outline until it is pointed
-   at or focused, and a faint "Add…" where the value would be, saying what a press does
-   (docs/design-system.md § Records). */
-@media (hover: hover) {
-  .property-sheet .property-quiet.property-empty:not(:hover, :focus-within) [data-slot='input'] {
-    border-color: transparent;
-    background: transparent;
-  }
-}
+
 /* Values line up on the sheet's start edge whatever script they are typed in: an email or a Latin
    organisation name in an Arabic record sits beside its label, not across the row from it. The
    input keeps its own direction, so the text still reads correctly. */
@@ -1411,6 +1607,14 @@ main:has(.home-page)::-webkit-scrollbar {
   gap: 2px;
   padding-inline: 4px;
   font-size: 12px;
+}
+/* Under 360 px a fifth of the bar cannot hold a 12 px Arabic label ("الملاحظات"), so the labels
+   take the 11 px of an iOS tab bar rather than an ellipsis (ADMIN-B19). */
+@media (max-width: 359.98px) {
+  .mobile-navigation > a,
+  .mobile-navigation > button {
+    font-size: 11px;
+  }
 }
 
 /* Undo toasts. The toast is the receipt for something that left the screen, so it is centred under

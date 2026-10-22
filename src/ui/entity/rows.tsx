@@ -33,6 +33,24 @@ export function groupAt<T extends Entity, P extends object, C>(
   };
 }
 
+// A tile that leaves a hole on its row: the only tile in its group, or a group's last tile in an
+// odd place. tokens.css spans it across the row at the column counts where the hole appears.
+export function groupTail<T extends Entity, P extends object, C>(
+  { config, controller: c }: Surface<T, P, C>,
+  rows: Rendered<T>[],
+  index: number,
+) {
+  const key = (at: number) => {
+    const item = rows[at]?.item;
+    return item && !c.state.sort ? config.group?.(item) : null;
+  };
+  if (index < rows.length - 1 && key(index + 1) === key(index)) return undefined;
+  let start = index;
+  while (start > 0 && key(start - 1) === key(index)) start -= 1;
+  if (start === index) return 'alone';
+  return (index - start) % 2 === 0 ? 'odd' : undefined;
+}
+
 // How many cells stand before the first column of a table: the selection box and the row action,
 // each only while it is showing.
 export function leadingCells<T extends Entity, P extends object, C>({

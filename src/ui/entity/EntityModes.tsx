@@ -38,11 +38,13 @@ function EntityLayout<T extends Entity, P extends object, C>({
         <Button
           key={option.id}
           variant="ghost"
-          size="sm"
+          // An icon button is a circle at every size (docs/design-system.md § Shape): 28 px with a
+          // pointer, 44 px on touch, so the selected one never stretches into an oval.
+          size="icon-sm"
           aria-label={option.label}
           aria-pressed={option.id === c.state.layout}
           className={cn(
-            'h-7 px-2 text-text-muted dark:hover:bg-white/8',
+            'text-text-muted focus-visible:ring-2 focus-visible:ring-inset dark:hover:bg-white/8',
             option.id === c.state.layout &&
               'bg-surface-raised text-text dark:bg-white/15 dark:hover:bg-white/15',
           )}
@@ -70,11 +72,16 @@ export function EntityModeHeader<T extends Entity, P extends object, C>({
   if (!mode) return null;
   const current = c.facets[mode.key] ?? '';
   return (
-    <div className="px-3 pt-1 pb-1">
+    // Centred over the list: it rewrites every figure below it, so it belongs to the whole column.
+    <div className="flex justify-center px-3 pt-1 pb-1">
       <div
         role="group"
         aria-label={mode.label}
-        className={cn(segmentedTrack, 'w-fit max-w-full')}
+        // Below 1024 px it spans the column like the cards under it, every option an equal share.
+        className={cn(
+          segmentedTrack,
+          'w-fit max-w-full max-lg:grid max-lg:w-full max-lg:auto-cols-fr max-lg:grid-flow-col',
+        )}
       >
         {mode.options.map((option) => (
           <Button
@@ -83,7 +90,7 @@ export function EntityModeHeader<T extends Entity, P extends object, C>({
             aria-pressed={option.id === current}
             className={cn(
               segmentedItem,
-              'min-h-0',
+              'min-h-0 max-lg:min-w-0 max-lg:px-1.5',
               option.id === current && segmentedItemOn,
             )}
             onClick={() => c.navigate({ [mode.key]: option.id, id: null, sel: null }, true)}

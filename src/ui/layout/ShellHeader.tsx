@@ -2,7 +2,10 @@
 import { Suspense, lazy, useEffect, useSyncExternalStore } from 'react';
 import { useTranslations } from 'next-intl';
 import { Search } from 'lucide-react';
+import Link from 'next/link';
 import { Button } from '@/ui/primitives/button';
+import { routes } from '@/core/routes';
+import { Logo } from './Logo';
 import { closeSearchPalette, openSearchPalette, useSearchPalette } from './search-palette-store';
 // The palette is a whole dialog, a query and a result list, and it is loaded by every route in the
 // product for a control most visits never open. It arrives when it is first opened instead
@@ -25,10 +28,11 @@ export function ShellHeader({ user }: { user: { name: string; email: string; rol
   useSearchShortcut(openSearchPalette);
   return (
     <header className="flex min-h-14 shrink-0 items-center gap-2 border-b px-4 lg:px-6">
+      <PhoneMark />
       {/* The page's title, at the header's leading edge from 1024 px, the way a macOS window titles
           its toolbar. A list page renders its title group here (EntityTitle); a page without one
           leaves it empty. */}
-      <div id={HEADER_TITLE_SLOT} className="hidden min-w-0 items-center gap-2 lg:flex" />
+      <div id={HEADER_TITLE_SLOT} className="flex min-w-0 flex-1 items-center gap-2" />
       {/* SEARCH-B08: a button, not an input. The palette owns the text, so there is one place it is
           typed and no state to hand over when it opens.
           SEARCH-B11: and it looks like one. It used to be drawn as a bordered field stretched
@@ -53,7 +57,10 @@ export function ShellHeader({ user }: { user: { name: string; email: string; rol
             {t(apple ? 'searchShortcutMac' : 'searchShortcut')}
           </kbd>
         </Button>
-        <LanguageToggle />
+        {/* On a phone the language is chosen in the bar's More sheet (MobileNav), not up here. */}
+        <div className="hidden lg:block">
+          <LanguageToggle />
+        </div>
         <NotificationBell />
         <AccountMenu user={user} />
       </div>
@@ -96,4 +103,18 @@ const subscribe = () => () => {};
 const isApple = () => /mac|iphone|ipad/i.test(navigator.userAgent);
 function useApplePlatform() {
   return useSyncExternalStore(subscribe, isApple, () => false);
+}
+// Below 1024 px the side menu, and the mark it carries, are hidden; the mark heads the bar instead,
+// in the same accent tile (ADR 0030), and leads home as it does there.
+function PhoneMark() {
+  const t = useTranslations('common');
+  return (
+    <Link
+      href={routes.home()}
+      aria-label={t('home')}
+      className="me-1 inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent ring-1 ring-accent/25 ring-inset lg:hidden"
+    >
+      <Logo className="size-5" />
+    </Link>
+  );
 }

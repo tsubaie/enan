@@ -95,7 +95,11 @@ function PaletteField({ query, onQuery }: { query: string; onQuery: (value: stri
   return (
     <>
       <div className="flex items-center gap-3 px-5">
-        <Search aria-hidden={true} className="size-5 shrink-0 text-text-muted" strokeWidth={2} />
+        <Search
+          aria-hidden={true}
+          className="size-4 shrink-0 text-text-muted lg:size-5"
+          strokeWidth={2}
+        />
         <Input
           autoFocus
           type="search"
@@ -103,7 +107,7 @@ function PaletteField({ query, onQuery }: { query: string; onQuery: (value: stri
           spellCheck={false}
           aria-label={t('search')}
           placeholder={t('searchPlaceholder')}
-          className="h-14 border-0 bg-transparent px-0 text-xl font-medium focus-visible:ring-0 dark:bg-transparent md:text-xl"
+          className="h-12 border-0 bg-transparent px-0 text-base font-light focus-visible:ring-0 dark:bg-transparent lg:h-14 lg:text-xl lg:font-medium"
           value={query}
           onChange={(event) => onQuery(event.target.value)}
         />

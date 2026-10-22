@@ -9,6 +9,7 @@ export const defaults = {
   appUrl: 'http://localhost:3000',
   filesDir: '/var/lib/enan/files',
   backupDir: '/var/lib/enan/backups',
+  fontsDir: '/var/lib/enan/fonts',
   cookieName: 'eos_session',
   migrationLock: 7231,
 };

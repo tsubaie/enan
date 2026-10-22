@@ -71,7 +71,7 @@ for (const locale of ['en', 'ar']) {
       );
       expect(owners.map((owner) => owner.id)).toEqual([personId]);
       await page
-        .getByRole('button', { name: new RegExp(`^(${m.common.close}|${m.common.back})$`, 'u') })
+        .getByRole('button', { name: new RegExp(`^${m.common.close}$`, 'u') })
         .first()
         .click();
       await expect(page).not.toHaveURL(/id=/);

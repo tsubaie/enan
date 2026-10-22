@@ -166,7 +166,7 @@ const createByApi = (page: Page, name: string, unit: string) =>
     },
     { name, unit },
   );
-test('KPIS-B26 EP-B28 the period toggle is a compact group at the start edge and switches the reading', async ({
+test('KPIS-B26 EP-B28 the period toggle is a compact group centred over the list and switches the reading', async ({
   page,
 }) => {
   await loginAs(page, 'en');
@@ -183,7 +183,7 @@ test('KPIS-B26 EP-B28 the period toggle is a compact group at the start edge and
     'aria-pressed',
     'true',
   );
-  // Sized to its options rather than stretched across the list, and set at the start edge.
+  // Sized to its options from 1024 px (equal shares of the width below it), and centred.
   const box = await group.boundingBox();
   const holder = await group.locator('xpath=..').boundingBox();
   const segments = await group
@@ -194,7 +194,8 @@ test('KPIS-B26 EP-B28 the period toggle is a compact group at the start edge and
   expect(box && holder).toBeTruthy();
   // The track hugs its three segments (a few pixels of padding and border), however wide the list.
   expect(box!.width).toBeLessThanOrEqual(segments + 12);
-  expect(box!.x - holder!.x).toBeLessThan(24);
+  const centre = (rect: { x: number; width: number }) => rect.x + rect.width / 2;
+  expect(Math.abs(centre(box!) - centre(holder!))).toBeLessThan(2);
   await group.getByRole('button', { name: en.kpis.comparePrevious }).click();
   await expect(page).toHaveURL(/period=previous/u);
   await expect(group.getByRole('button', { name: en.kpis.comparePrevious })).toHaveAttribute(

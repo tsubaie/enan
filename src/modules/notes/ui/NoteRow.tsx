@@ -26,14 +26,20 @@ export function NoteTrail({ note, inCommittee = false }: { note: Note; inCommitt
   const tasks = note.openTaskCount + note.doneTaskCount;
   return (
     <span className="flex flex-wrap items-center justify-end gap-2 text-xs text-text-muted @lg:gap-3">
-      {note.committee && !inCommittee && <CommitteeChip committee={note.committee} />}
+      {note.committee && !inCommittee && (
+        <span data-card-more className="contents">
+          <CommitteeChip committee={note.committee} />
+        </span>
+      )}
       {note.type && <Chip>{typeLabel(note.type)}</Chip>}
-      {note.archivedAt && <Chip tone="warning">{t('archivedChip')}</Chip>}
-      <CardProgress
-        done={note.doneTaskCount}
-        total={tasks}
-        label={t('taskCounts', { open: note.openTaskCount, done: note.doneTaskCount })}
-      />
+      <span data-card-more className="contents">
+        {note.archivedAt && <Chip tone="warning">{t('archivedChip')}</Chip>}
+        <CardProgress
+          done={note.doneTaskCount}
+          total={tasks}
+          label={t('taskCounts', { open: note.openTaskCount, done: note.doneTaskCount })}
+        />
+      </span>
       <time
         dateTime={note.noteDate}
         title={date.absolute}

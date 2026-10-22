@@ -57,7 +57,7 @@ function CommitteeStats({ committee }: { committee: Committee }) {
       <CardProgress done={committee.stats.completed} total={total}
         label={t('taskProgress', { done: committee.stats.completed, total })} />
     </span>
-    {committee.lastNoteDate && <span className="mt-auto text-xs text-text-muted">
+    {committee.lastNoteDate && <span data-card-more className="mt-auto text-xs text-text-muted">
       <CardFact icon={NotebookPen} className="tabular-nums">{t('lastNote', { date: date(committee.lastNoteDate) })}</CardFact>
     </span>}
   </span>;

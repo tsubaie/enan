@@ -62,6 +62,11 @@ test('TASKS-B02 TASKS-B08 EP-B20 task rows retain an independent completion cont
   // that had not drawn one yet, and the strip was then expected while it was still standing aside
   // for a rail the test had not collapsed.
   await expect(page.locator('.entity-toolbar:visible')).toBeVisible();
+  // Below 1024 px there is no strip (EP-B40): the view menu in the header carries the views.
+  if ((page.viewportSize()?.width ?? 0) < 1024) {
+    await expect(summaries).toBeHidden();
+    return;
+  }
   const railed = await page.getByRole('button', { name: en.common.collapseViews }).isVisible();
   if (railed) {
     await expect(summaries).toBeHidden();
@@ -168,7 +173,7 @@ for (const locale of ['en', 'ar'])
       path: `docs/screenshots/tasks-detail-${locale}-mobile.png`,
       fullPage: true,
     });
-    await page.getByRole('button', { name: m.common.back, exact: true }).click();
+    await page.getByRole('button', { name: m.common.close, exact: true }).click();
     await expect(page.locator(`[data-row-id="${id}"]`)).toBeVisible();
     await page.screenshot({
       path: `docs/screenshots/tasks-list-${locale}-mobile.png`,
@@ -186,29 +191,36 @@ for (const locale of ['en', 'ar'])
       fullPage: true,
     });
   });
-test('TASKS-A05 TASKS-B09 group selected tasks through framework selection', async ({ page }) => {
-  await loginAs(page, 'en');
-  const prefix = `Group ${crypto.randomUUID()}`;
-  const children = [];
-  for (const suffix of ['One', 'Two', 'Three'])
-    children.push((await api(page, '', 'POST', { title: `${prefix} ${suffix}` })).body.data);
-  await page.goto(`/tasks?view=all&q=${encodeURIComponent(prefix)}`);
-  await page.getByRole('button', { name: en.common.select, exact: true }).click();
-  for (const child of children)
-    await page.getByRole('checkbox', { name: `Select ${child.title}`, exact: true }).click();
-  await page.getByRole('button', { name: en.tasks.group, exact: true }).click();
-  await page
-    .getByRole('dialog')
-    .getByLabel(en.tasks.title, { exact: true })
-    .fill(`${prefix} Parent`);
-  await page.getByRole('dialog').getByRole('button', { name: en.tasks.group, exact: true }).click();
-  await expect(page.getByRole('dialog')).toBeHidden();
-  await expect(page.locator('[data-row-id]')).toHaveCount(1);
-  await page.locator('[data-row-id]').click();
-  await expect(
-    page.locator('aside.entity-detail').getByLabel(en.tasks.subtaskTitle, { exact: true }),
-  ).toHaveCount(4);
-});
+test(
+  'TASKS-A05 TASKS-B09 group selected tasks through framework selection',
+  { tag: '@desktop' },
+  async ({ page }) => {
+    await loginAs(page, 'en');
+    const prefix = `Group ${crypto.randomUUID()}`;
+    const children = [];
+    for (const suffix of ['One', 'Two', 'Three'])
+      children.push((await api(page, '', 'POST', { title: `${prefix} ${suffix}` })).body.data);
+    await page.goto(`/tasks?view=all&q=${encodeURIComponent(prefix)}`);
+    await page.getByRole('button', { name: en.common.select, exact: true }).click();
+    for (const child of children)
+      await page.getByRole('checkbox', { name: `Select ${child.title}`, exact: true }).click();
+    await page.getByRole('button', { name: en.tasks.group, exact: true }).click();
+    await page
+      .getByRole('dialog')
+      .getByLabel(en.tasks.title, { exact: true })
+      .fill(`${prefix} Parent`);
+    await page
+      .getByRole('dialog')
+      .getByRole('button', { name: en.tasks.group, exact: true })
+      .click();
+    await expect(page.getByRole('dialog')).toBeHidden();
+    await expect(page.locator('[data-row-id]')).toHaveCount(1);
+    await page.locator('[data-row-id]').click();
+    await expect(
+      page.locator('aside.entity-detail').getByLabel(en.tasks.subtaskTitle, { exact: true }),
+    ).toHaveCount(4);
+  },
+);
 test('TASKS-A09 EP-B08 stale editor offers reload and reapply without resetting other fields', async ({
   page,
 }) => {
@@ -342,13 +354,13 @@ for (const locale of ['en', 'ar']) {
     await page.keyboard.press('Escape');
     await expect(page).not.toHaveURL(/sel=/);
     await row.click();
-    await page.getByRole('button', { name: m.common.back, exact: true }).click();
+    await page.getByRole('button', { name: m.common.close, exact: true }).click();
     await expect(row).toBeFocused();
     await page.goto(`/tasks?view=all&priority=urgent&id=${task.id}`);
     await expect(page.getByText(m.common.outside, { exact: true })).toBeVisible();
     await page.getByRole('button', { name: m.common.showAll }).click();
     await expect(page).toHaveURL(new RegExp(`view=all&id=${task.id}`));
-    await page.getByRole('button', { name: m.common.back, exact: true }).click();
+    await page.getByRole('button', { name: m.common.close, exact: true }).click();
     await page.getByRole('button', { name: m.common.filter, exact: true }).click();
     await page.getByRole('dialog').getByLabel(m.tasks.priority, { exact: true }).click();
     await page.getByRole('option', { name: m.tasks.urgent, exact: true }).click();
