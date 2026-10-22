@@ -5,6 +5,7 @@ import { migrateDatabase } from '@/core/db/migrate';
 import { insertUser, lockWorkspace, recordLogin } from '@/core/db/auth-repo';
 import { id } from '@/core/db/ids';
 import { env } from '@/core/config/env';
+import { getSetting, writeSetting } from '@/core/db/settings-repo';
 // The recovery route exists only when RECOVERY_TOKEN is configured; the suite reads the value the
 // test environment was given rather than setting one, because env.ts owns environment access.
 const recoveryToken = env().RECOVERY_TOKEN ?? '';
@@ -91,4 +92,15 @@ it('ADMIN-B22 recovery attempts are throttled by client address and stay single-
   });
   await expect(attempt(recoveryToken, '198.51.100.4')).resolves.toBeUndefined();
   await expect(attempt(recoveryToken, '198.51.100.4')).rejects.toMatchObject({ code: 'conflict' });
+});
+
+it('ADMIN-B22 ADMIN-B64 a recovery turns password sign-in back on, so the new password is usable', async () => {
+  const admin = await addUser('admin@example.test');
+  await writeSetting(db(), 'auth.sign_in_methods', ['code'], admin.id);
+  await recover(
+    db(),
+    { email: admin.email, password: 'a-brand-new-password-1', token: recoveryToken },
+    '198.51.100.4',
+  );
+  expect(await getSetting(db(), 'auth.sign_in_methods')).toEqual(['code', 'password']);
 });

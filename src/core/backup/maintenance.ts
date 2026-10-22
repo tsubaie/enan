@@ -31,9 +31,14 @@ export async function maintenanceFile(enabled: boolean) {
 // ADMIN-B31: one backup or restore at a time, across processes: the restore is a command of its
 // own while backups run in the server. The lock file names its holder's pid; one left by a process
 // that has died, or by this process before it restarted (pid 1 again in a container), is taken over.
-let holding = false;
+// Whether this process holds it is kept on globalThis: every server chunk carries its own copy of
+// this module (src/core/db/client.ts), and a flag per chunk let one chunk take over another's lock.
+declare global {
+  var enanBackupLockHeld: boolean | undefined;
+}
 function alive(pid: number) {
-  if (!Number.isInteger(pid) || pid <= 0 || (pid === process.pid && !holding)) return false;
+  if (!Number.isInteger(pid) || pid <= 0 || (pid === process.pid && !globalThis.enanBackupLockHeld))
+    return false;
   try {
     process.kill(pid, 0);
     return true;
@@ -59,19 +64,19 @@ async function claim(file: string, retry = true): Promise<boolean> {
 export async function releaseStaleLock() {
   const file = join(env().BACKUP_DIR, '.lock');
   const holder = await readFile(file, 'utf8').catch(() => '');
-  if (!holding && Number(holder) === process.pid) await rm(file, { force: true });
+  if (!globalThis.enanBackupLockHeld && Number(holder) === process.pid) await rm(file, { force: true });
 }
 export async function withBackupLock<T>(
   work: () => Promise<T>,
 ): Promise<{ acquired: true; value: T } | { acquired: false }> {
   await mkdir(env().BACKUP_DIR, { recursive: true });
   const file = join(env().BACKUP_DIR, '.lock');
-  if (holding || !(await claim(file))) return { acquired: false };
-  holding = true;
+  if (globalThis.enanBackupLockHeld || !(await claim(file))) return { acquired: false };
+  globalThis.enanBackupLockHeld = true;
   try {
     return { acquired: true, value: await work() };
   } finally {
-    holding = false;
+    globalThis.enanBackupLockHeld = false;
     await rm(file, { force: true });
   }
 }

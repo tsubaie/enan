@@ -139,7 +139,11 @@ async function generationAt(path: string) {
     client.close();
   }
 }
-let verified: string | undefined;
+// Once per process (every server chunk has its own copy of this module): a value per chunk made
+// each chunk close the client once after a restore, a later one closing the freshly reopened pool.
+declare global {
+  var enanVerifiedDatabase: string | undefined;
+}
 /**
  * ADMIN-B38: the restore command runs in its own process, so the application's client keeps the
  * old file open after the swap until it is told. This check, run with every maintenance-mode
@@ -151,11 +155,14 @@ let verified: string | undefined;
 export async function reconcileDatabaseClient() {
   const live = databaseFile();
   const identity = await identityOf(live);
-  if (identity === undefined || identity === verified) return;
-  if (verified === undefined && (await generationAt(live)) === (await generationOf(pool()))) {
-    verified = identity;
+  if (identity === undefined || identity === globalThis.enanVerifiedDatabase) return;
+  if (
+    globalThis.enanVerifiedDatabase === undefined &&
+    (await generationAt(live)) === (await generationOf(pool()))
+  ) {
+    globalThis.enanVerifiedDatabase = identity;
     return;
   }
   closeDatabase();
-  verified = identity;
+  globalThis.enanVerifiedDatabase = identity;
 }

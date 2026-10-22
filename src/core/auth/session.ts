@@ -1,7 +1,7 @@
 import 'server-only';
 import { cookies, headers } from 'next/headers';
 import { Locale } from '@/core/config/defaults';
-import { type Database } from '@/core/db/client';
+import { withWriteLock, type Database } from '@/core/db/client';
 import { auth } from './better-auth';
 import { User } from './validation';
 export async function setLocaleCookie(locale: string) {
@@ -18,10 +18,10 @@ export async function setLocaleCookie(locale: string) {
  * since been deactivated or deleted counts for nothing.
  */
 async function session(slide: boolean) {
-  const found = await (await auth()).api.getSession({
-    headers: await headers(),
-    query: { disableRefresh: !slide },
-  });
+  const read = async () =>
+    (await auth()).api.getSession({ headers: await headers(), query: { disableRefresh: !slide } });
+  // A slide may write the session; it runs before the request's own transaction, in the queue.
+  const found = await (slide ? withWriteLock(read) : read());
   if (!found || !found.user.isActive || found.user.deletedAt) return null;
   return { id: found.session.id, user: User.parse(found.user) };
 }

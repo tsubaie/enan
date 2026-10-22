@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
+import { createHash } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { closeDatabase, db } from '@/core/db/client';
 import { clearDatabase } from '@/core/db/reset';
@@ -6,7 +7,7 @@ import { migrateDatabase } from '@/core/db/migrate';
 import { env } from '@/core/config/env';
 import { insertUser, insertSession } from '@/core/db/auth-repo';
 import { writeSetting } from '@/core/db/settings-repo';
-import { users, settings } from '@/core/db/system-schema';
+import { users, settings, idempotencyKeys } from '@/core/db/system-schema';
 import { authSessions } from '@/core/db/auth-schema';
 import { hashPassword } from '@/core/auth/password';
 import { User } from '@/core/http/user-schema';
@@ -457,4 +458,17 @@ it('ACCT-B03 "sign out everywhere else" revokes every other session, replays und
     expect.objectContaining({ current: true, userAgent: 'Agent hash-holder-current' }),
   ]);
   expect(await live(member.id)).toEqual(['hash-member']);
+});
+
+it('ACCT-B02 the stored retry fingerprint of a password change is keyed, not a plain hash of the password', async () => {
+  session.user = holder;
+  const body = { current: PASSWORD, next: 'another long password' };
+  expect((await call(api.password, 'POST', '/password', body)).status).toBe(200);
+  const [row] = await db().select().from(idempotencyKeys);
+  const url = new URL('/api/v1/account/password', env().APP_URL).toString();
+  const plain = createHash('sha256')
+    .update(JSON.stringify({ method: 'POST', url, input: body }))
+    .digest('hex');
+  expect(row?.requestHash).toMatch(/^[0-9a-f]{64}$/u);
+  expect(row?.requestHash).not.toBe(plain);
 });

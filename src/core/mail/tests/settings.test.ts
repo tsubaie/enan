@@ -118,6 +118,22 @@ it('ADMIN-B60 the server variables apply until a server is saved, and again once
   await withTransaction(db(), (tx) => removeMail(tx, id()));
   expect((await mailServer(db()))?.password).toBe('env-password');
 });
+it('ADMIN-B60 saving the form the server variables filled keeps their password, for that server and user only', async () => {
+  overrides.value = {
+    SMTP_HOST: 'env.example.test',
+    SMTP_PORT: 465,
+    SMTP_USER: 'env-user',
+    SMTP_PASSWORD: 'env-password',
+    MAIL_FROM: 'env@example.test',
+  };
+  // Only the sender changes, the password left empty as the form says it may be.
+  const filled = { host: 'env.example.test', port: 465, username: 'env-user', password: '' };
+  await write({ ...filled, fromAddress: 'office@example.test' });
+  expect((await mailServer(db()))?.password).toBe('env-password');
+  await withTransaction(db(), (tx) => removeMail(tx, id()));
+  await write({ ...filled, host: 'other.example.test', fromAddress: 'office@example.test' });
+  expect((await mailServer(db()))?.password).toBeNull();
+});
 it('ADMIN-B60 refuses a host that is not a server name and an invalid sender', async () => {
   await expect(write({ ...server, host: 'smtp.example.test:25' })).rejects.toThrow();
   await expect(write({ ...server, host: 'https://smtp.example.test' })).rejects.toThrow();

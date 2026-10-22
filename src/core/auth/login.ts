@@ -13,6 +13,9 @@ import { verifyPassword, hashPassword, matchesToken, digest } from './password';
 import { type Recovery } from './validation';
 import type { z } from 'zod';
 import { env } from '@/core/config/env';
+import { getSetting, writeSetting } from '@/core/db/settings-repo';
+import { SignInMethods } from '@/core/config/sign-in-schema';
+import { writeAudit } from '@/core/db/audit-repo';
 const maxFailures = 5;
 // ADMIN-B20: five failures against one email, or five from one client address, close that bucket
 // for fifteen minutes. The two are counted apart because their union is a limit nobody configured:
@@ -60,5 +63,16 @@ export async function recover(
     const user = await userByEmail(database, input.email);
     if (!user || user.role !== 'admin' || !user.isActive) throw new AppError('not_found');
     await recoverUser(database, user.id, digest(configured), passwordHash);
+    // ADMIN-B64: the new password must be usable. With password sign-in switched off and the
+    // other methods unservable (mail broken), recovery would otherwise lead nowhere.
+    const methods = await getSetting(database, 'auth.sign_in_methods');
+    if (!methods.includes('password')) {
+      const value = SignInMethods.parse([...methods, 'password']);
+      await writeSetting(database, 'auth.sign_in_methods', value, user.id);
+      await writeAudit(database, user.id, 'update', 'setting', null, {
+        key: 'auth.sign_in_methods',
+        value,
+      });
+    }
   });
 }

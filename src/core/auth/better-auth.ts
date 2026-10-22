@@ -8,7 +8,7 @@ import { emailOTP } from 'better-auth/plugins';
 import { z } from 'zod';
 import { env, secureCookies } from '@/core/config/env';
 import { logger } from '@/core/config/logger';
-import { db } from '@/core/db/client';
+import { db, pool } from '@/core/db/client';
 import { id } from '@/core/db/ids';
 import { recordLogin, userByEmail, userById } from '@/core/db/auth-repo';
 import { getSetting, hasSetting } from '@/core/db/settings-repo';
@@ -267,12 +267,15 @@ async function build() {
     telemetry: { enabled: false },
   });
 }
-let instance: ReturnType<typeof build> | undefined;
+// Built for the connection it was given: a restore closes the pool and the next query opens a new
+// one (ADMIN-B38), so an instance still holding the closed one is rebuilt rather than kept.
+let built: { client: ReturnType<typeof pool>; instance: ReturnType<typeof build> } | undefined;
 export function auth() {
-  instance ??= build();
-  return instance;
+  const client = pool();
+  if (built?.client !== client) built = { client, instance: build() };
+  return built.instance;
 }
 // A saved or removed Google client takes effect on the next request.
 export function resetAuth() {
-  instance = undefined;
+  built = undefined;
 }

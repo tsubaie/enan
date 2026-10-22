@@ -269,3 +269,40 @@ it('ADMIN-B20 a sign-in turned away because the hasher is busy (429) is not coun
     .where(and(eq(loginAttempts.email, 'member@example.test'), eq(loginAttempts.succeeded, false)));
   expect(failed).toHaveLength(0);
 });
+
+it('ADMIN-B38 after a restore reopens the database, sign-in uses the new connection', async () => {
+  const before = await auth();
+  // What a restore does to this process: the pool is closed, and the next query opens a new one.
+  closeDatabase();
+  expect(await auth()).not.toBe(before);
+  expect((await signIn('member@example.test')).status).toBe(200);
+});
+
+it('ADR 0029 a sign-in waits its turn behind an open write transaction instead of failing busy', async () => {
+  const { POST } = await import('../../../app/api/auth/[...all]/route');
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  const finished: string[] = [];
+  // A request's transaction, open and holding the write lock while it awaits something.
+  const writing = withTransaction(db(), async (database) => {
+    await database.run(sql`update users set name = name where id = ${member}`);
+    await held;
+    finished.push('transaction');
+  });
+  const signing = POST(
+    new Request(new URL('/api/auth/sign-in/email', env().APP_URL), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: env().APP_URL,
+        'X-Requested-With': 'Enan',
+      },
+      body: JSON.stringify({ email: 'member@example.test', password }),
+    }),
+  ).then((response) => (finished.push('sign-in'), response));
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  release();
+  await writing;
+  expect((await signing).status).toBe(200);
+  expect(finished).toEqual(['transaction', 'sign-in']);
+});
