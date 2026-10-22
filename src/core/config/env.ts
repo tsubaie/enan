@@ -39,6 +39,8 @@ const Environment = z.object({
     .transform((value) => value === 'true'),
   FILES_DIR: z.string().default(defaults.filesDir),
   BACKUP_DIR: z.string().default(defaults.backupDir),
+  // ADMIN-B51: an install's own Arabic faces (text-400.woff2, display-700.woff2 …); none by default.
+  FONTS_DIR: z.string().default(defaults.fontsDir),
   FILES_QUOTA_GB: z.coerce.number().positive().default(20),
   MAX_UPLOAD_MB: z.coerce.number().positive().max(20).default(20),
   // ADMIN-B47: the largest wallpaper image an administrator may upload. The request passes through

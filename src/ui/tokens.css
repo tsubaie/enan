@@ -42,7 +42,7 @@
   --color-scrim: var(--scrim);
   --radius-lg: 0.625rem;
   --radius-xl: 0.875rem;
-  --font-sans: 'Inter', var(--font-arabic), sans-serif;
+  --font-sans: 'Inter', var(--font-arabic-custom,) var(--font-arabic), sans-serif;
   /* ADR 0030: the named steps the restyle added between Tailwind's own, so a size is a decision
      made once here rather than a number written into a component. `meta` is a property label,
      `nav` an Arabic navigation label (Arabic letterforms sit smaller on the line than Latin ones),
@@ -117,7 +117,8 @@
   --ease-rise: cubic-bezier(0.22, 0.61, 0.36, 1);
   --step-rise: 70ms;
   /* Latin first in LTR; the Arabic face leads in RTL (below), the way the text stack does. */
-  --display-stack: 'Inter', var(--font-arabic), sans-serif;
+  /* ADMIN-B51: an install's own Arabic faces, when it supplies them, stand in front of Noto. */
+  --display-stack: 'Inter', var(--font-arabic-display-custom,) var(--font-arabic), sans-serif;
   /* The language toggle's flags, in their official colours: the same in every theme, because a
      flag is a mark, not a surface. */
   --flag-uk-blue: #012169;
@@ -700,10 +701,16 @@ main:has(.home-page)::-webkit-scrollbar {
        own, so the order is what keeps English in Inter). Inter is named on its own, without the
        Arial-based fallback face next/font pairs with it: that face covers Arabic and would catch
        every Arabic character before Noto. */
-    font-family: 'Inter', var(--font-arabic), sans-serif;
+    font-family:
+      'Inter',
+      var(--font-arabic-custom,) var(--font-arabic),
+      sans-serif;
   }
   html[dir='rtl'] body {
-    font-family: 'Inter', var(--font-arabic), sans-serif;
+    font-family:
+      'Inter',
+      var(--font-arabic-custom,) var(--font-arabic),
+      sans-serif;
   }
   button:not(:disabled),
   a {
