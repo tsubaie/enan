@@ -815,20 +815,17 @@ main:has(.home-page)::-webkit-scrollbar {
     animation: rise-sheet 340ms var(--ease-rise);
     transition: translate 200ms var(--ease-rise);
   }
+  /* The desktop record's backdrop, value for value (EP-B23): it blurs and dims the page, so the
+     sheet's glass reads as the same material it is beside the list on a desktop. */
   .entity-backdrop {
-    background: color-mix(in oklch, var(--color-scrim), transparent 45%);
+    background: color-mix(in oklch, var(--color-scrim), transparent 65%);
+    backdrop-filter: blur(10px) saturate(120%);
     animation: backdrop-in 220ms ease-out both;
   }
   /* The bar is drawn by the shell, above the page the sheet lives in, so it would float over the
      sheet's foot; while a record is open there is nothing to navigate to without closing it. */
   body:has(.entity-page-open) .mobile-navigation {
     display: none;
-  }
-  /* Solid, not glass: the page's own glass under the sheet leaves nothing for a second blur to
-     sample here, so the rows behind read through. An iOS sheet is opaque for the same reason. */
-  .dark .entity-detail {
-    background: var(--elevated);
-    backdrop-filter: none;
   }
 }
 @keyframes rise-sheet {
