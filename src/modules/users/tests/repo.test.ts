@@ -1,8 +1,9 @@
 import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
-import { eq, isNotNull, isNull, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { db, closeDatabase } from '@/core/db/client';
 import { migrateDatabase } from '@/core/db/migrate';
-import { sessions, users } from '@/core/db/system-schema';
+import { users } from '@/core/db/system-schema';
+import { authSessions } from '@/core/db/auth-schema';
 import { id } from '@/core/db/ids';
 import { selectUsers, countAdmins, updateUser } from '../repo';
 import { addSession, addUser, harness } from './fixtures';
@@ -20,10 +21,7 @@ const patchOf = (user: { name: string; role: string; isActive: boolean; revision
   revision: user.revision,
 });
 const liveSessions = (userId: string) =>
-  db()
-    .select({ id: sessions.id })
-    .from(sessions)
-    .where(and(eq(sessions.userId, userId), isNull(sessions.revokedAt)));
+  db().select({ id: authSessions.id }).from(authSessions).where(eq(authSessions.userId, userId));
 it('ADMIN-B03 the member list is every live account ordered by name and never a deleted one', async () => {
   const zed = await addUser('member', 'zed@example.test', { name: 'Zed' });
   await addUser('member', 'amal@example.test', { name: 'Amal' });
@@ -93,11 +91,6 @@ it('ADMIN-B03 deactivating an account revokes every session of that account and 
   expect(row?.isActive).toBe(false);
   expect(await liveSessions(member.id)).toHaveLength(0);
   expect(await liveSessions(bystander.id)).toHaveLength(1);
-  const revoked = await db()
-    .select({ id: sessions.id })
-    .from(sessions)
-    .where(and(eq(sessions.userId, member.id), isNotNull(sessions.revokedAt)));
-  expect(revoked).toHaveLength(2);
   // A stale deactivation changes nothing, sessions included.
   await updateUser(
     db(),

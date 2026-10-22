@@ -9,5 +9,3 @@ export const SignInMethodsStatus = z.object({
   enabled: SignInMethods,
 });
 export const SignInMethodsWrite = z.strictObject({ methods: SignInMethods });
-// ADMIN-B63: a sign-in code is six digits.
-export const SignInCode = z.string().regex(/^\d{6}$/u);

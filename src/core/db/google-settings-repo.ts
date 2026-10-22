@@ -1,7 +1,7 @@
 import 'server-only';
 import { eq } from 'drizzle-orm';
 import { type Database } from './client';
-import { googleSettings, users } from './system-schema';
+import { googleSettings } from './system-schema';
 export async function readGoogleSettings(database: Database) {
   const [row] = await database.select().from(googleSettings).where(eq(googleSettings.id, 1));
   return row;
@@ -18,8 +18,4 @@ export async function saveGoogleSettings(
 }
 export async function deleteGoogleSettings(database: Database) {
   await database.delete(googleSettings).where(eq(googleSettings.id, 1));
-}
-// ADMIN-B65: the first Google account a user signs in with becomes theirs.
-export async function linkGoogleSubject(database: Database, userId: string, subject: string) {
-  await database.update(users).set({ googleSubject: subject }).where(eq(users.id, userId));
 }

@@ -1,27 +1,16 @@
-import { beforeAll, beforeEach, afterAll, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, afterAll, expect, it } from 'vitest';
 import { closeDatabase, db, withTransaction } from '@/core/db/client';
 import { clearDatabase } from '@/core/db/reset';
 import { migrateDatabase } from '@/core/db/migrate';
-import { insertUser, lockWorkspace } from '@/core/db/auth-repo';
+import { insertUser, lockWorkspace, recordLogin } from '@/core/db/auth-repo';
 import { id } from '@/core/db/ids';
 import { env } from '@/core/config/env';
 // The recovery route exists only when RECOVERY_TOKEN is configured; the suite reads the value the
 // test environment was given rather than setting one, because env.ts owns environment access.
 const recoveryToken = env().RECOVERY_TOKEN ?? '';
-// The placeholder verification (ADMIN-B21) is observable only as a call, so the real helper is
-// wrapped rather than replaced: the argon2 cost and the hash it receives both stay assertable.
-const { verified } = vi.hoisted(() => ({ verified: [] as string[] }));
-vi.mock('../password', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../password')>();
-  return {
-    ...actual,
-    verifyPassword: (hash: string, value: string) => {
-      verified.push(hash);
-      return actual.verifyPassword(hash, value);
-    },
-  };
-});
-const { login, recover } = await import('../login');
+// ADR 0055: Better Auth makes the attempts (better-auth.test.ts); the buckets they fill are the
+// throttle's, driven here with recorded failures so each bucket can be set exactly.
+const { throttle, recover } = await import('../login');
 const { hashPassword } = await import('../password');
 const password = 'correct-horse-battery-staple';
 let passwordHash = '';
@@ -38,16 +27,14 @@ async function addUser(email: string, isActive = true) {
     });
   });
 }
-const fail = (email: string, ip: string | null) =>
-  expect(login(db(), { email, password: 'wrong-password' }, ip)).rejects.toMatchObject({
-    code: 'unauthenticated',
-  });
+const fail = (email: string, ip: string | null) => recordLogin(db(), email, ip, false);
+const login = (_database: object, input: { email: string; password: string }, ip: string | null) =>
+  throttle(db(), input.email, ip).then(() => ({ user: { email: input.email } }));
 beforeAll(async () => {
   await migrateDatabase();
   passwordHash = await hashPassword(password);
 });
 beforeEach(async () => {
-  verified.length = 0;
   await clearDatabase();
 });
 afterAll(() => closeDatabase());
@@ -88,22 +75,6 @@ it('ADMIN-B20 five failures from one address throttle that address independently
   ).rejects.toMatchObject({ code: 'rate_limited', details: { scope: 'login' } });
   const session = await login(db(), { email: 'second@example.test', password }, '198.51.100.4');
   expect(session.user.email).toBe('second@example.test');
-});
-
-it('ADMIN-B21 every login path performs one argon2 verification whatever the account state', async () => {
-  await addUser('active@example.test');
-  await addUser('inactive@example.test', false);
-  await fail('unknown@example.test', '203.0.113.9');
-  expect(verified).toHaveLength(1);
-  // Identical cost parameters are the point: a cheaper placeholder would restore the timing gap.
-  expect(verified[0]).toMatch(/^\$argon2id\$v=19\$m=65536,p=4,t=3\$/u);
-  expect(verified[0]).not.toBe(passwordHash);
-  await fail('inactive@example.test', '203.0.113.10');
-  expect(verified).toHaveLength(2);
-  expect(verified[1]).not.toBe(passwordHash);
-  await fail('active@example.test', '203.0.113.11');
-  expect(verified).toHaveLength(3);
-  expect(verified[2]).toBe(passwordHash);
 });
 
 it('ADMIN-B22 recovery attempts are throttled by client address and stay single-use', async () => {

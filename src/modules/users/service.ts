@@ -8,7 +8,7 @@ import type { z } from 'zod';
 import type { Setup } from '@/core/auth/validation';
 import { User } from '@/core/auth/validation';
 import { digest, hashPassword, matchesToken, token, verifyPassword } from '@/core/auth/password';
-import { newSession, type Context } from '@/core/auth/session';
+import { type Context } from '@/core/auth/session';
 import { db, withTransaction, type Database } from '@/core/db/client';
 import {
   lockWorkspace,
@@ -30,7 +30,8 @@ import { UserCreate } from './schema/validation';
 // the identical submission (same token, same fields, the new administrator's password) signs in as
 // that administrator instead of failing, so a dropped connection never strands the operator.
 const setupReplayMs = 15 * 60 * 1000;
-type SetupResult = { user: User; token: string };
+// ADR 0055: setup makes the administrator; the browser then signs in through Better Auth.
+type SetupResult = { user: User };
 // Everything a retry must repeat exactly, except the password, which argon2 checks instead so no
 // fast hash of it is ever stored. The 256-bit setup token makes the fingerprint unguessable.
 function setupFingerprint(input: z.infer<typeof Setup>) {
@@ -53,7 +54,7 @@ async function replaySetup(
     !(await verifyPassword(admin.passwordHash, input.password))
   )
     throw refused;
-  return { user: User.parse(admin), token: await newSession(database, admin.id) };
+  return { user: User.parse(admin) };
 }
 async function firstSetup(
   database: Database,
@@ -91,7 +92,7 @@ async function firstSetup(
   await writeSetting(database, 'workspace.timezone', input.timezone, user.id);
   await writeSetting(database, 'workspace.principal_person_id', principal.data.id, user.id);
   await finishSetup(database, digest(setupFingerprint(input)));
-  return { user, token: await newSession(database, user.id) };
+  return { user };
 }
 /**
  * ADMIN-B01 one transaction: the request handler's when called from the route (as a savepoint), a

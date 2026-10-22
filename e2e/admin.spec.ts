@@ -484,7 +484,7 @@ test('ADMIN-B64 ADMIN-B63 the workspace offers an emailed code once mail is set 
     await login.goto('/login');
     await expect(login.getByLabel(en.auth.password)).toHaveCount(0);
     await expect(login.getByRole('link', { name: en.auth.codeLink })).toBeVisible();
-    const refused = await login.request.post('/api/v1/auth/login', {
+    const refused = await login.request.post('/api/auth/sign-in/email', {
       headers: { Origin: laneBaseURL(), 'X-Requested-With': 'Enan' },
       data: { email: 'stranger@example.test', password: 'whatever-it-is' },
     });
@@ -497,13 +497,13 @@ test('ADMIN-B64 ADMIN-B63 the workspace offers an emailed code once mail is set 
   }
 });
 
-test('ADMIN-B65 a Google client saved on the Sign-in page puts Continue with Google on the login page, which goes to Google', async ({
+test('ADMIN-B65 ADMIN-B66 a Google client saved on the Sign-in page puts Continue with Google on the login page, which goes to Google', async ({
   page,
   browser,
 }) => {
   await loginAs(page, 'en');
   await page.goto('/admin/signin');
-  await expect(page.getByText('/api/v1/auth/google/callback')).toBeVisible();
+  await expect(page.getByText('/api/auth/callback/google')).toBeVisible();
   await page.getByLabel(en.admin.googleClientId).fill('1234-e2e.apps.googleusercontent.com');
   await page.getByLabel(en.admin.googleClientSecret).fill('e2e-google-secret');
   await page.getByRole('button', { name: en.common.save, exact: true }).click();
@@ -515,19 +515,25 @@ test('ADMIN-B65 a Google client saved on the Sign-in page puts Continue with Goo
   try {
     const login = await visitor.newPage();
     await login.goto('/login');
-    await expect(login.getByRole('link', { name: en.auth.googleLink })).toBeVisible();
+    await expect(login.getByRole('button', { name: en.auth.googleLink })).toBeVisible();
     // Not followed: the browser suite does not talk to Google, only checks where it is sent.
-    const start = await login.request.get('/api/v1/auth/google', { maxRedirects: 0 });
-    expect(start.status()).toBe(303);
-    const target = new URL(start.headers().location ?? '');
+    const start = await login.request.post('/api/auth/sign-in/social', {
+      headers: { Origin: laneBaseURL(), 'X-Requested-With': 'Enan' },
+      data: { provider: 'google', callbackURL: '/home', errorCallbackURL: '/login' },
+    });
+    expect(start.status()).toBe(200);
+    const target = new URL(((await start.json()) as { url: string }).url);
     expect(target.host).toBe('accounts.google.com');
     expect(target.searchParams.get('client_id')).toBe('1234-e2e.apps.googleusercontent.com');
+    expect(target.searchParams.get('redirect_uri')).toBe(
+      `${laneBaseURL()}/api/auth/callback/google`,
+    );
     expect(target.searchParams.get('code_challenge_method')).toBe('S256');
-    // A callback this browser did not start is refused.
-    const forged = await login.request.get('/api/v1/auth/google/callback?code=x&state=y', {
+    // A callback this browser did not start is refused and lands on the login page.
+    const forged = await login.request.get('/api/auth/callback/google?code=x&state=y', {
       maxRedirects: 0,
     });
-    expect(forged.headers().location).toContain('/login?error=google_failed');
+    expect(forged.headers().location).toContain('/login?error=');
   } finally {
     await visitor.close();
     await page.getByRole('button', { name: en.admin.googleRemove }).click();

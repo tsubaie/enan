@@ -1,7 +1,8 @@
 import 'server-only';
-import { and, desc, eq, gt, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, eq, gt, or, sql } from 'drizzle-orm';
 import { type Database } from './client';
 import { signInCodes } from './system-schema';
+import { id } from './ids';
 // ADMIN-B63: how many codes were asked for by this email and from this address in the window,
 // counted apart as login failures are (ADMIN-B20). A null address counts nothing.
 export async function codeRequests(database: Database, email: string, address: string | null) {
@@ -24,38 +25,13 @@ export async function codeRequests(database: Database, email: string, address: s
     );
   return { byEmail: row?.byEmail ?? 0, byAddress: row?.byAddress ?? 0 };
 }
-// A new code replaces every earlier one for the address: only the latest can be used.
-export async function retireCodes(database: Database, email: string) {
-  await database
-    .update(signInCodes)
-    .set({ usedAt: new Date() })
-    .where(and(eq(signInCodes.email, email), isNull(signInCodes.usedAt)));
-}
-export async function insertCode(database: Database, row: typeof signInCodes.$inferInsert) {
-  await database.insert(signInCodes).values(row);
-}
-export async function latestCode(database: Database, email: string, maxAttempts: number) {
-  const [row] = await database
-    .select()
-    .from(signInCodes)
-    .where(
-      and(
-        eq(signInCodes.email, email),
-        isNull(signInCodes.usedAt),
-        gt(signInCodes.expiresAt, new Date()),
-        lt(signInCodes.attempts, maxAttempts),
-      ),
-    )
-    .orderBy(desc(signInCodes.createdAt))
-    .limit(1);
-  return row;
-}
-export async function spendCode(database: Database, codeId: string) {
-  await database.update(signInCodes).set({ usedAt: new Date() }).where(eq(signInCodes.id, codeId));
-}
-export async function missCode(database: Database, codeId: string) {
-  await database
-    .update(signInCodes)
-    .set({ attempts: sql`${signInCodes.attempts} + 1` })
-    .where(eq(signInCodes.id, codeId));
+// ADR 0055: Better Auth keeps the codes themselves (hashed, in auth_verifications); this table is
+// only the log of requests the send throttle counts, written for known and unknown emails alike.
+export async function recordCodeRequest(database: Database, email: string, ip: string | null) {
+  await database.insert(signInCodes).values({
+    id: id(),
+    email,
+    ip: ip ?? '',
+    expiresAt: new Date(Date.now() + 900000),
+  });
 }

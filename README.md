@@ -300,7 +300,7 @@ The password is stored encrypted with `SESSION_SECRET` and is never shown again.
 
 Members can sign in with the Google account of their email address. Nobody can sign up this way: only people an administrator has added get in.
 
-1. In [Google Cloud Console](https://console.cloud.google.com/), open **APIs & Services → Credentials**, create an **OAuth client ID** of type **Web application**, and add `https://<your domain>/api/v1/auth/google/callback` as an authorized redirect URI. (Set up the OAuth consent screen first if asked; the `openid` and `email` scopes are enough.)
+1. In [Google Cloud Console](https://console.cloud.google.com/), open **APIs & Services → Credentials**, create an **OAuth client ID** of type **Web application**, and add `https://<your domain>/api/auth/callback/google` as an authorized redirect URI. (Set up the OAuth consent screen first if asked; the `openid` and `email` scopes are enough.)
 2. In **Admin → Sign-in**, paste the client ID and secret (or set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`).
 3. **Admin → Sign-in** also chooses which ways in the login page offers: password, a code by email, and Google. If you ever lock yourself out, `RECOVERY_TOKEN` still works.
 

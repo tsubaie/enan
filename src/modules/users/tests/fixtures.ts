@@ -1,7 +1,7 @@
 import { createHarness } from '@/core/db/test-harness';
 import { db, withTransaction } from '@/core/db/client';
 import { insertUser, insertSession, lockWorkspace } from '@/core/db/auth-repo';
-import { digest, token } from '@/core/auth/password';
+import { token } from '@/core/auth/password';
 import { id } from '@/core/db/ids';
 import { User } from '@/core/http/user-schema';
 // Shared harness for the administration scenarios: a clean database and one administrator who is
@@ -33,16 +33,12 @@ export function addUser(
 }
 // One live session row for a user; returns the hash the sessions table holds.
 export async function addSession(userId: string) {
-  const raw = token();
-  const now = new Date();
+  const sessionId = id();
   await insertSession(db(), {
-    id: id(),
+    id: sessionId,
     userId,
-    tokenHash: digest(raw),
-    issuedAt: now,
-    lastSeenAt: now,
-    expiresAt: new Date(now.getTime() + 3600000),
-    absoluteExpiresAt: new Date(now.getTime() + 86400000),
+    token: token(),
+    expiresAt: new Date(Date.now() + 3600000),
   });
-  return digest(raw);
+  return sessionId;
 }

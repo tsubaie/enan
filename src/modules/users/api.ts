@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { defineHandler, authenticated } from '@/core/http/handler';
-import { setSessionCookie, setLocaleCookie } from '@/core/auth/session';
+import { setLocaleCookie } from '@/core/auth/session';
 import { Setup, User } from '@/core/auth/validation';
 import { setup, listUsers, patchUser, createUser } from './service';
 import { UserPatch, UserCreate } from './schema/validation';
@@ -10,7 +10,6 @@ export const setupApi = defineHandler({
   response: z.object({ data: User }),
   handler: async (input, ctx) => {
     const result = await setup(input, ctx.db);
-    await setSessionCookie(result.token);
     await setLocaleCookie(input.locale);
     return { data: result.user };
   },

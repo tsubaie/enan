@@ -1,7 +1,8 @@
 import 'server-only';
-import { and, eq, gt, isNull, ne, desc, sql, or } from 'drizzle-orm';
+import { and, eq, gt, ne, desc, sql, or } from 'drizzle-orm';
 import { db, type Database } from './client';
-import { users, sessions, workspace, loginAttempts, recoveryTokens } from './system-schema';
+import { users, workspace, loginAttempts, recoveryTokens } from './system-schema';
+import { authAccounts, authSessions } from './auth-schema';
 import { id } from './ids';
 
 export async function initialized(database: Database = db()) {
@@ -33,45 +34,53 @@ export async function userByEmail(database: Database, email: string) {
   const [row] = await database.select().from(users).where(eq(users.email, email));
   return row;
 }
+// Every member is added by an administrator, so the address counts as verified, and the password
+// is written where Better Auth reads it (ADR 0055) as well as on the row.
 export async function insertUser(database: Database, input: typeof users.$inferInsert) {
-  const [row] = await database.insert(users).values(input).returning();
-  if (!row) throw new Error('User insert failed');
-  return row;
-}
-export async function insertSession(database: Database, input: typeof sessions.$inferInsert) {
-  await database.insert(sessions).values(input);
-}
-export async function sessionByHash(hash: string, database: Database = db()) {
   const [row] = await database
-    .select({ session: sessions, user: users })
-    .from(sessions)
-    .innerJoin(users, eq(sessions.userId, users.id))
-    .where(
-      and(
-        eq(sessions.tokenHash, hash),
-        isNull(sessions.revokedAt),
-        gt(sessions.expiresAt, new Date()),
-        gt(sessions.absoluteExpiresAt, new Date()),
-        eq(users.isActive, true),
-        isNull(users.deletedAt),
-      ),
-    );
+    .insert(users)
+    .values({ emailVerified: true, ...input })
+    .returning();
+  if (!row) throw new Error('User insert failed');
+  await database.insert(authAccounts).values({
+    id: id(),
+    accountId: row.id,
+    providerId: 'credential',
+    userId: row.id,
+    password: row.passwordHash,
+  });
   return row;
 }
-export async function refreshSession(sessionId: string, expiry: Date, database: Database = db()) {
-  await database
-    .update(sessions)
-    .set({ lastSeenAt: new Date(), expiresAt: expiry })
-    .where(eq(sessions.id, sessionId));
-}
-export async function revokeSession(hash: string, database: Database = db()) {
-  await database
-    .update(sessions)
-    .set({ revokedAt: new Date() })
-    .where(eq(sessions.tokenHash, hash));
-}
+// ADR 0055: ending a session deletes its row, which is how Better Auth knows it is over.
 export async function revokeUserSessions(database: Database, userId: string) {
-  await database.update(sessions).set({ revokedAt: new Date() }).where(eq(sessions.userId, userId));
+  await database.delete(authSessions).where(eq(authSessions.userId, userId));
+}
+// ADR 0055: Better Auth reads the password from the credential account. The copy on `users` is
+// kept in step for the previous release (ADR 0050) and for the current-password checks.
+export async function setPassword(database: Database, userId: string, passwordHash: string) {
+  const now = new Date();
+  await database
+    .insert(authAccounts)
+    .values({
+      id: id(),
+      accountId: userId,
+      providerId: 'credential',
+      userId,
+      password: passwordHash,
+    })
+    .onConflictDoUpdate({
+      target: [authAccounts.providerId, authAccounts.accountId],
+      set: { password: passwordHash, updatedAt: now },
+    });
+  await database
+    .update(users)
+    .set({
+      passwordHash,
+      passwordChangedAt: now,
+      updatedAt: now,
+      revision: sql`${users.revision}+1`,
+    })
+    .where(eq(users.id, userId));
 }
 // ADMIN-B20: the email and the client address are independent buckets, counted in one statement so
 // the login path stays inside the per-request query budget. A null key counts nothing rather than
@@ -131,56 +140,42 @@ export async function recoverUser(
   passwordHash: string,
 ) {
   await database.insert(recoveryTokens).values({ tokenHash: hash });
-  await database
-    .update(users)
-    .set({
-      passwordHash,
-      passwordChangedAt: new Date(),
-      updatedAt: new Date(),
-      revision: sql`${users.revision}+1`,
-    })
-    .where(eq(users.id, userId));
+  await setPassword(database, userId, passwordHash);
   await revokeUserSessions(database, userId);
 }
-// ACCT-B03: the reader's own sessions, newest first. The current one is identified by its token
-// hash rather than by its id, because the cookie is the only thing the request knows about itself.
+// A session row as Better Auth writes one; scenarios use it to stand sessions up without a sign-in.
+export async function insertSession(database: Database, input: typeof authSessions.$inferInsert) {
+  await database.insert(authSessions).values(input);
+}
+// ACCT-B03: the reader's own sessions that have not expired, most recently used first.
 export async function userSessions(database: Database, userId: string) {
   return database
     .select({
-      id: sessions.id,
-      tokenHash: sessions.tokenHash,
-      issuedAt: sessions.issuedAt,
-      lastSeenAt: sessions.lastSeenAt,
-      ip: sessions.ip,
-      userAgent: sessions.userAgent,
+      id: authSessions.id,
+      issuedAt: authSessions.createdAt,
+      lastSeenAt: authSessions.updatedAt,
+      ip: authSessions.ipAddress,
+      userAgent: authSessions.userAgent,
     })
-    .from(sessions)
-    .where(and(eq(sessions.userId, userId), isNull(sessions.revokedAt)))
-    .orderBy(desc(sessions.lastSeenAt));
+    .from(authSessions)
+    .where(and(eq(authSessions.userId, userId), gt(authSessions.expiresAt, new Date())))
+    .orderBy(desc(authSessions.updatedAt));
 }
-// ACCT-B02/B03: revoking everything the reader holds except the session making the request, so a
+// ACCT-B02/B03: ending everything the reader holds except the session making the request, so a
 // password change signs them out everywhere else without signing them out of the tab they are in.
-export async function revokeOtherSessions(database: Database, userId: string, keepHash: string) {
+export async function revokeOtherSessions(database: Database, userId: string, keepId: string) {
   const rows = await database
-    .update(sessions)
-    .set({ revokedAt: new Date() })
-    .where(
-      and(
-        eq(sessions.userId, userId),
-        isNull(sessions.revokedAt),
-        ne(sessions.tokenHash, keepHash),
-      ),
-    )
-    .returning({ id: sessions.id });
+    .delete(authSessions)
+    .where(and(eq(authSessions.userId, userId), ne(authSessions.id, keepId)))
+    .returning({ id: authSessions.id });
   return rows.length;
 }
-// One session of the reader's own. Scoped by user so an id from elsewhere revokes nothing.
+// One session of the reader's own. Scoped by user so an id from elsewhere ends nothing.
 export async function revokeOwnSession(database: Database, userId: string, sessionId: string) {
   const rows = await database
-    .update(sessions)
-    .set({ revokedAt: new Date() })
-    .where(and(eq(sessions.userId, userId), eq(sessions.id, sessionId), isNull(sessions.revokedAt)))
-    .returning({ id: sessions.id });
+    .delete(authSessions)
+    .where(and(eq(authSessions.userId, userId), eq(authSessions.id, sessionId)))
+    .returning({ id: authSessions.id });
   return rows.length > 0;
 }
 // ACCT-B01/B02: the account's own writes. `updatedAt` and the revision move with every change so

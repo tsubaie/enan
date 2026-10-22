@@ -3,8 +3,8 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { LogOut } from 'lucide-react';
-import { z } from 'zod';
-import { request } from '@/core/http/client';
+
+import { authCall, authClient } from '@/core/http/auth-client';
 import { routes } from '@/core/routes';
 import { Button } from '@/ui/primitives/button';
 // The actions behind the avatar. They are here rather than in AccountMenu so that the logout
@@ -19,9 +19,9 @@ function SignOut({ onDone }: { onDone: () => void }) {
   const t = useTranslations('common');
   const client = useQueryClient();
   const router = useRouter();
+  const word = useTranslations('errors');
   const logout = useMutation({
-    mutationFn: () =>
-      request('/auth/logout', z.object({ data: z.null() }), { method: 'POST', body: {} }),
+    mutationFn: () => authCall(authClient.signOut(), (code) => word(code)),
     onSuccess: () => {
       onDone();
       client.clear();

@@ -5,6 +5,7 @@ import { env } from '@/core/config/env';
 import { WallpaperChoice } from '@/core/config/wallpapers';
 import { SignInMethodsStatus, SignInMethodsWrite } from '@/core/config/sign-in-schema';
 import { signInMethods } from '@/core/auth/methods';
+import { resetAuth } from '@/core/auth/better-auth';
 import { GoogleSettingsWrite, GoogleStatus } from '@/core/config/google-schema';
 import { googleStatus, removeGoogle, saveGoogle } from '@/core/auth/google-settings';
 import { Setting, SettingWrite, UploadedWallpaper, WallpaperUpload } from './schema/validation';
@@ -113,13 +114,19 @@ export const googleSave = defineHandler({
   guard: 'admin',
   input: GoogleSettingsWrite,
   response: google,
-  handler: async (input, ctx) => ({
-    data: await saveGoogle(ctx.db, authenticated(ctx).user.id, input),
-  }),
+  handler: async (input, ctx) => {
+    const data = await saveGoogle(ctx.db, authenticated(ctx).user.id, input);
+    resetAuth();
+    return { data };
+  },
 });
 export const googleRemove = defineHandler({
   guard: 'admin',
   input: z.strictObject({}),
   response: google,
-  handler: async (_, ctx) => ({ data: await removeGoogle(ctx.db, authenticated(ctx).user.id) }),
+  handler: async (_, ctx) => {
+    const data = await removeGoogle(ctx.db, authenticated(ctx).user.id);
+    resetAuth();
+    return { data };
+  },
 });

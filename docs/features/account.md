@@ -36,7 +36,7 @@ No new tables. The account is a view over two that exist:
 - `settings` — rows with `scope = 'user'` and `user_id = me`. The table already carries the scope
   split and a check constraint pairing `scope` with `user_id`, so per-user preference storage
   exists and is used as-is.
-- `sessions` — listed and revocable (ADR 0005).
+- `auth_sessions` — listed and revocable; revoking deletes the row (ADR 0055).
 - `people` — read to show the linked person and to deep-link to their directory record.
 
 - ACCT-I01 Every write is scoped to `ctx.user.id`. No endpoint in this module takes a user id.
@@ -85,7 +85,7 @@ No new tables. The account is a view over two that exist:
   administrator cannot be removed (`features/admin.md`).
 - ACCT-B08 The page is reachable at `/account` from the avatar menu and nowhere else in the nav; it
   is a destination a reader visits rarely and not a module.
-- ACCT-B09 **The login cookie slides with the session.** Each API request that extends the session's database expiry (at most once a minute) re-issues the session cookie with exactly the remaining lifetime, never past the 90-day absolute expiry. The browser therefore keeps an active reader signed in instead of dropping the cookie 30 days after sign-in. Page renders read the session without extending it, because a server-rendered page cannot set cookies; the API requests every page makes do the extending.
+- ACCT-B09 **The login cookie slides with the session.** An API request made more than a day after the session was last refreshed extends it to 30 days from then and re-issues the cookie (Better Auth, ADR 0055). Page renders read the session without extending it, because a server-rendered page cannot set cookies; the API requests every page makes do the extending.
 
 ## API
 

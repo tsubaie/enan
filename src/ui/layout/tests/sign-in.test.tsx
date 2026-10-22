@@ -7,13 +7,19 @@ import { AuthForm } from '../AuthForm';
 import { CodeSignIn } from '../CodeSignIn';
 import { mount } from '../../../../tests/fixtures/mount';
 
-const http = vi.hoisted(() => ({ request: vi.fn() }));
-vi.mock('@/core/http/client', async (original) => ({
-  ...(await original<typeof import('@/core/http/client')>()),
-  request: http.request,
+const http = vi.hoisted(() => ({ request: vi.fn(), social: vi.fn() }));
+vi.mock('@/core/http/auth-client', async (original) => ({
+  ...(await original<typeof import('@/core/http/auth-client')>()),
+  authClient: {
+    emailOtp: { sendVerificationOtp: http.request },
+    signIn: { social: http.social, emailOtp: vi.fn(), email: vi.fn() },
+  },
 }));
 vi.mock('../Preferences', () => ({ Preferences: () => null }));
-afterEach(() => http.request.mockReset());
+afterEach(() => {
+  http.request.mockReset();
+  http.social.mockReset();
+});
 
 it('ADMIN-B64 the login page offers the password form and, when on, an emailed code', () => {
   mount(<AuthForm mode="login" methods={['password', 'code']} />);
@@ -30,14 +36,14 @@ it('ADMIN-B64 with password sign-in off the login page has no password form', ()
   expect(screen.getByRole('link', { name: ar.auth.codeLink })).toBeTruthy();
 });
 it('ADMIN-B63 the code form asks for the email, then for the six digits it says may be on their way', async () => {
-  http.request.mockResolvedValue({ data: null });
+  http.request.mockResolvedValue({ data: { success: true }, error: null });
   mount(<CodeSignIn passwordEnabled />);
   fireEvent.change(screen.getByLabelText(en.auth.email), {
     target: { value: 'member@example.test' },
   });
   fireEvent.click(screen.getByRole('button', { name: en.auth.codeSend }));
   await waitFor(() => expect(screen.getByLabelText(en.auth.code)).toBeTruthy());
-  expect(http.request.mock.calls[0]?.[0]).toBe('/auth/code');
+  expect(http.request.mock.calls[0]?.[0]).toEqual({ email: 'member@example.test', type: 'sign-in' });
   expect(screen.getByRole('status').textContent).toBe(
     en.auth.codeSent.replace('{email}', 'member@example.test'),
   );
@@ -48,11 +54,16 @@ it('ADMIN-B63 the code form asks for the email, then for the six digits it says 
   expect(screen.getByRole('button', { name: en.auth.login })).toHaveProperty('disabled', true);
   expect(screen.getByRole('link', { name: en.auth.passwordLink })).toBeTruthy();
 });
-it('ADMIN-B65 Continue with Google is a full navigation to the server, and a failed one says why', () => {
+it('ADMIN-B65 Continue with Google hands the browser to Better Auth, and a failed one says why', () => {
+  http.social.mockReturnValue(new Promise(() => {}));
   mount(<AuthForm mode="login" methods={['password', 'google']} notice="google_unknown" />);
-  const google = screen.getByRole('link', { name: en.auth.googleLink });
-  expect(google.getAttribute('href')).toBe('/api/v1/auth/google');
+  fireEvent.click(screen.getByRole('button', { name: en.auth.googleLink }));
+  expect(http.social).toHaveBeenCalledWith({
+    provider: 'google',
+    callbackURL: '/home',
+    errorCallbackURL: '/login',
+  });
   expect(screen.getByRole('alert').textContent).toBe(en.auth.googleUnknown);
   mount(<AuthForm mode="login" methods={['password']} />);
-  expect(screen.queryByRole('link', { name: en.auth.googleLink })).toBeNull();
+  expect(screen.queryByRole('button', { name: en.auth.googleLink })).toBeNull();
 });

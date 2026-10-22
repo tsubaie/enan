@@ -49,7 +49,13 @@ export const users = sqliteTable(
     id: text().primaryKey(),
     email: text().notNull().unique(),
     name: text().notNull(),
+    // ADR 0055: Better Auth reads the password from `auth_accounts`; this copy is kept in step so
+    // the previous release can still sign in on this database (ADR 0050), until a contract drops it.
     passwordHash: text('password_hash').notNull(),
+    // Better Auth's user fields. Every member is added by an administrator, so their address counts
+    // as verified; nothing here is shown.
+    emailVerified: boolean('email_verified').notNull().default(false),
+    image: text(),
     role: text().notNull(),
     isActive: boolean('is_active').notNull().default(true),
     revision: integer().notNull().default(1),
@@ -102,9 +108,8 @@ export const loginAttempts = sqliteTable(
     index('login_ip_time_idx').on(t.ip, t.createdAt),
   ],
 );
-// ADMIN-B63 (ADR 0053): one row per request for a sign-in code, whether or not the email belongs to
-// an account, so the send throttle counts the same for both. Only a request for an active account
-// has a user and a code; the code is stored as an HMAC bound to its row, never as the six digits.
+// ADMIN-B63: one row per request for a sign-in code, known email or not, which the send throttle
+// counts. The code columns are from ADR 0053 and no longer written (ADR 0055).
 export const signInCodes = sqliteTable(
   'sign_in_codes',
   {

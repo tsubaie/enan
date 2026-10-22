@@ -215,6 +215,7 @@ export function parseEntityTables(doc: string) {
 async function loadShapes(root: string) {
   const files = [
     'src/core/db/system-schema.ts',
+    'src/core/db/auth-schema.ts',
     ...(await walk(join(root, 'src/modules')))
       .filter((f) => f.endsWith('schema/db.ts'))
       .map((f) => `src/modules/${f}`),

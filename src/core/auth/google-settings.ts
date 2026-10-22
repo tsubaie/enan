@@ -14,7 +14,7 @@ import { seal, unseal } from './sealed';
 // GOOGLE_CLIENT_SECRET, which apply while nothing is saved. The secret is sealed to its client id.
 const purpose = 'google-credentials-v1';
 export function googleRedirectUri() {
-  return new URL('/api/v1/auth/google/callback', env().APP_URL).href;
+  return new URL('/api/auth/callback/google', env().APP_URL).href;
 }
 export async function googleStatus(database: Database) {
   const saved = await readGoogleSettings(database);

@@ -8,7 +8,7 @@ One decision per file. Format: **Status**, **Context**, **Decision**, **Conseque
 | 0002 | PostgreSQL with Drizzle ORM and generated plus custom migrations | superseded by 0029 |
 | 0003 | In-process AI via the Claude API and a Postgres-backed job runner | accepted, extended by 0010 |
 | 0004 | shadcn/ui on Base UI with semantic tokens as the design system | accepted |
-| 0005 | Own multi-user auth with cookie sessions and roles | accepted, login throttling refined by 0013 |
+| 0005 | Own multi-user auth with cookie sessions and roles | accepted, login throttling refined by 0013; sessions and login superseded by 0055 |
 | 0006 | Hybrid linking with mirrored structural relations | superseded by 0009 |
 | 0007 | Local file storage and native PDF input for meeting briefs | accepted |
 | 0008 | Scope of the "no CLI" rule; backups with bundled PostgreSQL client binaries | accepted, restore sequence refined by 0024, backup mechanism superseded by 0029 |
@@ -56,7 +56,8 @@ One decision per file. Format: **Status**, **Context**, **Decision**, **Conseque
 | 0050 | Releases, channel tags, and migrations the previous release can run on | accepted |
 | 0051 | Installs update themselves through an opt-in updater service | accepted |
 | 0052 | The push deploy is removed; the maintainer's install updates itself | accepted |
-| 0053 | Email and new sign-in methods extend the own auth; their credentials are sealed in the database | accepted |
+| 0053 | Email and new sign-in methods extend the own auth; their credentials are sealed in the database | accepted; extending the own auth superseded by 0055 |
 | 0054 | Slow work happens before the write lock | accepted |
+| 0055 | Better Auth replaces the own auth | accepted |
 
 Open decisions awaiting an ADR: license (see roadmap); chart library confirmation (`recharts`).

@@ -1,7 +1,6 @@
 import 'server-only';
 import { withTransaction, type Database } from '@/core/db/client';
 import {
-  initialized,
   loginFailures,
   recordLogin,
   userByEmail,
@@ -10,12 +9,10 @@ import {
   recoverUser,
 } from '@/core/db/auth-repo';
 import { AppError } from '@/core/http/errors';
-import { verifyPassword, hashPassword, matchesToken, digest, placeholderHash } from './password';
-import { newSession } from './session';
-import { User, type Login, type Recovery } from './validation';
+import { verifyPassword, hashPassword, matchesToken, digest } from './password';
+import { type Recovery } from './validation';
 import type { z } from 'zod';
 import { env } from '@/core/config/env';
-import { requireMethod } from './methods';
 const maxFailures = 5;
 // ADMIN-B20: five failures against one email, or five from one client address, close that bucket
 // for fifteen minutes. The two are counted apart because their union is a limit nobody configured:
@@ -37,34 +34,6 @@ export async function checkCurrentPassword(
   const matched = await verifyPassword(user.passwordHash, password);
   await recordLogin(database, user.email, null, matched);
   return matched;
-}
-// `handle` is the request's own transaction (a savepoint here) or the pool from a script: a second
-// immediate transaction opened on the pool inside a request would wait on the request's own write
-// lock (ADR 0029).
-export async function login(handle: Database, input: z.infer<typeof Login>, ip: string | null) {
-  // The immediate transaction serializes the throttle count and the attempt record against every
-  // other login (ADR 0029), so five concurrent failures cannot all read four.
-  const result = await withTransaction(handle, async (database) => {
-    if (!(await initialized(database))) throw new AppError('forbidden');
-    // ADMIN-B64: with password sign-in turned off the API refuses it too, not only the page.
-    await requireMethod(database, 'password');
-    await throttle(database, input.email, ip);
-    const user = await userByEmail(database, input.email);
-    const usable = Boolean(user && user.isActive && !user.deletedAt);
-    // ADMIN-B21: one argon2 verification runs whatever the account state. An unknown, deleted or
-    // deactivated address verifies a placeholder of identical cost, so response time cannot
-    // separate "no such account" from "wrong password".
-    const matched = await verifyPassword(
-      user && usable ? user.passwordHash : await placeholderHash(),
-      input.password,
-    );
-    const valid = usable && matched;
-    await recordLogin(database, input.email, ip, valid);
-    if (!user || !valid) return null;
-    return { user: User.parse(user), token: await newSession(database, user.id) };
-  });
-  if (!result) throw new AppError('unauthenticated', null, true);
-  return result;
 }
 // ADMIN-B22: recovery is throttled on the client address alone. The secret being guessed is the
 // installation-wide RECOVERY_TOKEN, not a password, so an email bucket would protect nothing while
