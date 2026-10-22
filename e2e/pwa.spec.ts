@@ -77,3 +77,20 @@ test('ADMIN-B52 the start address and a signed-out page redirect inside the scop
   await page.goto('/');
   await expect(page).toHaveURL(`${origin}/home`);
 });
+
+// ADMIN-B53: iOS reports safe-area insets only to a page that covers the screen, and draws an
+// installed app under the status bar only with the translucent style. Playwright has no notch, so
+// this checks the declarations iOS reads.
+test('ADMIN-B53 pages cover the screen under a translucent status bar', async ({ page }) => {
+  for (const path of ['/login', '/home']) {
+    if (path === '/home') await loginAs(page, 'en');
+    await page.goto(path);
+    await expect(page.locator('meta[name="viewport"]')).toHaveAttribute(
+      'content',
+      /viewport-fit=cover/,
+    );
+    await expect(
+      page.locator('meta[name="apple-mobile-web-app-status-bar-style"]'),
+    ).toHaveAttribute('content', 'black-translucent');
+  }
+});

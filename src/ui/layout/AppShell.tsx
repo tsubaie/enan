@@ -38,7 +38,7 @@ export function AppShell({
           {children}
         </main>
       </div>
-      <nav className="mobile-navigation fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+var(--mobile-nav-gap))] z-30 flex gap-0.5 rounded-[28px] border p-1 lg:hidden">
+      <nav className="mobile-navigation fixed inset-x-3 bottom-[var(--mobile-nav-bottom)] z-30 flex gap-0.5 rounded-[28px] border p-1 lg:hidden">
         <MobileNav role={user.role} />
       </nav>
     </div>

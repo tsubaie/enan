@@ -1565,9 +1565,11 @@ main:has(.home-page)::-webkit-scrollbar {
 :root {
   --mobile-nav-height: 66px;
   --mobile-nav-gap: 12px;
+  /* ADMIN-B53: on a phone with a home indicator the bar sinks into its area, as an iOS tab bar
+     does, rather than floating a full gap above it; elsewhere it keeps the gap. */
+  --mobile-nav-bottom: max(var(--mobile-nav-gap), calc(env(safe-area-inset-bottom) - 8px));
   --mobile-nav-clear: calc(
-    env(safe-area-inset-bottom) + var(--mobile-nav-gap) + var(--mobile-nav-height) +
-      var(--mobile-nav-gap)
+    var(--mobile-nav-bottom) + var(--mobile-nav-height) + var(--mobile-nav-gap)
   );
 }
 .mobile-navigation {

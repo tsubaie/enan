@@ -1,4 +1,5 @@
 import { type ReactNode } from 'react';
+import type { Viewport } from 'next';
 import { Inter, Noto_Sans_Arabic } from 'next/font/google';
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getTranslations } from 'next-intl/server';
@@ -24,7 +25,13 @@ export const metadata = {
   description: 'Self-hosted operating surface for executive offices',
   // ADMIN-B52: iOS ignores SVG for the home-screen icon and needs an opaque PNG.
   icons: { icon: { url: '/icon.svg', type: 'image/svg+xml' }, apple: '/apple-icon.png' },
+  // ADMIN-B53: the installed app draws under the status bar, as a native app does, instead of
+  // under a separate black band; the header pads itself clear of it.
+  appleWebApp: { title: 'Enan', statusBarStyle: 'black-translucent' },
 };
+// ADMIN-B53: without `cover`, iOS reports every safe-area inset as 0, so the bottom bar sat on the
+// home indicator despite the env(safe-area-inset-bottom) the shell already reserves.
+export const viewport: Viewport = { viewportFit: 'cover' };
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const locale = await getLocale();
   const t = await getTranslations('common');

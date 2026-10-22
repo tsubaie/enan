@@ -83,8 +83,8 @@ export function AuthForm({
   // menu's frosted glass (`.auth-glass`) and the product's mark above it. The language toggle keeps
   // the top corner, so the language is chosen the same way before and after signing in.
   return (
-    <div className="auth-page relative grid min-h-dvh place-items-center px-4 pt-20 pb-10 sm:py-16">
-      <div className="absolute end-4 top-4 sm:end-6 sm:top-6">
+    <div className="auth-page relative grid min-h-dvh place-items-center px-4 pt-[calc(env(safe-area-inset-top)+5rem)] pb-[calc(env(safe-area-inset-bottom)+2.5rem)] sm:py-16">
+      <div className="absolute end-4 top-[calc(env(safe-area-inset-top)+1rem)] sm:end-6 sm:top-[calc(env(safe-area-inset-top)+1.5rem)]">
         <Preferences />
       </div>
       <main id="content" className="w-full max-w-[400px]">
