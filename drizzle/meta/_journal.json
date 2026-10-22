@@ -64,6 +64,13 @@
       "when": 1792687367818,
       "tag": "0008_schedule_update_notifications",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1792704509840,
+      "tag": "0009_mail_settings",
+      "breakpoints": true
     }
   ]
 }

@@ -33,6 +33,12 @@ const Environment = z.object({
       'TRUSTED_PROXY_CIDRS must be a comma-separated list of IP addresses or CIDR blocks, for example "10.0.0.0/8, fd00::/8"',
   }),
   OPENROUTER_API_KEY: optionalText,
+  // ADMIN-B60: the outgoing mail server when none is saved from Administration.
+  SMTP_HOST: optionalText,
+  SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
+  SMTP_USER: optionalText,
+  SMTP_PASSWORD: optionalText,
+  MAIL_FROM: z.preprocess((v) => (v === '' ? undefined : v), z.email().optional()),
   AI_RATE_LIMIT_ENABLED: z
     .enum(['true', 'false'])
     .default('true')

@@ -14,6 +14,7 @@ export type AdminPage =
   | 'notes'
   | 'objectives'
   | 'ai'
+  | 'mail'
   | 'backups'
   | 'updates'
   | 'jobs'

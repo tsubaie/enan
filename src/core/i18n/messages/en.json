@@ -605,7 +605,39 @@
     "auditAction_update_check": "Asked for a check of",
     "auditAction_update_pause": "Paused",
     "auditAction_update_resume": "Resumed",
-    "auditAction_update_retry": "Let a failed version be tried again by"
+    "auditAction_update_retry": "Let a failed version be tried again by",
+    "mail": "Email",
+    "overviewMail": "The server Enan sends email through",
+    "mailStatus": "Sending email",
+    "mailStatusLabel": "Status",
+    "mailSaved": "Set up here",
+    "mailFromServer": "Set up on the server",
+    "mailNotSetUp": "Not set up",
+    "mailSendTest": "Send test email",
+    "mailSending": "Sending…",
+    "mailTestSent": "A test email was sent to {to}. If it has not arrived in a few minutes, look in the spam folder.",
+    "mailError_auth": "The mail server refused the user name or password.",
+    "mailError_network": "The mail server could not be reached. Check the server name and port.",
+    "mailError_tls": "A secure connection to the mail server could not be made. Enan only sends over an encrypted connection.",
+    "mailError_rejected": "The mail server refused the message. Check the sender address.",
+    "mailError_credentials": "The saved password can no longer be read, because the server's SESSION_SECRET changed. Enter the password again.",
+    "mailError_server": "The mail server returned an error. Try again later.",
+    "mailServer": "Mail server",
+    "mailServerHelp": "Any SMTP server works. For Google Workspace or Gmail use smtp.gmail.com on port 587, your address as the user name, and an app password from your Google account (it needs 2-Step Verification).",
+    "mailServerFromEnv": "The server's SMTP settings are in use. Settings saved here take their place.",
+    "mailHost": "Server",
+    "mailHostInvalid": "Enter a server name, such as smtp.gmail.com.",
+    "mailPort": "Port",
+    "mailPortHint": "587 upgrades to an encrypted connection; 465 is encrypted from the start.",
+    "mailUsername": "User name",
+    "mailPassword": "Password",
+    "mailPasswordKept": "A password is saved. Leave this empty to keep it.",
+    "mailFrom": "Send from",
+    "mailFromInvalid": "Enter an email address.",
+    "mailRemove": "Remove saved settings",
+    "auditAction_mail_settings_save": "Saved the mail server in",
+    "auditAction_mail_settings_remove": "Removed the mail server from",
+    "auditEntity_mail_settings": "Email"
   },
   "errors": {
     "validation_failed": "Check the entered values.",
@@ -617,7 +649,8 @@
     "rate_limited": "Too many attempts. Try again later.",
     "ai_unavailable": "AI is unavailable.",
     "internal": "Something went wrong. Retry or contact your administrator.",
-    "ai_failed": "AI request failed. Please try again."
+    "ai_failed": "AI request failed. Please try again.",
+    "mail_failed": "Email could not be sent."
   },
   "tasks": {
     "searchList": "Search tasks",
@@ -1086,5 +1119,9 @@
     "updateRollbackFailed": "Update and rollback failed: {title}",
     "updateBlocked": "Update waiting for you: {title}",
     "updateStalled": "The updater stopped checking: {title}"
+  },
+  "mail": {
+    "testSubject": "Test email from {workspace}",
+    "testBody": "This is a test message from {workspace}. Email from Enan is working."
   }
 }

@@ -19,6 +19,8 @@ const secretKeys = new Set([
   'anthropicapikey',
   'openrouterapikey',
   'encryptedkey',
+  'encryptedpassword',
+  'smtppassword',
   'secret',
   'sessionsecret',
   'authorization',
