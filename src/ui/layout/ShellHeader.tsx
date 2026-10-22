@@ -2,7 +2,10 @@
 import { Suspense, lazy, useEffect, useSyncExternalStore } from 'react';
 import { useTranslations } from 'next-intl';
 import { Search } from 'lucide-react';
+import Link from 'next/link';
 import { Button } from '@/ui/primitives/button';
+import { routes } from '@/core/routes';
+import { Logo } from './Logo';
 import { closeSearchPalette, openSearchPalette, useSearchPalette } from './search-palette-store';
 // The palette is a whole dialog, a query and a result list, and it is loaded by every route in the
 // product for a control most visits never open. It arrives when it is first opened instead
@@ -25,6 +28,7 @@ export function ShellHeader({ user }: { user: { name: string; email: string; rol
   useSearchShortcut(openSearchPalette);
   return (
     <header className="flex min-h-14 shrink-0 items-center gap-2 border-b px-4 lg:px-6">
+      <PhoneMark />
       {/* The page's title, at the header's leading edge from 1024 px, the way a macOS window titles
           its toolbar. A list page renders its title group here (EntityTitle); a page without one
           leaves it empty. */}
@@ -99,4 +103,18 @@ const subscribe = () => () => {};
 const isApple = () => /mac|iphone|ipad/i.test(navigator.userAgent);
 function useApplePlatform() {
   return useSyncExternalStore(subscribe, isApple, () => false);
+}
+// Below 1024 px the side menu, and the mark it carries, are hidden; the mark heads the bar instead,
+// in the same accent tile (ADR 0030), and leads home as it does there.
+function PhoneMark() {
+  const t = useTranslations('common');
+  return (
+    <Link
+      href={routes.home()}
+      aria-label={t('home')}
+      className="me-1 inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent ring-1 ring-accent/25 ring-inset lg:hidden"
+    >
+      <Logo className="size-5" />
+    </Link>
+  );
 }
