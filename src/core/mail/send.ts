@@ -7,7 +7,9 @@ import { Locale as Locales } from '@/core/config/defaults';
 import { type MailFailure as Failure } from '@/core/config/mail-schema';
 import { AppError } from '@/core/http/errors';
 import { logger } from '@/core/config/logger';
-import { type MailServer } from './settings';
+import { type Database } from '@/core/db/client';
+import { getSetting, hasSetting } from '@/core/db/settings-repo';
+import { mailServer, type MailServer } from './settings';
 type MailFailure = z.infer<typeof Failure>;
 type Locale = z.infer<typeof Locales>;
 export type Mail = { to: string; subject: string; lines: string[] };
@@ -79,4 +81,23 @@ export async function deliver(server: MailServer, sender: string, locale: Locale
   } finally {
     transport.close();
   }
+}
+type Copy = ReturnType<typeof mailCatalog>;
+// A message to one member, in their language (their own choice, else the workspace's), from the
+// workspace by name. The copy is filled from that language's catalog.
+export async function mailUser(
+  database: Database,
+  user: { id: string; email: string },
+  compose: (copy: Copy, workspace: string) => { subject: string; lines: string[] },
+) {
+  const server = await mailServer(database);
+  if (!server) throw new AppError('rule_violation', { reason: 'mail_not_configured' });
+  const locale = (await hasSetting(database, 'user.locale', user.id))
+    ? await getSetting(database, 'user.locale', user.id)
+    : await getSetting(database, 'workspace.default_locale');
+  const workspace = await getSetting(database, 'workspace.name');
+  await deliver(server, workspace, locale, {
+    to: user.email,
+    ...compose(mailCatalog(locale), workspace),
+  });
 }

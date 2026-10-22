@@ -44,6 +44,7 @@ const pages = [
   'settings',
   'ai',
   'users',
+  'signin',
   'mail',
   'tasks',
   'notes',
@@ -54,7 +55,7 @@ const pages = [
   'audit',
 ] as const;
 
-test('ADMIN-B40 @desktop the rail lists the overview, then settings, AI, members, email, tasks, notes, objectives, then maintenance', async ({
+test('ADMIN-B40 @desktop the rail lists the overview, then settings, AI, members, sign-in, email, tasks, notes, objectives, then maintenance', async ({
   page,
 }) => {
   await loginAs(page, 'en');
@@ -444,4 +445,54 @@ test('ADMIN-B60 ADMIN-B61 a mail server saved on the Email page keeps its passwo
   ).toBeVisible();
   await page.getByRole('button', { name: en.admin.mailRemove }).click();
   await expect(page.getByText(en.admin.mailNotSetUp)).toBeVisible();
+});
+
+test('ADMIN-B64 ADMIN-B63 the workspace offers an emailed code once mail is set up, and can turn password sign-in off', async ({
+  page,
+  browser,
+}) => {
+  await loginAs(page, 'en');
+  await page.goto('/admin/signin');
+  const box = (name: string) => page.getByRole('checkbox', { name });
+  await expect(page.getByRole('link', { name: en.admin.signInNeedsMail })).toBeVisible();
+  await expect(box(en.admin.signInMethod_code)).toBeDisabled();
+  // A mail server nobody listens on: enough for the method to be servable, and nothing is sent.
+  const saved = await api(page, '/admin/mail', 'PUT', {
+    host: '127.0.0.1',
+    port: 1,
+    username: '',
+    password: '',
+    fromAddress: 'office@example.test',
+  });
+  expect(saved.status).toBe(200);
+  await page.reload();
+  await expect(box(en.admin.signInMethod_code)).toBeChecked();
+  const visitor = await browser.newContext({ baseURL: laneBaseURL() });
+  await visitor.addCookies([{ name: 'eos_locale', value: 'en', url: laneBaseURL() }]);
+  const login = await visitor.newPage();
+  try {
+    await login.goto('/login');
+    await login.getByRole('link', { name: en.auth.codeLink }).click();
+    await expect(login).toHaveURL(/\/login\/code$/u);
+    await login.getByLabel(en.auth.email).fill('stranger@example.test');
+    await login.getByRole('button', { name: en.auth.codeSend }).click();
+    await expect(login.getByLabel(en.auth.code)).toBeVisible();
+    // Password off: the form is gone and the API refuses a password even with the right one.
+    await box(en.admin.signInMethod_password).click();
+    await expect(page.getByText(en.admin.signInSaved)).toBeVisible();
+    await expect(box(en.admin.signInMethod_code)).toBeDisabled();
+    await login.goto('/login');
+    await expect(login.getByLabel(en.auth.password)).toHaveCount(0);
+    await expect(login.getByRole('link', { name: en.auth.codeLink })).toBeVisible();
+    const refused = await login.request.post('/api/v1/auth/login', {
+      headers: { Origin: laneBaseURL(), 'X-Requested-With': 'Enan' },
+      data: { email: 'stranger@example.test', password: 'whatever-it-is' },
+    });
+    expect(refused.status()).toBe(403);
+  } finally {
+    await box(en.admin.signInMethod_password).click();
+    await expect(box(en.admin.signInMethod_password)).toBeChecked();
+    expect((await api(page, '/admin/mail', 'DELETE', {})).status).toBe(200);
+    await visitor.close();
+  }
 });

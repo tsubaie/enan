@@ -3,6 +3,7 @@ import { useId, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { z } from 'zod';
+import type messages from '@/core/i18n/messages/en.json';
 import { ChevronRight, CircleAlert, CircleCheck } from 'lucide-react';
 import { routes, type AdminPage } from '@/core/routes';
 import { adminSections } from '@/ui/layout/admin-sections';
@@ -144,17 +145,19 @@ const aiKey: Record<AiReading, 'connected' | 'aiConnectionFailed' | 'disabledAI'
     notConfigured: 'disabledAI',
     notTested: 'aiNotTested',
   };
-const DescribedPage = z.enum(['settings', 'mail', 'tasks', 'notes', 'objectives', 'updates']);
-const describedKey: Record<
-  'settings' | 'mail' | 'tasks' | 'notes' | 'objectives' | 'updates',
-  | 'overviewSettings'
-  | 'overviewMail'
-  | 'overviewTasks'
-  | 'overviewNotes'
-  | 'overviewObjectives'
-  | 'overviewUpdates'
-> = {
+const DescribedPage = z.enum([
+  'settings',
+  'signin',
+  'mail',
+  'tasks',
+  'notes',
+  'objectives',
+  'updates',
+]);
+type OverviewKey = Extract<keyof (typeof messages)['admin'], `overview${string}`>;
+const describedKey: Record<z.infer<typeof DescribedPage>, OverviewKey> = {
   mail: 'overviewMail',
+  signin: 'overviewSignIn',
   updates: 'overviewUpdates',
   settings: 'overviewSettings',
   tasks: 'overviewTasks',

@@ -178,7 +178,16 @@
     "recovery": "Reset password",
     "recoverLink": "Account recovery",
     "secure": "Self-hosted · Your data stays in your workspace",
-    "recoverDone": "Password updated. Sign in with your new password."
+    "recoverDone": "Password updated. Sign in with your new password.",
+    "or": "or",
+    "codeLink": "Email me a sign-in code",
+    "codeTitle": "Sign in with a code",
+    "codeDescription": "We’ll email you a six-digit code. It works once, for ten minutes.",
+    "codeSend": "Send code",
+    "codeSent": "If {email} belongs to an account here, a code is on its way. Enter it below.",
+    "code": "Code",
+    "codeAgain": "Send a new code",
+    "passwordLink": "Sign in with a password"
   },
   "home": {
     "title": "Your office, at a glance",
@@ -637,7 +646,20 @@
     "mailRemove": "Remove saved settings",
     "auditAction_mail_settings_save": "Saved the mail server in",
     "auditAction_mail_settings_remove": "Removed the mail server from",
-    "auditEntity_mail_settings": "Email"
+    "auditEntity_mail_settings": "Email",
+    "signin": "Sign-in",
+    "overviewSignIn": "The ways members can sign in",
+    "signInMethods": "Ways to sign in",
+    "signInMethodsHelp": "Choose what the login page offers. At least one must stay on. If you are ever locked out, the server’s RECOVERY_TOKEN still lets an administrator in.",
+    "signInMethod_password": "Email and password",
+    "signInMethod_code": "A code sent by email",
+    "signInMethod_google": "Google",
+    "signInMethodHelp_password": "Members sign in with the password an administrator gave them or they chose.",
+    "signInMethodHelp_code": "Members enter their email and receive a six-digit code that works once, for ten minutes.",
+    "signInMethodHelp_google": "Members sign in with the Google account of the same email address.",
+    "signInNeedsMail": "Set up email first",
+    "signInLast": "This is the only way in that is on, so it cannot be turned off.",
+    "signInSaved": "Saved. The login page now offers what is checked."
   },
   "errors": {
     "validation_failed": "Check the entered values.",
@@ -1122,6 +1144,9 @@
   },
   "mail": {
     "testSubject": "Test email from {workspace}",
-    "testBody": "This is a test message from {workspace}. Email from Enan is working."
+    "testBody": "This is a test message from {workspace}. Email from Enan is working.",
+    "codeSubject": "Your sign-in code for {workspace}",
+    "codeBody": "Your sign-in code is {code}.",
+    "codeExpiry": "It works once and expires in {minutes} minutes. If you did not ask for it, you can ignore this email."
   }
 }

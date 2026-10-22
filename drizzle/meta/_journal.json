@@ -71,6 +71,13 @@
       "when": 1792704509840,
       "tag": "0009_mail_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1792706118967,
+      "tag": "0010_sign_in_codes",
+      "breakpoints": true
     }
   ]
 }

@@ -43,6 +43,8 @@ import { lockWorkspace } from '@/core/db/auth-repo';
 import { writeAudit } from '@/core/db/audit-repo';
 import type { Context } from '@/core/auth/session';
 import { AppError } from '@/core/http/errors';
+import { requireAvailable } from '@/core/auth/methods';
+import { SignInMethods } from '@/core/config/sign-in-schema';
 export async function listSettings(ctx: Context) {
   if (ctx.user.role !== 'admin') throw new AppError('forbidden');
   const saved = await readSettings(ctx.db);
@@ -73,6 +75,7 @@ export const updateSetting = transactional(async function updateSetting(
   await lockWorkspace(ctx.db);
   const parsed = z.json().parse(item.schema.parse(value));
   if (key === 'workspace.wallpaper') await requireWallpaperChoice(ctx.db, parsed);
+  if (key === 'auth.sign_in_methods') await requireAvailable(ctx.db, SignInMethods.parse(parsed));
   await writeWorkspaceSetting(ctx, key, parsed);
   await writeAudit(ctx.db, ctx.user.id, 'update', 'setting', null, { key, value: parsed });
   return { key, value: parsed, default: z.json().parse(item.default), type: item.schema.def.type };

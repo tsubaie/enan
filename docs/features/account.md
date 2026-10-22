@@ -53,7 +53,7 @@ No new tables. The account is a view over two that exist:
   constraint) and must stay unique; taking an address another account holds fails with a field
   error on `email`. Changing the email requires the current password, because the email is half
   of the sign-in credentials; a wrong one fails with a field error on `current` and changes
-  nothing. Changing an email does not re-verify it: there is no mail transport (`01`).
+  nothing. Changing an email does not re-verify it: no verification mail is sent.
 - ACCT-B02 **Password.** Changing it requires the current password, and the new one is validated by
   the same `Password` schema registration uses. On success every **other** session is revoked and
   the current one is kept, and `password_changed_at` is set. A reader changing their password
@@ -145,7 +145,7 @@ password and session routes.
 
 ## Out of scope
 
-- Email verification and password reset by mail (no mail transport in v1; recovery is `features/admin.md`).
+- Email verification and password reset by mail (recovery is `features/admin.md`). Sign-in by an emailed code is `ADMIN-B63`.
 - Two-factor authentication, passkeys, OAuth.
 - Avatar upload — the avatar is initials, or the linked person's, per `PersonAvatar`.
 - Notification preferences (`features/notifications.md` ships no per-kind mute).

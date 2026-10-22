@@ -99,6 +99,28 @@ export const loginAttempts = sqliteTable(
     index('login_ip_time_idx').on(t.ip, t.createdAt),
   ],
 );
+// ADMIN-B63 (ADR 0053): one row per request for a sign-in code, whether or not the email belongs to
+// an account, so the send throttle counts the same for both. Only a request for an active account
+// has a user and a code; the code is stored as an HMAC bound to its row, never as the six digits.
+export const signInCodes = sqliteTable(
+  'sign_in_codes',
+  {
+    id: text().primaryKey(),
+    email: text().notNull(),
+    userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    codeHash: text('code_hash'),
+    attempts: integer().notNull().default(0),
+    ip: text().notNull(),
+    expiresAt: time('expires_at').notNull(),
+    usedAt: time('used_at'),
+    createdAt: time('created_at').notNull().default(now),
+  },
+  (t) => [
+    index('sign_in_codes_email_time_idx').on(t.email, t.createdAt),
+    index('sign_in_codes_ip_time_idx').on(t.ip, t.createdAt),
+    index('sign_in_codes_user_idx').on(t.userId),
+  ],
+);
 export const recoveryTokens = sqliteTable('recovery_token_uses', {
   tokenHash: text('token_hash').primaryKey(),
   usedAt: time('used_at').notNull().default(now),

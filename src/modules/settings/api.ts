@@ -3,6 +3,8 @@ import { defineHandler, authenticated } from '@/core/http/handler';
 import { currentUser } from '@/core/auth/session';
 import { env } from '@/core/config/env';
 import { WallpaperChoice } from '@/core/config/wallpapers';
+import { SignInMethodsStatus, SignInMethodsWrite } from '@/core/config/sign-in-schema';
+import { signInMethods } from '@/core/auth/methods';
 import { Setting, SettingWrite, UploadedWallpaper, WallpaperUpload } from './schema/validation';
 import {
   deleteWallpaper,
@@ -76,3 +78,20 @@ function imageFile(size: 'full' | 'thumbnail') {
 }
 export const wallpaperImageFile = imageFile('full');
 export const wallpaperThumbnailFile = imageFile('thumbnail');
+// ADMIN-B64: the ways in an administrator may offer, which the server can serve, and which are on.
+export const signIn = defineHandler({
+  guard: 'admin',
+  input: z.strictObject({}),
+  response: z.object({ data: SignInMethodsStatus }),
+  handler: async (_, ctx) => ({ data: await signInMethods(ctx.db) }),
+});
+export const signInSave = defineHandler({
+  guard: 'admin',
+  input: SignInMethodsWrite,
+  response: z.object({ data: SignInMethodsStatus }),
+  idempotent: true,
+  handler: async (input, ctx) => {
+    await updateSetting(authenticated(ctx), 'auth.sign_in_methods', input.methods);
+    return { data: await signInMethods(ctx.db) };
+  },
+});

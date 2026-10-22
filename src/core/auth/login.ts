@@ -15,11 +15,12 @@ import { newSession } from './session';
 import { User, type Login, type Recovery } from './validation';
 import type { z } from 'zod';
 import { env } from '@/core/config/env';
+import { requireMethod } from './methods';
 const maxFailures = 5;
 // ADMIN-B20: five failures against one email, or five from one client address, close that bucket
 // for fifteen minutes. The two are counted apart because their union is a limit nobody configured:
 // three failures on an account plus two from an unrelated address used to add up to a lockout.
-async function throttle(database: Database, email: string | null, ip: string | null) {
+export async function throttle(database: Database, email: string | null, ip: string | null) {
   const failures = await loginFailures(database, email, ip);
   if (failures.byEmail >= maxFailures || failures.byAddress >= maxFailures)
     throw new AppError('rate_limited', { scope: 'login', retryAfterSeconds: 900 });
@@ -32,6 +33,8 @@ export async function login(handle: Database, input: z.infer<typeof Login>, ip: 
   // other login (ADR 0029), so five concurrent failures cannot all read four.
   const result = await withTransaction(handle, async (database) => {
     if (!(await initialized(database))) throw new AppError('forbidden');
+    // ADMIN-B64: with password sign-in turned off the API refuses it too, not only the page.
+    await requireMethod(database, 'password');
     await throttle(database, input.email, ip);
     const user = await userByEmail(database, input.email);
     const usable = Boolean(user && user.isActive && !user.deletedAt);
