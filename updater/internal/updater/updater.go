@@ -240,6 +240,11 @@ func (u *Updater) Check(ctx context.Context) {
 		u.publish()
 		return
 	}
+	if u.state.Phase != Idle {
+		// A rollback that failed left an update unfinished; finish reversing it before anything new.
+		u.Recover(ctx)
+		return
+	}
 	u.status = Status{Channel: u.status.Channel, Running: u.status.Running, UpdaterUpdate: u.status.UpdaterUpdate, LastCheckAt: u.now(), StartedAt: u.now(), State: Checking}
 	u.publish()
 	u.status.Step = "check"
@@ -513,14 +518,18 @@ func (u *Updater) recoverFrom(ctx context.Context, cause error) {
 		}
 	}
 	u.Log.Warn("rolling back", "step", step, "error", cause)
+	if u.state.Target != nil {
+		u.state.Rejected[u.state.Target.Digest] = fmt.Sprintf("%s at %s", step, u.now().UTC().Format(time.RFC3339))
+	}
 	if err := u.rollback(ctx); err != nil {
+		// Paused, with the phase kept: the next check must not install the same image again, and
+		// `resume` first retries putting the previous container back (Check, then Recover).
+		u.state.Paused = true
+		_ = u.save()
 		u.status.Step = step
 		u.status.Error = fmt.Sprintf("%s; rolling back also failed: %s", cause, err)
 		u.finish(ctx, RollbackFailed, "")
 		return
-	}
-	if u.state.Target != nil {
-		u.state.Rejected[u.state.Target.Digest] = fmt.Sprintf("%s at %s", step, u.now().UTC().Format(time.RFC3339))
 	}
 	u.status.Running = u.state.Previous
 	u.status.Step = step
@@ -670,6 +679,15 @@ func (u *Updater) Rollback(ctx context.Context, force bool) {
 	}
 	u.status.Candidate = target
 	u.install(ctx, app, ref, running, target)
+	if u.status.State == Updated {
+		// The channel still names the image just left; without this the next check reinstalls it.
+		if running.Digest != "" {
+			u.state.Rejected[running.Digest] = fmt.Sprintf("rolled back by hand at %s", u.now().UTC().Format(time.RFC3339))
+		} else {
+			u.state.Paused = true
+		}
+		_ = u.save()
+	}
 }
 
 // Command is a request left in the commands folder by the CLI or by Enan.

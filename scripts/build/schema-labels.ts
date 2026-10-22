@@ -8,8 +8,9 @@ export const baseline = 7;
 
 const destructive: { name: string; pattern: RegExp }[] = [
   { name: 'DROP TABLE', pattern: /\bdrop\s+table\b/iu },
-  { name: 'DROP COLUMN', pattern: /\bdrop\s+column\b/iu },
-  { name: 'RENAME', pattern: /\brename\s+(?:column|to)\b/iu },
+  // SQLite lets COLUMN be left out of both forms: `ALTER TABLE t DROP c`, `RENAME a TO b`.
+  { name: 'DROP COLUMN', pattern: /\balter\s+table\s+\S+\s+drop\b/iu },
+  { name: 'RENAME', pattern: /\brename\s+(?:column\s+)?\S+\s+to\b|\brename\s+to\b/iu },
   { name: 'DROP INDEX', pattern: /\bdrop\s+index\b/iu },
   { name: 'DROP VIEW', pattern: /\bdrop\s+view\b/iu },
   { name: 'DROP TRIGGER', pattern: /\bdrop\s+trigger\b/iu },

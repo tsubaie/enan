@@ -161,6 +161,11 @@ describe('audit:migrations', () => {
     expect(rules('ALTER TABLE `tasks` ADD `x` text;')).toEqual([]);
     expect(rules('ALTER TABLE `tasks` DROP COLUMN `x`;')).toEqual(['rollback-compatibility']);
     expect(rules('ALTER TABLE `a` RENAME TO `b`;')).toEqual(['rollback-compatibility']);
+    expect(rules('ALTER TABLE `tasks` DROP `x`;')).toEqual(['rollback-compatibility']);
+    expect(rules('ALTER TABLE `tasks` RENAME `a` TO `b`;')).toEqual(['rollback-compatibility']);
+    expect(rules('ALTER TABLE `tasks` RENAME COLUMN `a` TO `b`;')).toEqual([
+      'rollback-compatibility',
+    ]);
     expect(rules('-- enan:contract\nDROP TABLE `old`;')).toEqual([]);
     expect(rules('-- enan:compatible rebuild keeps every column\nDROP TABLE `files`;')).toEqual([]);
     expect(rules('-- enan:compatible\nDROP TABLE `files`;')).toEqual(['compatible-reason']);
