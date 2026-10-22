@@ -2,7 +2,6 @@
 import 'server-only';
 import { transactional } from '@/core/db/transaction';
 import { requireCommittee } from '@/modules/committees';
-import { userIdsForPeople } from '@/modules/people';
 import { z } from 'zod';
 import type { Context } from '@/core/auth/session';
 import { id } from '@/core/db/ids';
@@ -14,7 +13,7 @@ import { applyUpdate, requireRevision, type EntityOps } from '@/core/entity/serv
 import { AppError } from '@/core/http/errors';
 import { emit } from '@/core/notifications/emit';
 import { dayAt, addDays, bandOf } from '@/core/time/tasks';
-import { aiPeople, getPerson, personNameSql } from '@/modules/people';
+import { aiPeople, getPerson, personNameSql, userIdsForPeople } from '@/modules/people';
 import { getNote } from '@/modules/notes';
 import {
   DefaultView,
@@ -216,6 +215,7 @@ export const completeTask = transactional(async function completeTask(
   force = false,
 ) {
   const task = await current(ctx, taskId, revision);
+  if (task.status === 'completed') throw new AppError('conflict', { reason: 'state' }); // TASKS-B02
   const open = task.subtasks.filter((child) => child.status !== 'completed');
   if (open.length && !force)
     throw new AppError('conflict', { reason: 'state', openSubtasks: open.length });

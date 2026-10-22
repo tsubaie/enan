@@ -191,7 +191,7 @@ Nothing else may read `process.env` (static lint).
 
 ## Health
 
-`GET /api/v1/health` (public) returns `{ status: "ok" | "degraded", version, revision: string | null, db: boolean, jobs: { queued, running, oldestQueuedSeconds }, ai: "enabled" | "disabled" | "error", storage: { usedBytes, quotaBytes } }`.
+`GET /api/v1/health` (public) returns `{ status: "ok" | "degraded", version, revision: string | null, db: boolean }`; to a signed-in administrator it adds `jobs: { queued, running, oldestQueuedSeconds }, ai: "enabled" | "disabled" | "error", storage: { usedBytes, quotaBytes }`. Version and revision stay public because installed updaters verify every new image by them (ADMIN-B54).
 
 ## What deliberately does not exist
 
