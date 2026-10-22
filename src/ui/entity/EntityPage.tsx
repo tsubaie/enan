@@ -62,7 +62,6 @@ function EntityRail<T extends Entity, P extends object, C>({
 // width is the measure it had as a column -- 480 px floor, 880 px ceiling -- because that is what
 // a property form reads at; the percentage now reads against the window it covers.
 function EntitySurface<T extends Entity, P extends object, C>(props: EntityPageProps<T, P, C>) {
-  const t = useTranslations('common');
   const root = useRef<HTMLElement>(null);
   const sheet = useRef<HTMLElement>(null);
   const c = useEntityController(props, root);
@@ -93,7 +92,8 @@ function EntitySurface<T extends Entity, P extends object, C>(props: EntityPageP
           <button
             type="button"
             tabIndex={-1}
-            aria-label={t('close')}
+            // The sheet's own close button is the named way out; this is the tap target around it.
+            aria-hidden={true}
             className="entity-backdrop fixed inset-0 z-[29] cursor-default max-lg:z-[39] lg:pointer-events-none"
             onClick={dismiss}
           />

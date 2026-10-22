@@ -135,15 +135,9 @@ Twelve top-level props is the ceiling (`07-coding-guidelines.md`); related optio
   (EP-B31). A `filters.mode` is the same: EP-B28 already says it travels with the facets and is not
   one, and counting it was what made choosing a period light up "Filters · 1" and widen the button.
 - EP-B40 The bar and the readings above it are measured in rows of a phone, not in pixels of a
-  desktop. The featured readings are a single scrolling line below 1024 px (`@lg` on the list
-  container), each reading one row of name and figure, and the two-column grid returns with the
-  width to hold it: five readings in two columns is three rows and an orphan with a hole beside it,
-  which cost 198 px of the 732 px a 390 px phone has for records. The strip's snap positions are
-  inset by its own padding, or it rests scrolled by exactly that padding with its leading reading
-  cut off. The bar's own padding and the gap between its wrapped lines step down at the same width,
-  because three wrapped lines at desktop spacing is a row of records. Measured on a 390 px screen
-  with seeded data, this moves the first record of Tasks from 433 px to 284 px and of Notes from
-  287 px to 224 px.
+  desktop. Below 1024 px there is no featured strip: the view menu in the shell header carries the
+  same views and counts one tap away, so the first row under the one toolbar row is a record. From
+  1024 px, where the rail is hidden, the strip is a grid of the featured readings.
 - EP-B41 The list's search field names its module. Its placeholder and accessible name are the
   module's own words — "Search tasks", "Search notes" — through a required `searchLabel` on the page
   declaration, so beside the Filter button it reads as text against facets, and beside the workspace
@@ -237,8 +231,8 @@ Twelve top-level props is the ceiling (`07-coding-guidelines.md`); related optio
   server, and reading it that way keeps the first client render agreeing with the markup instead of
   correcting it a frame later. Clearing filters does not clear it — that returns the reader to the
   unfiltered list, it does not take away the presentation they chose to read it in.
-- EP-B28 `filters.mode` is one reading the whole list is taken under: a wide capsule segmented
-  control heading the list, between the toolbar and the figures it rewrites, whose first option is the default and carries the empty value. It keeps URL state exactly
+- EP-B28 `filters.mode` is one reading the whole list is taken under: a capsule segmented control
+  centred over the list (below 1024 px it fills the width in equal segments) heading the list, between the toolbar and the figures it rewrites, whose first option is the default and carries the empty value. It keeps URL state exactly
   as a facet does — same key, same query, same clearing — but it is not a filter and must not be
   presented as one. A filter shortens the list; a mode changes what every row of it says, and
   something that rewrites every figure on the page does not belong behind a button that reports how

@@ -66,9 +66,15 @@ for (const locale of ['en', 'ar'] as const) {
 test('ACCT-B04 the header language toggle reloads the page in the other language and direction', async ({
   page,
 }) => {
+  // Below 1024 px the toggle is the last row of the bar's More sheet rather than in the header.
+  const reveal = async (m: typeof en) => {
+    if ((page.viewportSize()?.width ?? 0) < 1024)
+      await page.getByRole('button', { name: m.common.navMore, exact: true }).click();
+  };
   await loginAs(page, 'en');
   try {
     await page.goto('/home');
+    await reveal(en);
     await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
     const group = page.getByRole('radiogroup', { name: en.common.language, exact: true });
@@ -87,6 +93,7 @@ test('ACCT-B04 the header language toggle reloads the page in the other language
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     await expect(page.locator('html')).toHaveAttribute('lang', 'ar');
     expect(posted).toBe(1);
+    await reveal(ar);
     const arabicGroup = page.getByRole('radiogroup', { name: ar.common.language, exact: true });
     await expect(arabicGroup.getByRole('radio', { name: ar.common.arabic })).toHaveAttribute(
       'aria-checked',
@@ -95,6 +102,7 @@ test('ACCT-B04 the header language toggle reloads the page in the other language
     await arabicGroup.getByRole('radio', { name: en.common.english }).click();
     await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+    await reveal(en);
     await expect(
       page
         .getByRole('radiogroup', { name: en.common.language, exact: true })

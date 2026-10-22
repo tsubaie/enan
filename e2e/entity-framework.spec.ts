@@ -204,34 +204,25 @@ for (const locale of ['en', 'ar'] as const) {
   }
 }
 
-// EP-B40: the featured readings are one line on a phone. Two columns made five readings three rows
-// and an orphan with a hole beside it, which cost 198 px of a 732 px list before a single record.
+// EP-B40: below 1024 px there is no featured strip. The view menu in the shell header carries the
+// same views and counts, so a phone's first row under the toolbar is a record, not a summary.
 for (const locale of ['en', 'ar'] as const) {
-  test(`EP-B40 featured readings are one row on a phone (${locale})`, async ({ page }) => {
+  test(`EP-B40 a phone shows no featured strip; the header's view menu carries the views (${locale})`, async ({
+    page,
+  }) => {
+    const m = locale === 'ar' ? ar : en;
     await loginAs(page, locale);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/tasks?view=all');
-    const strip = page.locator('[data-entity-stats]:visible');
-    await expect(strip).toBeVisible();
-    const laid = await strip.evaluate((bar) => {
-      const rtl = getComputedStyle(bar).direction === 'rtl';
-      const tiles = [...bar.children].map((tile) => tile.getBoundingClientRect());
-      const first = tiles[0]!;
-      return {
-        rows: new Set(tiles.map((tile) => Math.round(tile.top))).size,
-        height: Math.round(bar.getBoundingClientRect().height),
-        // The strip must rest where it was painted: a snap position that ignores the padding
-        // leaves it scrolled by exactly that padding, with the leading reading cut off. RTL
-        // scrolls the other way, so the distance from zero is what matters.
-        scrolled: Math.abs(bar.scrollLeft),
-        // Inset from the inline start edge, whichever side that is.
-        leadingInset: Math.round(rtl ? window.innerWidth - first.right : first.left),
-      };
-    });
-    expect(laid.rows).toBe(1);
-    expect(laid.height).toBeLessThanOrEqual(80);
-    expect(laid.scrolled).toBe(0);
-    expect(laid.leadingInset).toBeGreaterThan(0);
+    await expect(page.locator('.entity-toolbar:visible')).toBeVisible();
+    await expect(page.locator('[data-entity-stats]:visible')).toHaveCount(0);
+    await page
+      .getByRole('banner')
+      .getByRole('button', { name: new RegExp(`^${m.tasks.all}`, 'u') })
+      .click();
+    await expect(
+      page.getByRole('dialog').getByRole('button', { name: new RegExp(m.tasks.inbox, 'u') }),
+    ).toBeVisible();
   });
 }
 
@@ -312,10 +303,8 @@ for (const locale of ['en', 'ar'] as const) {
             .locator('.entity-rail:visible')
             .getByRole('button', { name: new RegExp(m.tasks.overdue, 'u') }),
         ).toHaveAttribute('aria-pressed', 'true');
-    } else {
-      // On a phone the record is the whole screen (EP-B08).
-      await expect(list).toBeHidden();
     }
+    // On a phone the record is a sheet over the list (EP-B38), so the list stays where it was.
     await page.goBack();
     await expect(page).toHaveURL(/view=overdue/u);
     await expect(page).not.toHaveURL(/[?&]id=/u);
@@ -731,8 +720,8 @@ test('EP-B35 the strip and the view summary appear only where the rail is not sh
   await expect(toolbar).toBeVisible();
   const rail = page.locator('.entity-rail:visible');
   const strip = page.locator('[data-entity-stats]:visible');
-  // The summary heads the bar on a phone and sits in the shell header from 1024 px (EP-B07).
-  const summary = (wide(page) ? page.getByRole('banner') : toolbar).getByRole('button', {
+  // The summary sits in the shell header at every width (EP-B07).
+  const summary = page.getByRole('banner').getByRole('button', {
     name: new RegExp(`^${en.tasks.all}`, 'u'),
   });
   if (railed(page)) {

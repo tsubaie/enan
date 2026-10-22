@@ -1608,6 +1608,14 @@ main:has(.home-page)::-webkit-scrollbar {
   padding-inline: 4px;
   font-size: 12px;
 }
+/* Under 360 px a fifth of the bar cannot hold a 12 px Arabic label ("الملاحظات"), so the labels
+   take the 11 px of an iOS tab bar rather than an ellipsis (ADMIN-B19). */
+@media (max-width: 359.98px) {
+  .mobile-navigation > a,
+  .mobile-navigation > button {
+    font-size: 11px;
+  }
+}
 
 /* Undo toasts. The toast is the receipt for something that left the screen, so it is centred under
    the column the thing left rather than parked in a corner of the window: the reader's eye is

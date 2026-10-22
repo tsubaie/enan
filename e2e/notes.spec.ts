@@ -119,7 +119,11 @@ for (const locale of ['en', 'ar']) {
     await page.goto(`/notes?view=all&q=${encodeURIComponent(title)}`);
     await expect(rows(page)).toHaveCount(1);
     await expect(page.getByText(m.notes.today, { exact: true }).first()).toBeVisible();
-    await expect(rows(page).first().locator('..').getByText('1/1', { exact: true })).toBeVisible();
+    // Below 1024 px the card leaves the task count to the record (EP-B20), checked above.
+    if ((page.viewportSize()?.width ?? 0) >= 1024)
+      await expect(
+        rows(page).first().locator('..').getByText('1/1', { exact: true }),
+      ).toBeVisible();
   });
 }
 test('NOTES-A02 NOTES-B08 a mention adds a participant, "Add name" creates another, both persist in details and reach the person page', async ({
@@ -190,41 +194,44 @@ test('NOTES-A04 attach an existing unlinked task; a task linked elsewhere is not
     page.locator('aside.entity-detail').getByRole('link', { name: first.title }),
   ).toBeVisible();
 });
-test('NOTES-A05 NOTES-A06 archive from the bulk bar, find it by search, and tag two notes at once', async ({
-  page,
-}) => {
-  await loginAs(page, 'en');
-  const prefix = `Bulk ${crypto.randomUUID()}`;
-  const notes = [];
-  for (const suffix of ['One', 'Two', 'Three']) notes.push(await note(page, `${prefix} ${suffix}`));
-  await page.goto(`/notes?view=all&q=${encodeURIComponent(prefix)}`);
-  await expect(rows(page)).toHaveCount(3);
-  await page.getByRole('button', { name: en.common.select, exact: true }).click();
-  for (const item of notes)
-    await page.getByRole('checkbox', { name: `Select ${item.title}`, exact: true }).click();
-  await page.getByRole('button', { name: en.notes.archive, exact: true }).click();
-  await page.getByRole('button', { name: en.common.confirm, exact: true }).click();
-  await expect(rows(page)).toHaveCount(3);
-  await expect(rows(page).first().locator('..').getByText(en.notes.archivedChip)).toBeVisible();
-  await page.goto('/notes?view=all');
-  await expect(rows(page).filter({ hasText: prefix })).toHaveCount(0);
-  await selectView(page, 'en', new RegExp(en.notes.archived));
-  await expect(rows(page).filter({ hasText: prefix })).toHaveCount(3);
-  await page.getByRole('button', { name: en.common.select, exact: true }).click();
-  for (const item of notes.slice(0, 2))
-    await page.getByRole('checkbox', { name: `Select ${item.title}`, exact: true }).click();
-  await page.getByRole('button', { name: en.notes.addTag, exact: true }).click();
-  const tag = `tag${crypto.randomUUID().slice(0, 6)}`;
-  await page.getByRole('dialog').getByLabel(en.notes.tagName, { exact: true }).fill(tag);
-  await page
-    .getByRole('dialog')
-    .getByRole('button', { name: en.notes.addTag, exact: true })
-    .click();
-  await expect(page.getByRole('dialog')).toBeHidden();
-  for (const item of notes.slice(0, 2))
-    expect((await api(page, 'notes', `/${item.id}`)).body.data.tags).toEqual([tag]);
-  expect((await api(page, 'notes', `/${notes[2].id}`)).body.data.tags).toEqual([]);
-});
+test(
+  'NOTES-A05 NOTES-A06 archive from the bulk bar, find it by search, and tag two notes at once',
+  { tag: '@desktop' },
+  async ({ page }) => {
+    await loginAs(page, 'en');
+    const prefix = `Bulk ${crypto.randomUUID()}`;
+    const notes = [];
+    for (const suffix of ['One', 'Two', 'Three'])
+      notes.push(await note(page, `${prefix} ${suffix}`));
+    await page.goto(`/notes?view=all&q=${encodeURIComponent(prefix)}`);
+    await expect(rows(page)).toHaveCount(3);
+    await page.getByRole('button', { name: en.common.select, exact: true }).click();
+    for (const item of notes)
+      await page.getByRole('checkbox', { name: `Select ${item.title}`, exact: true }).click();
+    await page.getByRole('button', { name: en.notes.archive, exact: true }).click();
+    await page.getByRole('button', { name: en.common.confirm, exact: true }).click();
+    await expect(rows(page)).toHaveCount(3);
+    await expect(rows(page).first().locator('..').getByText(en.notes.archivedChip)).toBeVisible();
+    await page.goto('/notes?view=all');
+    await expect(rows(page).filter({ hasText: prefix })).toHaveCount(0);
+    await selectView(page, 'en', new RegExp(en.notes.archived));
+    await expect(rows(page).filter({ hasText: prefix })).toHaveCount(3);
+    await page.getByRole('button', { name: en.common.select, exact: true }).click();
+    for (const item of notes.slice(0, 2))
+      await page.getByRole('checkbox', { name: `Select ${item.title}`, exact: true }).click();
+    await page.getByRole('button', { name: en.notes.addTag, exact: true }).click();
+    const tag = `tag${crypto.randomUUID().slice(0, 6)}`;
+    await page.getByRole('dialog').getByLabel(en.notes.tagName, { exact: true }).fill(tag);
+    await page
+      .getByRole('dialog')
+      .getByRole('button', { name: en.notes.addTag, exact: true })
+      .click();
+    await expect(page.getByRole('dialog')).toBeHidden();
+    for (const item of notes.slice(0, 2))
+      expect((await api(page, 'notes', `/${item.id}`)).body.data.tags).toEqual([tag]);
+    expect((await api(page, 'notes', `/${notes[2].id}`)).body.data.tags).toEqual([]);
+  },
+);
 test('NOTES-A07 NOTES-A10 trash keeps linked tasks, restore brings them back, AI routes refuse', async ({
   page,
 }) => {

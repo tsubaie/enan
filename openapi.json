@@ -15130,6 +15130,24 @@
         "x-idempotency-key": "required"
       }
     },
+    "/api/v1/fonts/{file}": {
+      "get": {
+        "operationId": "getfonts/{file}",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Bare object (envelope exception)"
+          }
+        },
+        "security": []
+      }
+    },
     "/api/v1/health": {
       "get": {
         "operationId": "gethealth",
