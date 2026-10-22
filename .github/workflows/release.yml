@@ -65,6 +65,11 @@ jobs:
       - name: Publish the release
         run: |
           set -eu
+          # GitHub can deliver one tag push twice; the second run finds the release made and stops.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::notice::the release $TAG already exists"
+            exit 0
+          fi
           label() {
             docker buildx imagetools inspect "$1" --format '{{ json .Image.Config.Labels }}' \
               | jq -r --arg name "$2" '.[$name] // "0"'
