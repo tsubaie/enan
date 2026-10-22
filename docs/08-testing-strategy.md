@@ -77,12 +77,13 @@ Collected, thresholds per file class: `service.ts` and `schema/validation.ts` â‰
 
 1. `pnpm install --frozen-lockfile`
 2. `pnpm lint`, `pnpm typecheck`, `pnpm depcruise`
-3. `pnpm knip`, `pnpm audit:structure`, `audit:i18n`, `audit:portability`, `audit:docs`, `audit:schema`, `audit:tests`, `gitleaks`
+3. `pnpm knip`, `pnpm audit:structure`, `audit:i18n`, `audit:portability`, `audit:docs`, `audit:schema`, `audit:tests`, `audit:migrations`, `gitleaks`
 4. `pnpm test` with `DATABASE_URL_TEST` pointing at a `file:` path under `tmp/` (includes core adversarial suite and audit self-tests); no service container
 5. `pnpm build`, `pnpm audit:bundle`
 6. `pnpm test:e2e` on several lanes (below), both locales, two workspace configurations
 7. `pnpm audit:openapi`, `pnpm audit:a11y`
-8. `pnpm test:mutate` on the listed critical functions (nightly, not per PR, if runtime exceeds 10 minutes)
+8. The container image: built, started on a fresh database, then the current `:edge` started on the database it migrated (ADR 0050). `:edge` moves only after the gate passes.
+9. `pnpm test:mutate` on the listed critical functions (nightly, not per PR, if runtime exceeds 10 minutes)
 
 Nightly: `ai-smoke.yml`, `pnpm test:mutate`.
 

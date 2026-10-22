@@ -1,0 +1,81 @@
+name: Release
+# ADMIN-B54, ADR 0050: pushing a tag `vX.Y.Z` on a commit of main publishes that commit's image
+# under the release's tags and creates the GitHub Release. Nothing is rebuilt: the image is the one
+# CI built, smoke-tested and checked for that commit. See CONTRIBUTING.md § Releasing.
+on:
+  push:
+    tags: ['v*']
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Release
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-latest"') }}
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      packages: write
+      checks: read
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: ${{ github.ref_name }}
+      SHA: ${{ github.sha }}
+      IMAGE: ghcr.io/${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: The tag names a checked commit of main
+        run: |
+          set -eu
+          version=${TAG#v}
+          echo "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$' \
+            || { echo "::error::$TAG is not vMAJOR.MINOR.PATCH"; exit 1; }
+          package=$(node -p "require('./package.json').version")
+          [ "$package" = "$version" ] \
+            || { echo "::error::package.json says $package but the tag says $version; bump it on main first"; exit 1; }
+          git fetch -q origin main
+          git merge-base --is-ancestor "$SHA" origin/main \
+            || { echo "::error::$SHA is not on main"; exit 1; }
+          passed=$(gh api "repos/$GITHUB_REPOSITORY/commits/$SHA/check-runs?check_name=Gate" \
+            --jq '[.check_runs[] | select(.conclusion == "success")] | length')
+          [ "$passed" -gt 0 ] \
+            || { echo "::error::the Gate has not passed for $SHA; wait for CI on main, then push the tag again"; exit 1; }
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Tag the image
+        run: |
+          set -eu
+          version=${TAG#v}
+          tags="--tag $IMAGE:$version"
+          # A pre-release (1.2.0-rc.1) gets its own tag only; it never moves a channel.
+          case "$version" in
+            *-*) ;;
+            *) tags="$tags --tag $IMAGE:${version%.*} --tag $IMAGE:${version%%.*} --tag $IMAGE:latest" ;;
+          esac
+          docker buildx imagetools create $tags "$IMAGE:$SHA"
+      - name: Publish the release
+        run: |
+          set -eu
+          label() {
+            docker buildx imagetools inspect "$1" --format '{{ json .Image.Config.Labels }}' \
+              | jq -r --arg name "$2" '.[$name] // "0"'
+          }
+          notes=""
+          previous=$(git describe --tags --abbrev=0 --match 'v*' "$SHA^" 2>/dev/null || true)
+          if [ -n "$previous" ]; then
+            contract=$(label "$IMAGE:$SHA" org.enan.contract)
+            schema=$(label "$IMAGE:${previous#v}" org.enan.schema)
+            if [ "$contract" -gt "$schema" ]; then
+              notes="**Rollback:** this release's database migrations cannot be read by $previous (ADR 0050). Back up before updating; an updater installs it only when allowed to and never rolls back across it."
+            fi
+          fi
+          prerelease=""
+          case "$TAG" in *-*) prerelease="--prerelease" ;; esac
+          gh release create "$TAG" --verify-tag --generate-notes $prerelease ${notes:+--notes "$notes"}

@@ -34,3 +34,11 @@ test('ADMIN-B34 API responses are uncached, nosniff and allow no active content'
     "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
   );
 });
+
+// ADMIN-B54: an updater accepts a new container only when health names the version and the commit
+// it expects, so an old container that is still answering is never mistaken for the new one.
+test('ADMIN-B54 health reports the version and the build revision', async ({ request }) => {
+  const health = await (await request.get('/api/v1/health')).json();
+  expect(health).toMatchObject({ status: 'ok', db: true, revision: 'e2e-revision' });
+  expect(health.version).toMatch(/^\d+\.\d+\.\d+/u);
+});

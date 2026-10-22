@@ -71,5 +71,7 @@ export function laneEnv(lane: number): Record<string, string> {
     BACKUP_DIR: (process.env.BACKUP_DIR || './tmp/backups') + suffix,
     PORT: String(FIRST_PORT + lane),
     HOSTNAME: '127.0.0.1',
+    // ADMIN-B54: what the production image sets to its commit.
+    ENAN_REVISION: 'e2e-revision',
   };
 }

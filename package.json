@@ -29,7 +29,7 @@
     "backup:create": "node --conditions=react-server --import tsx scripts/backup/create.ts",
     "backup:restore": "node --conditions=react-server --import tsx scripts/backup/restore.ts",
     "audit:all": "pnpm audit:static && pnpm audit:data && pnpm audit:browser",
-    "audit:static": "pnpm lint && pnpm typecheck && pnpm depcruise && pnpm audit:structure && pnpm audit:i18n && pnpm audit:portability && pnpm audit:docs && pnpm audit:tests && pnpm audit:deps && pnpm audit:secrets && pnpm audit:dupes",
+    "audit:static": "pnpm lint && pnpm typecheck && pnpm depcruise && pnpm audit:structure && pnpm audit:i18n && pnpm audit:portability && pnpm audit:docs && pnpm audit:tests && pnpm audit:deps && pnpm audit:secrets && pnpm audit:dupes && pnpm audit:migrations",
     "audit:data": "pnpm audit:schema && pnpm test",
     "audit:browser": "pnpm build && pnpm audit:bundle && pnpm test:e2e && pnpm audit:openapi && pnpm audit:a11y && pnpm audit:perf",
     "audit:structure": "tsx scripts/audit/structure.ts",
@@ -45,6 +45,7 @@
     "audit:perf": "node --conditions=react-server --import tsx scripts/audit/perf.ts",
     "audit:dupes": "tsx scripts/audit/dupes.ts",
     "audit:secrets": "tsx scripts/audit/secrets.ts",
+    "audit:migrations": "tsx scripts/audit/migrations.ts",
     "db:e2e-account": "node --conditions=react-server --import tsx scripts/db/e2e-account.ts",
     "db:e2e-reset": "node --conditions=react-server --import tsx scripts/db/e2e-reset.ts"
   },

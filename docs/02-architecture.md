@@ -189,7 +189,7 @@ Nothing else may read `process.env` (static lint).
 
 ## Health
 
-`GET /api/v1/health` (public) returns `{ status: "ok" | "degraded", version, db: boolean, jobs: { queued, running, oldestQueuedSeconds }, ai: "enabled" | "disabled" | "error", storage: { usedBytes, quotaBytes } }`.
+`GET /api/v1/health` (public) returns `{ status: "ok" | "degraded", version, revision: string | null, db: boolean, jobs: { queued, running, oldestQueuedSeconds }, ai: "enabled" | "disabled" | "error", storage: { usedBytes, quotaBytes } }`.
 
 ## What deliberately does not exist
 

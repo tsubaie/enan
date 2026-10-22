@@ -15,6 +15,8 @@ export async function GET() {
       {
         status: (await isRestoring()) ? 'degraded' : 'ok',
         version: appVersion,
+        // ADMIN-B54: an updater confirms the new container, not an old one, is the one answering.
+        revision: env().ENAN_REVISION ?? null,
         db: true,
         ai: aiConnection().state,
         jobs: {

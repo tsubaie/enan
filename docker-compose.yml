@@ -1,5 +1,9 @@
 services:
   app:
+    # ADMIN-B54: the published image (`latest` is the newest release, `edge` the newest main that
+    # passed every check, or pin a version such as `0.2`). `docker compose up -d --build` still
+    # builds it from this checkout instead.
+    image: ghcr.io/tsubaie/enan:${ENAN_TAG:-latest}
     build:
       context: .
       target: runtime
