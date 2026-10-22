@@ -54,7 +54,22 @@ test('ADMIN-B52 the phone tabs navigate in the same window on the same origin @m
     const path = await link.getAttribute('href');
     expect(path).toMatch(/^\/(?!\/)/);
     await link.click();
-    await expect(page).toHaveURL(new URL(path!, origin).href);
+    // The same origin and page; a list may add its default view to the query as it opens.
+    const target = new URL(path!, origin);
+    await expect(page).toHaveURL(
+      (url) => url.origin === origin && url.pathname === target.pathname,
+    );
+    // Let the page settle before the next tab, as a person would: a list that records its default
+    // view as it opens can otherwise pull a tap made in that instant back to itself (#59). Settled
+    // means the network is quiet and the address has not changed for a moment.
+    await page.waitForLoadState('networkidle');
+    await expect
+      .poll(async () => {
+        const before = page.url();
+        await page.waitForTimeout(400);
+        return page.url() === before;
+      })
+      .toBe(true);
   }
 
   // The rest of the destinations sit behind More; administration is one of them.
