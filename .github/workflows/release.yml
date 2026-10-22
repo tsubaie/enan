@@ -60,6 +60,8 @@ jobs:
             *) tags="$tags --tag $IMAGE:${version%.*} --tag $IMAGE:${version%%.*} --tag $IMAGE:latest" ;;
           esac
           docker buildx imagetools create $tags "$IMAGE:$SHA"
+          # The updater (ADR 0051) is released with the app, under the same tags.
+          docker buildx imagetools create ${tags//$IMAGE:/$IMAGE-updater:} "$IMAGE-updater:$SHA"
       - name: Publish the release
         run: |
           set -eu

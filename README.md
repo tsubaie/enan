@@ -221,6 +221,41 @@ Migrations run on start. Each release is listed on the [Releases](https://github
 
 An install built from source with `--build` moves to the published image with `docker compose pull && docker compose up -d` in the same folder; its volumes are kept. A clone in a new folder starts with new, empty volumes, because Compose names the volumes after the folder.
 
+### Automatic updates
+
+The optional `updater` service keeps the app on the newest image of its channel ([ADR 0051](docs/adr/0051-installs-update-themselves.md)). Turn it on with:
+
+```bash
+docker compose --profile autoupdate up -d
+```
+
+Every 15 minutes it checks the registry. When a new image is out, it:
+
+1. takes a backup;
+2. replaces the app container with one on the new image;
+3. waits for the new version to report itself healthy.
+
+If the new version fails, it puts the previous container back. It never restores the database by itself: the status names the backup it took and the command to restore it. It holds back a new major version, and a release whose database changes the previous release cannot read, until you allow them. Set these in `.env`:
+
+| Variable                                  | Default              | Purpose                                                                                                         |
+| ----------------------------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `ENAN_CHANNEL`                            | the app's `ENAN_TAG` | `latest` (releases), `edge` (every checked commit), or a version such as `0`                                    |
+| `ENAN_UPDATE_INTERVAL`                    | `15m`                | How often to check                                                                                              |
+| `ENAN_UPDATE_WINDOW`, `ENAN_UPDATE_TZ`    | empty, `UTC`         | Only update inside a daily window, for example `02:00-05:00`                                                    |
+| `ENAN_ALERT_WEBHOOK`                      | empty                | A URL that receives a JSON POST for every update, failure and rollback; its `text` field works with Slack as is |
+| `ENAN_ALLOW_MAJOR`, `ENAN_ALLOW_CONTRACT` | `false`              | Let through the updates described above                                                                         |
+
+```bash
+docker compose exec updater enan-updater status    # the last check, the running version, any error
+docker compose exec updater enan-updater history   # the last 50 outcomes
+docker compose exec updater enan-updater check     # check now
+docker compose exec updater enan-updater pause     # or resume
+docker compose exec updater enan-updater retry     # try an image that failed before
+docker compose exec updater enan-updater rollback  # go back to the image the last update replaced
+```
+
+The updater is given the Docker socket, which is equivalent to root on the host. It listens on no port and talks only to the image registry and your webhook; the app itself never gets the socket. The updater does not replace itself: when a newer updater is out, it says so once, and you run `docker compose --profile autoupdate pull updater && docker compose --profile autoupdate up -d updater`.
+
 The app listens on `127.0.0.1:3000` only. To use it beyond localhost, put it behind a reverse proxy that terminates TLS and set an `https://` `APP_URL`. Production refuses to start without one.
 
 ## Configuration

@@ -95,3 +95,13 @@ describe('audit:tests', () => {
     ).toEqual([]);
   });
 });
+
+describe('audit:docs Go scenarios', () => {
+  it('ADMIN-B56 counts named subtests in Go tests as scenarios', () => {
+    const go = 't.Run("ADMIN-B56 a failing image is rolled back", func(t *testing.T) {})';
+    expect(scanTestNames('updater/x_test.go', go).map((t) => t.name)).toEqual([
+      'ADMIN-B56 a failing image is rolled back',
+    ]);
+    expect(scanTestNames('src/x.ts', go)).toEqual([]);
+  });
+});

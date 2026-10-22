@@ -32,7 +32,28 @@ services:
       timeout: 5s
       start_period: 60s
       retries: 5
+  # ADMIN-B56, ADR 0051: keeps `app` on the newest image of its channel. Off unless started with
+  # `docker compose --profile autoupdate up -d`; README § Automatic updates. The Docker socket is
+  # given to this service only, never to the app.
+  updater:
+    image: ghcr.io/tsubaie/enan-updater:${ENAN_UPDATER_TAG:-latest}
+    profiles: [autoupdate]
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - updater-status:/var/lib/enan-updater/status
+      - updater-commands:/var/lib/enan-updater/commands
+    environment:
+      ENAN_CHANNEL: ${ENAN_CHANNEL:-}
+      ENAN_UPDATE_INTERVAL: ${ENAN_UPDATE_INTERVAL:-15m}
+      ENAN_UPDATE_WINDOW: ${ENAN_UPDATE_WINDOW:-}
+      ENAN_UPDATE_TZ: ${ENAN_UPDATE_TZ:-UTC}
+      ENAN_ALERT_WEBHOOK: ${ENAN_ALERT_WEBHOOK:-}
+      ENAN_ALLOW_MAJOR: ${ENAN_ALLOW_MAJOR:-false}
+      ENAN_ALLOW_CONTRACT: ${ENAN_ALLOW_CONTRACT:-false}
 volumes:
   data:
   files:
   backups:
+  updater-status:
+  updater-commands:

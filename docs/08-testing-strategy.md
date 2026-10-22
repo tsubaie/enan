@@ -83,7 +83,8 @@ Collected, thresholds per file class: `service.ts` and `schema/validation.ts` â‰
 6. `pnpm test:e2e` on several lanes (below), both locales, two workspace configurations
 7. `pnpm audit:openapi`, `pnpm audit:a11y`
 8. The container image: built, started on a fresh database, then the current `:edge` started on the database it migrated (ADR 0050). `:edge` moves only after the gate passes.
-9. `pnpm test:mutate` on the listed critical functions (nightly, not per PR, if runtime exceeds 10 minutes)
+9. The updater (ADR 0051): `gofmt`, `go vet`, `govulncheck`, `go test -race`, and the update cycle against the runner's Docker with a local registry.
+10. `pnpm test:mutate` on the listed critical functions (nightly, not per PR, if runtime exceeds 10 minutes)
 
 Nightly: `ai-smoke.yml`, `pnpm test:mutate`.
 
