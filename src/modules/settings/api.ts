@@ -47,12 +47,16 @@ export const wallpaperUpload = defineHandler({
   maxBytes: () => env().WALLPAPER_MAX_MB * 1024 * 1024 + formOverhead,
   status: 201,
   response: z.object({ data: UploadedWallpaper }),
+  // The service decodes and stores the image first, then opens its own short transaction (ADR 0054).
+  transaction: false,
   handler: async (input, ctx) => ({ data: await uploadWallpaper(authenticated(ctx), input) }),
 });
 export const wallpaperRemove = defineHandler({
   guard: 'admin',
   input: z.strictObject({}),
   response: z.object({ data: z.object({ id: z.uuid(), wallpaper: WallpaperChoice }) }),
+  // The service removes the files only after its own transaction commits (ADR 0054).
+  transaction: false,
   handler: async (_, ctx, params) => ({
     data: await deleteWallpaper(authenticated(ctx), z.uuid().parse(params.id)),
   }),

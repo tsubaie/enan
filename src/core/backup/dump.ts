@@ -70,6 +70,12 @@ async function writeOnce(backupId: string, signal: AbortSignal) {
   } catch (error) {
     if (!(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') throw error;
   }
+  // A backup the process died in left its staging copy (the database and part of the files);
+  // the list and the pruning skip hidden names, so nothing else ever removes it. The lock is held.
+  const leftover = /^\.[0-9a-f-]{36}-[0-9a-f-]{36}$/u;
+  for (const entry of await readdir(root, { withFileTypes: true }))
+    if (entry.isDirectory() && leftover.test(entry.name))
+      await rm(resolveInside(root, entry.name), { recursive: true, force: true });
   const staging = resolveInside(root, `.${backupId}-${crypto.randomUUID()}`);
   await mkdir(staging, { recursive: true });
   try {

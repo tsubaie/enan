@@ -25,6 +25,19 @@ export async function throttle(database: Database, email: string | null, ip: str
   if (failures.byEmail >= maxFailures || failures.byAddress >= maxFailures)
     throw new AppError('rate_limited', { scope: 'login', retryAfterSeconds: 900 });
 }
+// ADMIN-B20 for the current-password checks of the account (ACCT-B01, ACCT-B02): the same email
+// bucket as login, so a stolen session cannot guess its way to a new password. The caller returns
+// rather than throws on a mismatch, then throws a committing error, so the recorded failure stays.
+export async function checkCurrentPassword(
+  database: Database,
+  user: { email: string; passwordHash: string },
+  password: string,
+) {
+  await throttle(database, user.email, null);
+  const matched = await verifyPassword(user.passwordHash, password);
+  await recordLogin(database, user.email, null, matched);
+  return matched;
+}
 // `handle` is the request's own transaction (a savepoint here) or the pool from a script: a second
 // immediate transaction opened on the pool inside a request would wait on the request's own write
 // lock (ADR 0029).

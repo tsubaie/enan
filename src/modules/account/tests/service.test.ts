@@ -90,6 +90,18 @@ it('ACCT-B02 refuses a wrong current password and changes nothing', async () => 
   expect(after[0]?.passwordHash).toBe(before[0]?.passwordHash);
 });
 
+it('ADMIN-B20 ACCT-B02 wrong current passwords count like failed logins: the sixth try is refused', async () => {
+  // As the handler does: a committing error keeps the attempt the service recorded.
+  const attempt = (password: string) =>
+    run((ctx) => service.changePassword(ctx, password, 'a new long password').catch((e) => e));
+  for (let i = 0; i < 5; i += 1)
+    expect(await attempt('not the password')).toMatchObject({ code: 'validation_failed' });
+  expect(await attempt('correct horse battery')).toMatchObject({ code: 'rate_limited' });
+  const email = (password: string) =>
+    run((ctx) => service.changeEmail(ctx, 1, 'thief@example.test', password).catch((e) => e));
+  expect(await email('correct horse battery')).toMatchObject({ code: 'rate_limited' });
+});
+
 it('ACCT-B02 keeps the session it was made in and revokes every other', async () => {
   await session('session-hash-current');
   await session('session-hash-other-1');

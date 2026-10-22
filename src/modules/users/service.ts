@@ -99,13 +99,14 @@ async function firstSetup(
  * (ADR 0029): the second waits at BEGIN and then reads the first's completed workspace.
  */
 export async function setup(input: z.infer<typeof Setup>, database: Database = db()) {
-  const passwordHash = await hashPassword(input.password);
   return withTransaction(database, async (tx) => {
     const workspace = await lockWorkspace(tx);
     if (await initialized(tx)) return replaySetup(tx, workspace, input);
     if (!workspace.setupTokenHash || !matchesToken(input.setupToken, workspace.setupTokenHash))
       throw new AppError('forbidden');
-    return firstSetup(tx, input, passwordHash);
+    // Hashed only past the token check: the route is public, and a hash slot spent on a refused
+    // submission is one a real sign-in cannot have (the hasher admits two at a time).
+    return firstSetup(tx, input, await hashPassword(input.password));
   });
 }
 // ADMIN-B03: creating a user generates, hashes and returns the temporary password once, and is

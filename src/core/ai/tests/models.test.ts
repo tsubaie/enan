@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { loadModels, selectModels } from '../models';
-const transport = vi.hoisted(() => ({ get: vi.fn(), write: vi.fn(), outcomes: vi.fn<() => Promise<{ model: string; status: string; error: string | null }[]>>(async () => []) }));
-vi.mock('../sdk', () => ({ aiClient: async () => ({ get: transport.get }) }));
+const transport = vi.hoisted(() => ({ token: 'first-key', get: vi.fn(), write: vi.fn(), outcomes: vi.fn<() => Promise<{ model: string; status: string; error: string | null }[]>>(async () => []) }));
+vi.mock('../sdk', () => ({ aiClient: async () => ({ get: transport.get, authToken: transport.token }) }));
 vi.mock('@/core/db/settings-repo', () => ({ writeSetting: transport.write }));
 vi.mock('@/core/db/client', () => ({ db: () => ({}) }));
 vi.mock('@/core/db/ai-credentials-repo', () => ({ readAiCredentials: async () => undefined }));
@@ -62,4 +62,16 @@ it('ADMIN-B25 a stale catalog is served while the fresh one loads in the backgro
     expect((await loadModels()).map((model) => model.id)).toEqual(['vendor/newer']),
   );
   vi.useRealTimers();
+});
+it('ADMIN-B25 without a catalog, a caller that cannot wait is answered at once and the fetch runs behind it', async () => {
+  // Another credential than the earlier tests' catalog was loaded for.
+  transport.token = 'second-key';
+  let release: (value: object) => void = () => {};
+  transport.get.mockReturnValue(new Promise((resolve) => (release = resolve)));
+  await expect(loadModels({ wait: false })).rejects.toMatchObject({ code: 'ai_unavailable' });
+  expect(transport.get).toHaveBeenCalledTimes(1);
+  release({ data: [compatible] });
+  await vi.waitFor(async () =>
+    expect((await loadModels({ wait: false })).map((model) => model.id)).toEqual([compatible.id]),
+  );
 });

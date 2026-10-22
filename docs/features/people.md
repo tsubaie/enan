@@ -16,7 +16,7 @@ See `03-data-model.md` § people. Invariants:
 - PEOPLE-I01 `full_name` required. Duplicate names are allowed; create returns `meta.possibleDuplicates` when a case-insensitive match exists and the UI asks for confirmation. Creating with `confirmDuplicate: true` proceeds.
 - PEOPLE-I02 `user_id` unique: one person per member. Linking a person to a user requires admin. A second link to the same user is 409 `conflict` with `reason: "state"`.
 - PEOPLE-I03 `is_assignable` controls whether the person appears in owner pickers; tasks already owned keep their owner when it is switched off.
-- PEOPLE-I04 The principal (`workspace.principal_person_id`) cannot be deleted or merged as a source.
+- PEOPLE-I04 The principal (`workspace.principal_person_id`) cannot be deleted or merged as a source. Saving it requires a person who exists and is not in the trash (otherwise 422 `rule_violation`, `unknown_person`); if it still names none, Home shows no principal instead of failing.
 - PEOPLE-I05 Deleting a person soft-deletes their contextual links and attendee rows with the same op id; tasks keep `owner_id` (the owner chip renders "deleted person" until restore or reassignment).
 
 ## Behaviors

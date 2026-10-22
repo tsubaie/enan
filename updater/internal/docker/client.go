@@ -26,6 +26,24 @@ type Client struct {
 	http *http.Client
 }
 
+// Deadlines for a call the daemon does not answer: without one the updater would wait forever, with
+// no checks, no status and no alerts. A pull and a command run in the app (the backup) get longer.
+var (
+	callTimeout = 2 * time.Minute
+	longTimeout = 30 * time.Minute
+)
+
+// cancelOnClose ends a call's deadline when its body is closed, after the caller has read it.
+type cancelOnClose struct {
+	io.ReadCloser
+	cancel context.CancelFunc
+}
+
+func (b cancelOnClose) Close() error {
+	defer b.cancel()
+	return b.ReadCloser.Close()
+}
+
 // ErrNotFound is returned for a container or image the daemon does not know.
 var ErrNotFound = errors.New("not found")
 
@@ -51,8 +69,13 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 	if len(query) > 0 {
 		target += "?" + query.Encode()
 	}
+	cancel := context.CancelFunc(func() {})
+	if _, ok := ctx.Deadline(); !ok {
+		ctx, cancel = context.WithTimeout(ctx, callTimeout)
+	}
 	request, err := http.NewRequestWithContext(ctx, method, target, reader)
 	if err != nil {
+		cancel()
 		return nil, err
 	}
 	if body != nil {
@@ -60,8 +83,10 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 	}
 	response, err := c.http.Do(request)
 	if err != nil {
+		cancel()
 		return nil, err
 	}
+	response.Body = cancelOnClose{response.Body, cancel}
 	if response.StatusCode == http.StatusNotFound {
 		response.Body.Close()
 		return nil, fmt.Errorf("%s %s: %w", method, path, ErrNotFound)
@@ -238,6 +263,8 @@ func (c *Client) InspectImage(ctx context.Context, ref string) (Image, error) {
 // Pull fetches repository@digest. The daemon streams progress; an error can arrive in that stream
 // after a 200, so the whole stream is read.
 func (c *Client) Pull(ctx context.Context, repository, digest string) error {
+	ctx, cancel := context.WithTimeout(ctx, longTimeout)
+	defer cancel()
 	response, err := c.do(ctx, http.MethodPost, "/images/create", url.Values{"fromImage": {repository}, "tag": {digest}}, nil)
 	if err != nil {
 		return err
@@ -305,6 +332,9 @@ func (c *Client) Start(ctx context.Context, id string) error {
 }
 
 func (c *Client) Stop(ctx context.Context, id string, timeout time.Duration) error {
+	// The daemon waits up to timeout for the app to exit before it answers.
+	ctx, cancel := context.WithTimeout(ctx, timeout+callTimeout)
+	defer cancel()
 	return c.json(ctx, http.MethodPost, "/containers/"+id+"/stop", url.Values{"t": {fmt.Sprint(int(timeout.Seconds()))}}, nil, nil)
 }
 
@@ -318,6 +348,8 @@ func (c *Client) Remove(ctx context.Context, id string) error {
 
 // Exec runs a command in a running container and returns its exit code and combined output.
 func (c *Client) Exec(ctx context.Context, id string, command []string) (int, string, error) {
+	ctx, cancel := context.WithTimeout(ctx, longTimeout)
+	defer cancel()
 	var created struct {
 		ID string `json:"Id"`
 	}

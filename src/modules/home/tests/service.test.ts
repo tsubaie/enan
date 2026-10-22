@@ -14,6 +14,7 @@ import { PersonCreate } from '@/modules/people/schema/validation';
 import { homeSummary } from '../service';
 import { addDays, dayAt } from '@/core/time/tasks';
 import { defaults } from '@/core/config/defaults';
+import { writeSetting } from '@/core/db/settings-repo';
 let user: User;
 const run = <T>(action: (ctx: { db: Database; user: User; requestId: string }) => Promise<T>) =>
   withTransaction(db(), (database) => action({ db: database, user, requestId: id() }));
@@ -232,4 +233,8 @@ it('HOME-B10 waiting work that nobody holds is counted and reported as one last 
     }),
   ]);
   expect(section?.items[0]?.href).toBe('/tasks?view=waiting');
+});
+it('PEOPLE-I04 a principal setting naming no person, or a trashed one, shows no principal instead of failing', async () => {
+  await writeSetting(db(), 'workspace.principal_person_id', id(), user.id);
+  expect((await run((ctx) => homeSummary(ctx))).principal).toBeNull();
 });

@@ -61,3 +61,8 @@ it('ADMIN-B07 settings writes go through the registry: unknown keys, invalid val
   expect(listed.find((item) => item.key === 'retention.trash_days')?.value).toBe(30);
   expect(listed.some((item) => item.key.startsWith('user.'))).toBe(false);
 });
+it('PEOPLE-I04 the principal must name a person who exists and is not in the trash', async () => {
+  await expect(
+    run(admin, (ctx) => updateSetting(ctx, 'workspace.principal_person_id', id())),
+  ).rejects.toMatchObject({ code: 'rule_violation', details: { reason: 'unknown_person' } });
+});

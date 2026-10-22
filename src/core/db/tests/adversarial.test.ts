@@ -84,6 +84,19 @@ it('ADMIN-B01 a replay after a lost response signs in only for the identical sub
     .set({ setupCompletedAt: new Date(Date.now() - 16 * 60 * 1000) });
   await expect(setup(input)).rejects.toMatchObject({ code: 'conflict' });
 });
+it('ADMIN-B01 refused setup submissions never take a password-hashing slot', async () => {
+  // More concurrent refusals than the hasher admits: none may be answered rate_limited.
+  const refused = () => setup({ ...input, setupToken: token() });
+  const before = await Promise.allSettled(Array.from({ length: 6 }, refused));
+  expect(before.map((r) => r.status === 'rejected' && r.reason.code)).toEqual(
+    Array(6).fill('forbidden'),
+  );
+  await setup(input);
+  const after = await Promise.allSettled(Array.from({ length: 6 }, refused));
+  expect(after.map((r) => r.status === 'rejected' && r.reason.code)).toEqual(
+    Array(6).fill('conflict'),
+  );
+});
 it('ADMIN-B01 a restart ends the replay window', async () => {
   await setup(input);
   await bootstrap();

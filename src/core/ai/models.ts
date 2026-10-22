@@ -27,20 +27,33 @@ const Catalog = z.object({
     }),
   ),
 });
-let catalog: { credential: string; expiresAt: number; models: z.infer<typeof AiModel>[] } | undefined;
-let refreshing: Promise<z.infer<typeof AiModel>[]> | undefined;
+type Catalogue = { credential: string; expiresAt: number; models: z.infer<typeof AiModel>[] };
+// Once per process, like the connection status (client.ts), so one chunk's fetch serves them all.
+declare global {
+  var enanAiModels:
+    | { catalog?: Catalogue; refreshing?: Promise<z.infer<typeof AiModel>[]> | undefined }
+    | undefined;
+}
+const shared = () => (globalThis.enanAiModels ??= {});
 // A stale catalog for the same credential is served while a fresh one is fetched in the
-// background: callers often hold the write lock, and the fetch is up to 20 provider pages.
-export async function loadModels() {
+// background: the fetch is up to 20 provider pages. `wait: false` is for callers holding the
+// write lock: with no catalog yet it starts the fetch and answers unavailable instead of waiting.
+export async function loadModels({ wait = true } = {}) {
   const client = await aiClient(10_000);
   if (!client) throw new AppError('ai_unavailable');
   const credential = createHash('sha256').update(client.authToken ?? '').digest('hex');
-  if (catalog?.credential === credential) {
-    if (catalog.expiresAt <= Date.now())
-      refreshing ??= fetchCatalog(client, credential)
-        .catch(() => [])
-        .finally(() => (refreshing = undefined));
-    return eligibleModels(catalog.models);
+  const state = shared();
+  const refresh = () =>
+    (state.refreshing ??= fetchCatalog(client, credential)
+      .catch(() => [])
+      .finally(() => (state.refreshing = undefined)));
+  if (state.catalog?.credential === credential) {
+    if (state.catalog.expiresAt <= Date.now()) void refresh();
+    return eligibleModels(state.catalog.models);
+  }
+  if (!wait) {
+    void refresh();
+    throw new AppError('ai_unavailable', { reason: 'models' });
   }
   return eligibleModels(await fetchCatalog(client, credential));
 }
@@ -71,7 +84,7 @@ async function fetchCatalog(
       )
       .filter((model) => model.inputPrice >= 0 && model.outputPrice >= 0 && supportsModelSlot(model, 'fast'))
       .sort((a, b) => a.name.localeCompare(b.name));
-    catalog = { credential, models, expiresAt: Date.now() + 60000 };
+    shared().catalog = { credential, models, expiresAt: Date.now() + 60000 };
     return models;
   } catch {
     throw new AppError('ai_unavailable', { reason: 'models' });
@@ -86,7 +99,8 @@ export async function modelSettings(database: Database = db()) {
 }
 export async function selectModels(database: Database = db(), actor: string, input: unknown) {
   const selection = AiModelSelection.parse(input);
-  const models = await loadModels();
+  // Saved inside the write lock: the catalog the page's read already loaded, never a fetch.
+  const models = await loadModels({ wait: false });
   if (!models.some((model) => model.id === selection.defaultModel && supportsModelSlot(model, 'default')) ||
       !models.some((model) => model.id === selection.fastModel && supportsModelSlot(model, 'fast')))
     throw new AppError('ai_unavailable', { reason: 'model' });

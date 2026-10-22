@@ -7,10 +7,11 @@ declare global {
     glob(patterns: string[], options: { eager: true }): Record<string, object>;
   }
 }
-// Exports that only read, or that open their transaction themselves (setup takes a handle, and
-// manageTags predates the wrapper). Everything else a service exports writes and must be atomic.
+// Exports that only read, or that open their transaction themselves (setup takes a handle,
+// manageTags predates the wrapper, the wallpaper upload and delete do slow work outside it, and
+// the account's email and password changes wrap one to throw after a recorded failure commits). Everything else a service exports writes and must be atomic.
 const exempt: Record<string, string[]> = {
-  account: ['getAccount', 'readerTheme', 'readerLocale'],
+  account: ['getAccount', 'readerTheme', 'readerLocale', 'changeEmail', 'changePassword'],
   committees: [
     'listCommittees',
     'getCommittee',
@@ -58,7 +59,14 @@ const exempt: Record<string, string[]> = {
     'personForUser',
     'userIdsForPeople',
   ],
-  settings: ['listSettings', 'workspaceWallpaper', 'listWallpapers', 'wallpaperImage'],
+  settings: [
+    'listSettings',
+    'workspaceWallpaper',
+    'listWallpapers',
+    'wallpaperImage',
+    'uploadWallpaper',
+    'deleteWallpaper',
+  ],
   tasks: ['listTasks', 'getTask', 'peopleForAi'],
   users: ['setup', 'listUsers'],
 };

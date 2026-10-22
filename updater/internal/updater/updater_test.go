@@ -294,6 +294,8 @@ func TestScenarios(t *testing.T) {
 		{"ADMIN-B56 an update interrupted during the switch is reversed", anUpdateInterruptedDuringTheSwitchIsReversed},
 		{"ADMIN-B56 pause and resume", pauseAndResume},
 		{"ADMIN-B56 a manual rollback goes back to the replaced image", manualRollbackGoesBackToTheReplacedImage},
+		{"ADMIN-B56 a failed rollback pauses the updater instead of installing the image again", aFailedRollbackPausesTheUpdater},
+		{"ADMIN-B56 a shutdown during verification records nothing and the next start finishes the update", aShutdownDuringVerificationIsLeftForRecovery},
 		{"ADMIN-B56 a second updater is refused", aSecondUpdaterIsRefused},
 		{"ADMIN-B56 commands are read once", commandsAreReadOnce},
 		{"ADMIN-B56 the history keeps the last outcomes", historyKeepsTheLastOutcomes},
@@ -461,6 +463,8 @@ func guards(t *testing.T) {
 		{"a migration the running release cannot read", "1.1.0", 9, 8, nil, true},
 		{"a contract migration the running release already has", "1.1.0", 9, 7, nil, false},
 		{"a contract migration, allowed", "1.1.0", 9, 8, func(c *Config) { c.AllowContract = true }, false},
+		{"an older image that cannot read the running database", "0.9.0", 5, 0, func(c *Config) { c.AllowContract = true }, true},
+		{"an older image that can read the running database", "0.9.0", 6, 0, nil, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -468,6 +472,8 @@ func guards(t *testing.T) {
 			if tc.allow != nil {
 				tc.allow(&u.Config)
 			}
+			// The running image's own newest contract migration is 6.
+			f.image("img-1", "sha256:one", "1.0.0", 7, 6)
 			f.image("img-2", "sha256:two", tc.version, tc.schema, tc.contract)
 			f.publish("latest", "sha256:two")
 			u.Check(context.Background())
@@ -536,6 +542,60 @@ func manualRollbackGoesBackToTheReplacedImage(t *testing.T) {
 	u.Apply(context.Background(), Command{Command: "rollback"})
 	if u.status.State != Updated || app(t, f).Image != "img-1" {
 		t.Fatalf("state %s: %s, running %s", u.status.State, u.status.Error, app(t, f).Image)
+	}
+	// The channel still names img-2; the next check must keep the operator's choice.
+	u.Check(context.Background())
+	if u.status.State != Blocked || app(t, f).Image != "img-1" {
+		t.Fatalf("next check: state %s, running %s", u.status.State, app(t, f).Image)
+	}
+}
+
+func aShutdownDuringVerificationIsLeftForRecovery(t *testing.T) {
+	u, f, sent := setup(t)
+	f.image("img-2", "sha256:two", "1.1.0", 8, 0)
+	f.publish("latest", "sha256:two")
+	// Not healthy yet when the stop arrives; the verification wait sees the cancelled context.
+	f.broken["img-2"] = true
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	u.Check(ctx)
+	if u.state.Phase != Verifying || u.state.Paused || len(u.state.Rejected) != 0 || len(*sent) != 0 {
+		t.Fatalf("phase %s, paused %v, rejected %v, alerts %v", u.state.Phase, u.state.Paused, u.state.Rejected, *sent)
+	}
+	f.broken["img-2"] = false
+	u.Recover(context.Background())
+	if u.status.State != Updated || u.state.Paused || app(t, f).Image != "img-2" {
+		t.Fatalf("after restart: state %s, paused %v, running %s", u.status.State, u.state.Paused, app(t, f).Image)
+	}
+}
+
+func aFailedRollbackPausesTheUpdater(t *testing.T) {
+	u, f, sent := setup(t)
+	f.image("img-2", "sha256:two", "1.1.0", 8, 0)
+	f.publish("latest", "sha256:two")
+	f.broken["img-1"], f.broken["img-2"] = true, true
+	u.Check(context.Background())
+	if u.status.State != RollbackFailed || !u.state.Paused || u.state.Rejected["sha256:two"] == "" {
+		t.Fatalf("state %s, paused %v, rejected %v", u.status.State, u.state.Paused, u.state.Rejected)
+	}
+	f.calls = nil
+	u.Check(context.Background())
+	if u.status.State != Paused || len(f.calls) != 0 {
+		t.Fatalf("next check: state %s, calls %v", u.status.State, f.calls)
+	}
+	// Once the old image answers again, resuming finishes the rollback; it backs up nothing new.
+	f.broken["img-1"] = false
+	u.Apply(context.Background(), Command{Command: "resume"})
+	u.Check(context.Background())
+	if u.status.State != RolledBack || u.state.Phase != Idle || app(t, f).Image != "img-1" || strings.Contains(strings.Join(f.calls, ","), "backup") {
+		t.Fatalf("resumed: state %s, phase %s, running %s, calls %v", u.status.State, u.state.Phase, app(t, f).Image, f.calls)
+	}
+	u.Check(context.Background())
+	if u.status.State != Blocked {
+		t.Fatalf("after recovery: state %s", u.status.State)
+	}
+	if strings.Join(*sent, ",") != "rollback_failed,rolled_back,blocked" {
+		t.Fatalf("alerts %v", *sent)
 	}
 }
 

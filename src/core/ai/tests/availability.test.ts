@@ -22,7 +22,7 @@ beforeEach(() => {
 it('ADMIN-B25 initializes route-local connection status before exposing configured capabilities', async () => {
   // Only db is consumed by this read-only service; repositories are mocked at their boundary.
   const ctx = { db: {} } as Context;
-  expect(await availableCapabilities(ctx)).toEqual(['notes.refine', 'notes.suggest_tags']);
+  expect(await availableCapabilities(ctx, true)).toEqual(['notes.refine', 'notes.suggest_tags']);
   expect(connection.check).toHaveBeenCalledTimes(1);
   await availableCapabilities(ctx);
   expect(connection.check).toHaveBeenCalledTimes(1);
@@ -42,6 +42,24 @@ it('ADMIN-B25 refreshes stale connection status in the background so recovered A
   const ctx = { db: {} } as Context;
   // The provider call is still running: the answer uses the state already known, without waiting.
   expect(await availableCapabilities(ctx)).toEqual([]);
+  expect(await availableCapabilities(ctx)).toEqual([]);
+  expect(connection.check).toHaveBeenCalledTimes(1);
+  finish();
+  await Promise.resolve();
+  expect(await availableCapabilities(ctx)).toContain('notes.refine');
+});
+it('ADMIN-B25 inside a write transaction a never-checked connection is not awaited: AI is not ready yet', async () => {
+  let finish: () => void = () => {};
+  connection.check.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = () => {
+          connection.value = { state: 'enabled', checkedAt: new Date().toISOString() };
+          resolve(connection.value);
+        };
+      }),
+  );
+  const ctx = { db: {} } as Context;
   expect(await availableCapabilities(ctx)).toEqual([]);
   expect(connection.check).toHaveBeenCalledTimes(1);
   finish();

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { withBackupLock } from '../maintenance';
+import { releaseStaleLock, withBackupLock } from '../maintenance';
 import { createBackup } from '../dump';
-import { workspace, writeTree } from './fixtures/archive';
+import { names, workspace, writeTree } from './fixtures/archive';
 const config = vi.hoisted(() => ({ BACKUP_DIR: '', FILES_DIR: '' }));
 vi.mock('@/core/config/env', () => ({ env: () => config }));
 let space: Awaited<ReturnType<typeof workspace>>;
@@ -27,4 +27,13 @@ it('ADMIN-B31 a lock left by a process that died, or by this process before a re
   // A restarted container runs the server as the same pid again; it holds nothing yet.
   await leftBy(process.pid);
   expect((await withBackupLock(async () => 'own pid')).acquired).toBe(true);
+});
+it('ADMIN-B31 the server removes at start a lock its own pid left, so a restore command is admitted', async () => {
+  await leftBy(process.pid);
+  await releaseStaleLock();
+  await expect(names(space.backups)).resolves.not.toContain('.lock');
+  // Another process's lock is left alone.
+  await leftBy(process.ppid);
+  await releaseStaleLock();
+  await expect(names(space.backups)).resolves.toContain('.lock');
 });

@@ -36,6 +36,16 @@ jobs:
           package=$(node -p "require('./package.json').version")
           [ "$package" = "$version" ] \
             || { echo "::error::package.json says $package but the tag says $version; bump it on main first"; exit 1; }
+          # A stable tag moves `latest` and `X`, so it must be the highest stable version: an older
+          # one would downgrade every updater on those channels (ADR 0050).
+          case "$version" in
+            *-*) ;;
+            *)
+              highest=$(git tag -l 'v*' | sed 's/^v//' | grep -v -e - | sort -V | tail -1)
+              [ "$highest" = "$version" ] \
+                || { echo "::error::$TAG is below the released $highest; it would move latest backwards"; exit 1; }
+              ;;
+          esac
           git fetch -q origin main
           git merge-base --is-ancestor "$SHA" origin/main \
             || { echo "::error::$SHA is not on main"; exit 1; }

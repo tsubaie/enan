@@ -240,6 +240,11 @@ func (u *Updater) Check(ctx context.Context) {
 		u.publish()
 		return
 	}
+	if u.state.Phase != Idle {
+		// A rollback that failed left an update unfinished; finish reversing it before anything new.
+		u.Recover(ctx)
+		return
+	}
 	u.status = Status{Channel: u.status.Channel, Running: u.status.Running, UpdaterUpdate: u.status.UpdaterUpdate, LastCheckAt: u.now(), StartedAt: u.now(), State: Checking}
 	u.publish()
 	u.status.Step = "check"
@@ -314,6 +319,11 @@ func (u *Updater) Check(ctx context.Context) {
 func (u *Updater) guard(running, candidate *Image) string {
 	if !u.Config.AllowMajor && major(running.Version) >= 0 && major(candidate.Version) > major(running.Version) {
 		return fmt.Sprintf("%s is a new major version after %s; set ENAN_ALLOW_MAJOR=true to install it", candidate.Version, running.Version)
+	}
+	// An older candidate (a channel moved back, or switched): it must be able to read this database.
+	// Not overridable here; going back across a contract is `enan-updater rollback --force`.
+	if running.Contract > candidate.Schema {
+		return fmt.Sprintf("%s cannot read migration %d of the running %s (ADR 0050); restore a backup taken before it instead", versionOf(candidate), running.Contract, versionOf(running))
 	}
 	if !u.Config.AllowContract && candidate.Contract > running.Schema {
 		return fmt.Sprintf("migration %d of %s cannot be undone by going back to %s (ADR 0050); back up, then set ENAN_ALLOW_CONTRACT=true to install it", candidate.Contract, versionOf(candidate), versionOf(running))
@@ -506,6 +516,12 @@ func (u *Updater) complete(ctx context.Context) {
 // database is never restored: the status names the backup and the command, for a person.
 func (u *Updater) recoverFrom(ctx context.Context, cause error) {
 	step := u.status.Step
+	if ctx.Err() != nil {
+		// Shutting down: every Docker call would fail and read as a failed rollback. The saved
+		// phase is left as it is, and Recover finishes or reverses the update after the restart.
+		u.Log.Warn("stopped during an update; recovery runs at the next start", "step", step)
+		return
+	}
 	u.status.Error = cause.Error()
 	if current, err := u.Engine.InspectContainer(ctx, u.state.Name); err == nil && current.ID != u.state.PreviousContainer {
 		if logs, err := u.Engine.Logs(ctx, current.ID, 200); err == nil {
@@ -513,14 +529,18 @@ func (u *Updater) recoverFrom(ctx context.Context, cause error) {
 		}
 	}
 	u.Log.Warn("rolling back", "step", step, "error", cause)
+	if u.state.Target != nil {
+		u.state.Rejected[u.state.Target.Digest] = fmt.Sprintf("%s at %s", step, u.now().UTC().Format(time.RFC3339))
+	}
 	if err := u.rollback(ctx); err != nil {
+		// Paused, with the phase kept: the next check must not install the same image again, and
+		// `resume` first retries putting the previous container back (Check, then Recover).
+		u.state.Paused = true
+		_ = u.save()
 		u.status.Step = step
 		u.status.Error = fmt.Sprintf("%s; rolling back also failed: %s", cause, err)
 		u.finish(ctx, RollbackFailed, "")
 		return
-	}
-	if u.state.Target != nil {
-		u.state.Rejected[u.state.Target.Digest] = fmt.Sprintf("%s at %s", step, u.now().UTC().Format(time.RFC3339))
 	}
 	u.status.Running = u.state.Previous
 	u.status.Step = step
@@ -670,6 +690,15 @@ func (u *Updater) Rollback(ctx context.Context, force bool) {
 	}
 	u.status.Candidate = target
 	u.install(ctx, app, ref, running, target)
+	if u.status.State == Updated {
+		// The channel still names the image just left; without this the next check reinstalls it.
+		if running.Digest != "" {
+			u.state.Rejected[running.Digest] = fmt.Sprintf("rolled back by hand at %s", u.now().UTC().Format(time.RFC3339))
+		} else {
+			u.state.Paused = true
+		}
+		_ = u.save()
+	}
 }
 
 // Command is a request left in the commands folder by the CLI or by Enan.

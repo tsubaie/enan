@@ -102,6 +102,8 @@ Singleton (`id = 1`), `setup_completed_at`, `schema_version`, `maintenance_mode 
 
 Indexes: `(status, run_after, priority desc)`, `(kind, status)`, `(entity_type, entity_id)`.
 
+`system.prune` deletes finished jobs (`succeeded`, `failed`, `cancelled`) whose `finished_at` is more than 30 days ago, with their attempts, but keeps the newest success of each kind and any job a note refinement still names. A job interrupted by a shutdown is queued again with its attempt number given back, and that attempt's row is removed (ADMIN-B33).
+
 ### job_attempts
 `id, job_id fk cascade, attempt int, lease_owner, started_at, finished_at, status (running|succeeded|failed|abandoned), error text`. Unique `(job_id, attempt)`.
 
