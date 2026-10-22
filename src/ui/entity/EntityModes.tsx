@@ -42,7 +42,7 @@ function EntityLayout<T extends Entity, P extends object, C>({
           aria-label={option.label}
           aria-pressed={option.id === c.state.layout}
           className={cn(
-            'h-7 px-2 text-text-muted dark:hover:bg-white/8',
+            'h-7 px-2 text-text-muted focus-visible:ring-2 focus-visible:ring-inset dark:hover:bg-white/8',
             option.id === c.state.layout &&
               'bg-surface-raised text-text dark:bg-white/15 dark:hover:bg-white/15',
           )}

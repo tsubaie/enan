@@ -77,7 +77,7 @@ function EntitySurface<T extends Entity, P extends object, C>(props: EntityPageP
         c.state.creating && 'entity-page-creating',
       )}
     >
-      <div className="entity-workspace flex min-h-0 flex-1 overflow-hidden lg:gap-6 lg:ps-6">
+      <div className="entity-workspace flex min-h-0 flex-1 overflow-hidden min-[32rem]:ps-6 lg:gap-6">
         {c.railOpen && <EntityRail config={props} controller={c} />}
         <div data-entity-list className="@container min-w-0 flex-1 overflow-y-auto">
           <EntityToolbar config={props} controller={c} />

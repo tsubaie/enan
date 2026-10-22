@@ -1141,6 +1141,18 @@ main:has(.home-page)::-webkit-scrollbar {
 .entity-grid > *:nth-child(n + 7) {
   animation-delay: calc(var(--step-rise) * 3.2);
 }
+/* A tile alone on its row spans it (EntityList marks it): a group of one, such as a KPI objective
+   with a single measure, at every column count; the last of an odd group where there are two. */
+@container (width >= 42rem) {
+  .entity-grid > [data-group-tail='alone'] {
+    grid-column: 1 / -1;
+  }
+}
+@container (42rem <= width < 64rem) {
+  .entity-grid > [data-group-tail='odd'] {
+    grid-column: 1 / -1;
+  }
+}
 /* The strip above it is one block and rises as one, ahead of the tiles it summarises. */
 [data-entity-stats] {
   animation: rise 300ms var(--ease-rise) backwards;

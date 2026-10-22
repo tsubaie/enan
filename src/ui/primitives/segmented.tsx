@@ -17,7 +17,7 @@ import { Button } from './button';
 export const segmentedTrack =
   'inline-flex rounded-full bg-surface-raised p-0.5 dark:border dark:bg-surface/40';
 export const segmentedItem =
-  'h-8 rounded-full px-3.5 text-sm font-light text-text-muted pointer-coarse:h-10 dark:hover:bg-white/8 dark:data-active:bg-white/15 dark:data-active:text-text dark:data-active:shadow-none dark:data-active:hover:bg-white/15';
+  'h-8 rounded-full px-3.5 text-sm font-light text-text-muted focus-visible:ring-2 focus-visible:ring-inset pointer-coarse:h-10 dark:hover:bg-white/8 dark:data-active:bg-white/15 dark:data-active:text-text dark:data-active:shadow-none dark:data-active:hover:bg-white/15';
 export const segmentedItemOn =
   'bg-surface font-medium text-text shadow-sm hover:bg-surface dark:bg-white/15 dark:text-text dark:shadow-none dark:hover:bg-white/15';
 export type Segment<T extends string> = { value: T; label: string; className?: string };

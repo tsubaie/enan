@@ -6,7 +6,7 @@ import { ErrorPanel } from '@/ui/layout/ErrorPanel';
 import { cn } from '@/ui/cn';
 import type { Entity } from './types';
 import type { Surface } from './surface';
-import { EntityGroupHeading, selectRow } from './rows';
+import { EntityGroupHeading, selectRow, groupTail } from './rows';
 import { useRowMotion, rowMotionClass, type Rendered } from './use-row-motion';
 import { EntityTable } from './EntityTable';
 import { EntityListSkeleton, EntityEmpty } from './EntityStates';
@@ -80,6 +80,9 @@ function EntityRows<T extends Entity, P extends object, C>({
           row={row}
           index={index}
           reorder={reorder}
+          tail={
+            props.config.renderers.rowStyle === 'grid' ? groupTail(props, shown, index) : undefined
+          }
         />
       ))}
     </ul>
@@ -99,11 +102,13 @@ function EntityListRow<T extends Entity, P extends object, C>({
   row,
   index,
   reorder,
+  tail,
 }: Surface<T, P, C> & {
   rows: Rendered<T>[];
   row: Rendered<T>;
   index: number;
   reorder: RowReorder | null;
+  tail?: 'alone' | 'odd' | undefined;
 }) {
   const { item, leaving } = row;
   const current = !leaving && c.state.id === item.id;
@@ -114,6 +119,7 @@ function EntityListRow<T extends Entity, P extends object, C>({
       <li
         ref={reorder?.register(item.id)}
         className={cn(rowMotionClass(row), 'min-w-0')}
+        data-group-tail={tail}
         inert={leaving || undefined}
       >
         <div
