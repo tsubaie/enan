@@ -88,7 +88,10 @@ describe('ADMIN-B39 administration overview', () => {
         .getAllByRole('link')
         .map((link) => link.getAttribute('href')),
     ).toEqual(['/admin/tasks', '/admin/notes', '/admin/objectives']);
-    expect(screen.getAllByRole('link')).toHaveLength(10);
+    expect(within(workspace).getByRole('link', { name: /Email/ }).textContent).toContain(
+      en.admin.overviewMail,
+    );
+    expect(screen.getAllByRole('link')).toHaveLength(11);
   });
   it('ADMIN-B39 says nothing about health until the lists it reads have arrived', () => {
     healthy();

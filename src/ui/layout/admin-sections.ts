@@ -3,6 +3,7 @@ import {
   History,
   ListChecks,
   ListTodo,
+  Mail,
   NotebookTabs,
   RefreshCw,
   SlidersHorizontal,
@@ -27,6 +28,7 @@ export const adminSections: {
       { page: 'settings', icon: SlidersHorizontal },
       { page: 'ai', icon: WandSparkles },
       { page: 'users', icon: Users },
+      { page: 'mail', icon: Mail },
     ],
   },
   {

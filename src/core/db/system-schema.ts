@@ -286,6 +286,22 @@ export const aiCredentials = sqliteTable(
   ],
 );
 
+// ADMIN-B60 (ADR 0053): the outgoing mail server an administrator saved. One row, kept apart from
+// the settings registry (ADR 0005); the password is sealed like the AI key.
+export const mailSettings = sqliteTable(
+  'mail_settings',
+  {
+    id: integer().primaryKey().default(1),
+    host: text().notNull(),
+    port: integer().notNull(),
+    username: text().notNull(),
+    encryptedPassword: text('encrypted_password'),
+    fromAddress: text('from_address').notNull(),
+    updatedAt: time('updated_at').notNull().default(now),
+  },
+  (t) => [check('mail_settings_singleton', sql`${t.id} = 1`)],
+);
+
 // ADR 0022: one row per recipient, addressed to a user and never to a person — external people
 // have no login and must never accumulate a feed. `subject_type`/`subject_id` are a soft reference
 // resolved through the owning module at read time (NOTIF-B06), so there is no foreign key to five

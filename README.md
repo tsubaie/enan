@@ -270,17 +270,31 @@ Every variable is documented in [`.env.example`](.env.example).
 
 | Variable              | Default                         | Purpose                                                                    |
 | --------------------- | ------------------------------- | -------------------------------------------------------------------------- |
-| `SESSION_SECRET`      | (required)                      | 32+ characters. Keep it stable: saved AI keys are encrypted with it.       |
+| `SESSION_SECRET`      | (required)                      | 32+ characters. Keep it stable: saved AI and mail keys are sealed with it. |
 | `APP_URL`             | `http://localhost:3000`         | The browser origin. It must be `https` in production, except on loopback.  |
 | `DATABASE_URL`        | `file:` path on the data volume | The SQLite file. Keep it on a local disk, not a network share.             |
 | `TRUSTED_PROXY_CIDRS` | empty                           | Your proxy's addresses, so per-address login throttling sees real clients. |
 | `OPENROUTER_API_KEY`  | empty                           | Optional fallback. A key saved in **Admin → AI** takes precedence.         |
+| `SMTP_HOST` …         | empty                           | Optional mail server. Settings saved in **Admin → Email** take precedence. |
 | `FILES_QUOTA_GB`      | `20`                            | Storage quota for uploaded files.                                          |
 | `MAX_UPLOAD_MB`       | `20`                            | The largest single upload.                                                 |
 | `RECOVERY_TOKEN`      | empty                           | A one-time admin recovery token. Set it, restart, use it, then remove it.  |
 | `LOG_LEVEL`           | `info`                          | `trace` through `fatal`.                                                   |
 
 </details>
+
+### Sending email
+
+Enan sends email for sign-in codes and a test message. Set it up in **Admin → Email** (or with the `SMTP_*` variables). Any SMTP server works, as long as it encrypts the connection: port 587 with STARTTLS, or 465.
+
+With Google Workspace or Gmail:
+
+1. Turn on 2-Step Verification for the account that will send (Google Account → Security).
+2. Create an app password at <https://myaccount.google.com/apppasswords>, named for example "Enan".
+3. In **Admin → Email**, enter server `smtp.gmail.com`, port `587`, the account's address as user name and as sender, and the 16-character app password.
+4. Press **Send test email**. It goes to your own address.
+
+The password is stored encrypted with `SESSION_SECRET` and is never shown again.
 
 ## Data and backups
 
@@ -291,7 +305,7 @@ docker compose exec app pnpm backup:create
 docker compose exec app pnpm backup:restore /var/lib/enan/backups/BACKUP_ID --confirm
 ```
 
-A restore replaces the database and the uploaded files, so it requires `--confirm`. Keep a copy of `SESSION_SECRET` with your backups, because a backup cannot decrypt a saved AI key without it.
+A restore replaces the database and the uploaded files, so it requires `--confirm`. Keep a copy of `SESSION_SECRET` with your backups, because a backup cannot decrypt a saved AI key or mail password without it.
 
 ## How it's built
 

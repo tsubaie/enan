@@ -605,7 +605,39 @@
     "auditAction_update_check": "طلب فحص في",
     "auditAction_update_pause": "إيقاف مؤقت في",
     "auditAction_update_resume": "استئناف",
-    "auditAction_update_retry": "السماح بإعادة تجربة إصدار فشل في"
+    "auditAction_update_retry": "السماح بإعادة تجربة إصدار فشل في",
+    "mail": "البريد",
+    "overviewMail": "الخادم الذي يرسل منه عنان البريد",
+    "mailStatus": "إرسال البريد",
+    "mailStatusLabel": "الحالة",
+    "mailSaved": "مُعدّ هنا",
+    "mailFromServer": "مُعدّ على الخادم",
+    "mailNotSetUp": "غير مُعدّ",
+    "mailSendTest": "أرسل رسالة تجريبية",
+    "mailSending": "جارٍ الإرسال…",
+    "mailTestSent": "أُرسلت رسالة تجريبية إلى {to}. إن لم تصل خلال دقائق فابحث عنها في مجلد الرسائل غير المرغوبة.",
+    "mailError_auth": "رفض خادم البريد اسم المستخدم أو كلمة المرور.",
+    "mailError_network": "تعذّر الوصول إلى خادم البريد. تحقّق من اسم الخادم والمنفذ.",
+    "mailError_tls": "تعذّر إنشاء اتصال آمن بخادم البريد. لا يرسل عنان إلا عبر اتصال مشفّر.",
+    "mailError_rejected": "رفض خادم البريد الرسالة. تحقّق من عنوان المرسل.",
+    "mailError_credentials": "لم يعد ممكنًا قراءة كلمة المرور المحفوظة لأن SESSION_SECRET على الخادم تغيّر. أدخل كلمة المرور مرة أخرى.",
+    "mailError_server": "أعاد خادم البريد خطأً. أعد المحاولة لاحقًا.",
+    "mailServer": "خادم البريد",
+    "mailServerHelp": "يعمل أي خادم SMTP. لحساب Google Workspace أو Gmail استخدم smtp.gmail.com على المنفذ 587، وعنوانك اسمًا للمستخدم، وكلمة مرور تطبيق من حساب Google (تتطلّب التحقق بخطوتين).",
+    "mailServerFromEnv": "إعدادات SMTP على الخادم مستخدمة الآن. ما تحفظه هنا يحلّ محلّها.",
+    "mailHost": "الخادم",
+    "mailHostInvalid": "أدخل اسم خادم، مثل smtp.gmail.com.",
+    "mailPort": "المنفذ",
+    "mailPortHint": "المنفذ 587 يرقّي الاتصال إلى اتصال مشفّر، و465 مشفّر من البداية.",
+    "mailUsername": "اسم المستخدم",
+    "mailPassword": "كلمة المرور",
+    "mailPasswordKept": "توجد كلمة مرور محفوظة. اترك الحقل فارغًا للإبقاء عليها.",
+    "mailFrom": "الإرسال من",
+    "mailFromInvalid": "أدخل عنوان بريد إلكتروني.",
+    "mailRemove": "احذف الإعدادات المحفوظة",
+    "auditAction_mail_settings_save": "حفظ خادم البريد في",
+    "auditAction_mail_settings_remove": "حذف خادم البريد من",
+    "auditEntity_mail_settings": "البريد"
   },
   "errors": {
     "validation_failed": "تحقّق من القيم المدخلة.",
@@ -617,7 +649,8 @@
     "rate_limited": "محاولات كثيرة. حاول لاحقًا.",
     "ai_unavailable": "الذكاء الاصطناعي غير متاح.",
     "internal": "حدث خطأ. أعد المحاولة أو تواصل مع المسؤول.",
-    "ai_failed": "فشل طلب الذكاء الاصطناعي. أعد المحاولة."
+    "ai_failed": "فشل طلب الذكاء الاصطناعي. أعد المحاولة.",
+    "mail_failed": "تعذّر إرسال البريد."
   },
   "tasks": {
     "searchList": "ابحث في المهام",
@@ -1086,5 +1119,9 @@
     "updateRollbackFailed": "فشل التحديث والرجوع: {title}",
     "updateBlocked": "تحديث بانتظار موافقتك: {title}",
     "updateStalled": "توقّفت خدمة التحديث عن الفحص: {title}"
+  },
+  "mail": {
+    "testSubject": "رسالة تجريبية من {workspace}",
+    "testBody": "هذه رسالة تجريبية من {workspace}. البريد من عنان يعمل."
   }
 }

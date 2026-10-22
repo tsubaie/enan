@@ -44,6 +44,7 @@ const pages = [
   'settings',
   'ai',
   'users',
+  'mail',
   'tasks',
   'notes',
   'objectives',
@@ -53,7 +54,7 @@ const pages = [
   'audit',
 ] as const;
 
-test('ADMIN-B40 @desktop the rail lists the overview, then settings, AI, members, tasks, notes, objectives, then maintenance', async ({
+test('ADMIN-B40 @desktop the rail lists the overview, then settings, AI, members, email, tasks, notes, objectives, then maintenance', async ({
   page,
 }) => {
   await loginAs(page, 'en');
@@ -417,4 +418,30 @@ test('ADMIN-B43 a settings change reads in the audit log as words, not as raw ke
   } finally {
     await restore(page, 'retention.trash_days', before.value);
   }
+});
+
+test('ADMIN-B60 ADMIN-B61 a mail server saved on the Email page keeps its password hidden and a failed test says why', async ({
+  page,
+}) => {
+  await loginAs(page, 'en');
+  await page.goto('/admin/mail');
+  await expect(page.getByRole('heading', { level: 1, name: en.admin.mail })).toBeVisible();
+  // A port nothing listens on: the real client is refused, so the page must name the cause.
+  await page.getByLabel(en.admin.mailHost).fill('127.0.0.1');
+  await page.getByLabel(en.admin.mailPort).fill('1');
+  await page.getByLabel(en.admin.mailUsername).fill('sender@example.test');
+  await page.getByLabel(en.admin.mailPassword).fill('e2e-mail-password');
+  await page.getByLabel(en.admin.mailFrom).fill('office@example.test');
+  await page.getByRole('button', { name: en.common.save, exact: true }).click();
+  await expect(page.getByText(en.admin.mailSaved)).toBeVisible();
+  await expect(page.getByText(en.admin.mailPasswordKept)).toBeVisible();
+  await expect(page.getByLabel(en.admin.mailPassword)).toHaveValue('');
+  const status = await api(page, '/admin/mail');
+  expect(JSON.stringify(status.body)).not.toContain('e2e-mail-password');
+  await page.getByRole('button', { name: en.admin.mailSendTest }).click();
+  await expect(
+    page.getByRole('alert').filter({ hasText: en.admin.mailError_network }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: en.admin.mailRemove }).click();
+  await expect(page.getByText(en.admin.mailNotSetUp)).toBeVisible();
 });

@@ -37,6 +37,7 @@ it('ADMIN-B40 the side list groups every administration page and marks the one s
     '/admin/settings',
     '/admin/ai',
     '/admin/users',
+    '/admin/mail',
     '/admin/tasks',
     '/admin/notes',
     '/admin/objectives',

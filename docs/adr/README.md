@@ -56,5 +56,6 @@ One decision per file. Format: **Status**, **Context**, **Decision**, **Conseque
 | 0050 | Releases, channel tags, and migrations the previous release can run on | accepted |
 | 0051 | Installs update themselves through an opt-in updater service | accepted |
 | 0052 | The push deploy is removed; the maintainer's install updates itself | accepted |
+| 0053 | Email and new sign-in methods extend the own auth; their credentials are sealed in the database | accepted |
 
 Open decisions awaiting an ADR: license (see roadmap); chart library confirmation (`recharts`).
