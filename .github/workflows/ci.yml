@@ -399,6 +399,10 @@ jobs:
             app=$($compose ps -q app)
             # The way back: a verified backup from the running version, before migrations touch it.
             docker exec "$app" pnpm backup:create
+            # ADR 0048: the image's data moved from /var/lib/executiveos to /var/lib/enan. An overlay
+            # that mounts a volume at the old path would otherwise sit beside the new mount, and the
+            # app would start on an empty database. Rewriting it is a no-op once done.
+            sed -i 's#/var/lib/executiveos\b#/var/lib/enan#g' "$overlay"
             sed -i "s#^\( *image: *\).*#\1$IMAGE#" "$overlay"
             $compose up -d
             app=$($compose ps -q app)
