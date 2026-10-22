@@ -19,6 +19,8 @@ vi.mock('@/core/auth/session', () => ({
     }),
 }));
 vi.mock('next-intl/server', () => ({ getTranslations: async () => (key: string) => key }));
+// Outside a Next request, the work `after` would run once the response is sent runs at once.
+vi.mock('next/server', () => ({ after: (work: () => void) => work() }));
 beforeAll(() => migrateDatabase());
 beforeEach(async () => {
   session.role = 'admin';

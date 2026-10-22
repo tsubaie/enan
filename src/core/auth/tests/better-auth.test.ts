@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { readMigrationFiles } from 'drizzle-orm/migrator';
 import journal from '../../../../drizzle/meta/_journal.json';
 import { closeDatabase, db, withTransaction } from '@/core/db/client';
@@ -8,7 +8,7 @@ import { migrateDatabase } from '@/core/db/migrate';
 import { insertUser, lockWorkspace } from '@/core/db/auth-repo';
 import { saveMailSettings } from '@/core/db/mail-settings-repo';
 import { writeSetting } from '@/core/db/settings-repo';
-import { users } from '@/core/db/system-schema';
+import { loginAttempts, users } from '@/core/db/system-schema';
 import { authSessions, authVerifications } from '@/core/db/auth-schema';
 import { id } from '@/core/db/ids';
 import { env } from '@/core/config/env';
@@ -51,7 +51,21 @@ vi.mock('../password', async (original) => {
     },
   };
 });
+// The Google client read can be made to fail once, the way a passing database error would.
+const google = vi.hoisted(() => ({ failNext: false }));
+vi.mock('../google-settings', async (original) => {
+  const actual = await original<typeof import('../google-settings')>();
+  return {
+    ...actual,
+    googleClient: (database: Parameters<typeof actual.googleClient>[0]) => {
+      if (!google.failNext) return actual.googleClient(database);
+      google.failNext = false;
+      return Promise.reject(new Error('database is locked'));
+    },
+  };
+});
 const { auth, resetAuth } = await import('../better-auth');
+const { saveGoogle } = await import('../google-settings');
 const { hashPassword } = await import('../password');
 const password = 'correct-horse-battery-staple';
 let passwordHash = '';
@@ -228,4 +242,30 @@ it('ADMIN-B66 migration 0012 carries a password from before Better Auth over, so
   for (const statement of statements.filter((text) => /^\s*INSERT/u.test(text)))
     await db().run(sql.raw(statement));
   expect((await signIn('before@example.test')).status).toBe(200);
+});
+
+const startGoogle = () =>
+  call('/sign-in/social', { provider: 'google', callbackURL: '/home', errorCallbackURL: '/login' });
+it('ADMIN-B65 a saved Google client takes effect once Better Auth is rebuilt, and a failed read is not kept', async () => {
+  await withTransaction(db(), (database) =>
+    saveGoogle(database, member, {
+      clientId: '1234-test.apps.googleusercontent.com',
+      clientSecret: 'fixture-google-secret',
+    }),
+  );
+  // The first build cannot read the client, so it has no Google; the next request builds again.
+  google.failNext = true;
+  expect((await startGoogle()).status).not.toBe(200);
+  const started = await startGoogle();
+  expect(started.status).toBe(200);
+  expect(new URL(((await started.json()) as { url: string }).url).host).toBe('accounts.google.com');
+});
+it('ADMIN-B20 a sign-in turned away because the hasher is busy (429) is not counted as a wrong password', async () => {
+  const replies = await Promise.all([1, 2, 3].map(() => signIn('member@example.test')));
+  expect(replies.map((reply) => reply.status).sort()).toEqual([200, 200, 429]);
+  const failed = await db()
+    .select()
+    .from(loginAttempts)
+    .where(and(eq(loginAttempts.email, 'member@example.test'), eq(loginAttempts.succeeded, false)));
+  expect(failed).toHaveLength(0);
 });
