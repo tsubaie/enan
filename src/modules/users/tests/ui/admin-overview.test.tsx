@@ -91,7 +91,7 @@ describe('ADMIN-B39 administration overview', () => {
     expect(within(workspace).getByRole('link', { name: /Email/ }).textContent).toContain(
       en.admin.overviewMail,
     );
-    expect(screen.getAllByRole('link')).toHaveLength(11);
+    expect(screen.getAllByRole('link')).toHaveLength(12);
   });
   it('ADMIN-B39 says nothing about health until the lists it reads have arrived', () => {
     healthy();

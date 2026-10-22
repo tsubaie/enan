@@ -15,6 +15,7 @@ export type AdminPage =
   | 'objectives'
   | 'ai'
   | 'mail'
+  | 'signin'
   | 'backups'
   | 'updates'
   | 'jobs'
@@ -37,4 +38,5 @@ export const routes = {
   login: () => '/login',
   setup: () => '/setup',
   recovery: () => '/recovery',
+  loginCode: () => '/login/code',
 };

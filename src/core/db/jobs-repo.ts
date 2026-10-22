@@ -5,6 +5,7 @@ import {
   jobAttempts,
   schedules,
   loginAttempts,
+  signInCodes,
   sessions,
   idempotencyKeys,
 } from './system-schema';
@@ -298,6 +299,9 @@ export async function prune(database: Database) {
     .delete(idempotencyKeys)
     .where(lt(idempotencyKeys.createdAt, new Date(Date.now() - 86400000)));
   await database.delete(sessions).where(lt(sessions.expiresAt, new Date()));
+  await database
+    .delete(signInCodes)
+    .where(lt(signInCodes.createdAt, new Date(Date.now() - 86400000)));
 }
 export async function dueSchedules(database: Database) {
   return database.select().from(schedules).where(eq(schedules.enabled, true));

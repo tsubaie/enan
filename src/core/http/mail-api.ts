@@ -1,11 +1,9 @@
 import 'server-only';
 import { z } from 'zod';
 import { defineHandler, authenticated } from './handler';
-import { AppError } from './errors';
 import { MailSettingsWrite, MailStatus } from '@/core/config/mail-schema';
-import { mailStatus, mailServer, saveMail, removeMail } from '@/core/mail/settings';
-import { deliver, mailCatalog } from '@/core/mail/send';
-import { getSetting, hasSetting } from '@/core/db/settings-repo';
+import { mailStatus, saveMail, removeMail } from '@/core/mail/settings';
+import { mailUser } from '@/core/mail/send';
 const response = z.object({ data: MailStatus });
 export const read = defineHandler({
   guard: 'admin',
@@ -36,18 +34,10 @@ export const test = defineHandler({
   transaction: false,
   handler: async (_, ctx) => {
     const { user } = authenticated(ctx);
-    const server = await mailServer(ctx.db);
-    if (!server) throw new AppError('rule_violation', { reason: 'mail_not_configured' });
-    const locale = (await hasSetting(ctx.db, 'user.locale', user.id))
-      ? await getSetting(ctx.db, 'user.locale', user.id)
-      : await getSetting(ctx.db, 'workspace.default_locale');
-    const workspace = await getSetting(ctx.db, 'workspace.name');
-    const copy = mailCatalog(locale);
-    await deliver(server, workspace, locale, {
-      to: user.email,
+    await mailUser(ctx.db, user, (copy, workspace) => ({
       subject: copy.testSubject.replaceAll('{workspace}', workspace),
       lines: [copy.testBody.replaceAll('{workspace}', workspace)],
-    });
+    }));
     return { data: { to: user.email } };
   },
 });

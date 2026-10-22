@@ -178,7 +178,16 @@
     "recovery": "إعادة تعيين كلمة المرور",
     "recoverLink": "استعادة الحساب",
     "secure": "استضافة ذاتية · بياناتك في مساحة عملك",
-    "recoverDone": "تم تحديث كلمة المرور. سجّل الدخول باستخدامها."
+    "recoverDone": "تم تحديث كلمة المرور. سجّل الدخول باستخدامها.",
+    "or": "أو",
+    "codeLink": "أرسل لي رمز دخول بالبريد",
+    "codeTitle": "الدخول برمز",
+    "codeDescription": "سنرسل إليك رمزًا من ست خانات بالبريد. يصلح مرة واحدة خلال عشر دقائق.",
+    "codeSend": "أرسل الرمز",
+    "codeSent": "إن كان {email} لحساب هنا فالرمز في طريقه إليك. أدخله أدناه.",
+    "code": "الرمز",
+    "codeAgain": "أرسل رمزًا جديدًا",
+    "passwordLink": "الدخول بكلمة المرور"
   },
   "home": {
     "title": "مكتبك، في لمحة",
@@ -637,7 +646,20 @@
     "mailRemove": "احذف الإعدادات المحفوظة",
     "auditAction_mail_settings_save": "حفظ خادم البريد في",
     "auditAction_mail_settings_remove": "حذف خادم البريد من",
-    "auditEntity_mail_settings": "البريد"
+    "auditEntity_mail_settings": "البريد",
+    "signin": "الدخول",
+    "overviewSignIn": "الطرق التي يدخل بها الأعضاء",
+    "signInMethods": "طرق الدخول",
+    "signInMethodsHelp": "اختر ما تعرضه صفحة الدخول. يجب أن تبقى طريقة واحدة على الأقل. إن أُغلق الباب عليك فإن RECOVERY_TOKEN على الخادم يتيح لمسؤول الدخول.",
+    "signInMethod_password": "البريد وكلمة المرور",
+    "signInMethod_code": "رمز يُرسل بالبريد",
+    "signInMethod_google": "Google",
+    "signInMethodHelp_password": "يدخل الأعضاء بكلمة المرور التي أعطاهم إياها مسؤول أو اختاروها.",
+    "signInMethodHelp_code": "يُدخل العضو بريده فيصله رمز من ست خانات يصلح مرة واحدة خلال عشر دقائق.",
+    "signInMethodHelp_google": "يدخل الأعضاء بحساب Google الذي يحمل عنوان البريد نفسه.",
+    "signInNeedsMail": "أعدّ البريد أولًا",
+    "signInLast": "هذه الطريقة الوحيدة المفعّلة، فلا يمكن إيقافها.",
+    "signInSaved": "حُفظ. تعرض صفحة الدخول الآن ما هو محدّد."
   },
   "errors": {
     "validation_failed": "تحقّق من القيم المدخلة.",
@@ -1122,6 +1144,9 @@
   },
   "mail": {
     "testSubject": "رسالة تجريبية من {workspace}",
-    "testBody": "هذه رسالة تجريبية من {workspace}. البريد من عنان يعمل."
+    "testBody": "هذه رسالة تجريبية من {workspace}. البريد من عنان يعمل.",
+    "codeSubject": "رمز دخولك إلى {workspace}",
+    "codeBody": "رمز دخولك هو {code}.",
+    "codeExpiry": "يصلح مرة واحدة وتنتهي صلاحيته خلال {minutes} دقائق. إن لم تطلبه فتجاهل هذه الرسالة."
   }
 }

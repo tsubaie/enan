@@ -1,0 +1,13 @@
+import { z } from 'zod';
+// ADMIN-B64: the ways the login page can offer. Google arrives with its own configuration.
+export const SignInMethod = z.enum(['password', 'code', 'google']);
+export type SignInMethod = z.infer<typeof SignInMethod>;
+export const SignInMethods = z.array(SignInMethod).min(1);
+export const SignInMethodsStatus = z.object({
+  chosen: SignInMethods,
+  available: z.record(SignInMethod, z.boolean()),
+  enabled: SignInMethods,
+});
+export const SignInMethodsWrite = z.strictObject({ methods: SignInMethods });
+// ADMIN-B63: a sign-in code is six digits.
+export const SignInCode = z.string().regex(/^\d{6}$/u);

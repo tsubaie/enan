@@ -1,6 +1,7 @@
 'use client';
 import { useTranslations } from 'next-intl';
 import { z } from 'zod';
+import { SignInMethods } from '@/core/config/sign-in-schema';
 import { useDateTime, usePlainDate } from '@/ui/format';
 // ADMIN-B43: what a change did, as a reader would say it: each changed field by its everyday name
 // and its new value in words (a state, a date, Yes or No), long text as "edited" rather than
@@ -120,6 +121,7 @@ const SettingKey = z.enum([
   'retention.backup_count',
   'kpis.status_thresholds',
   'tasks.default_view',
+  'auth.sign_in_methods',
 ]);
 const settingLabel: Record<
   z.infer<typeof SettingKey>,
@@ -134,6 +136,7 @@ const settingLabel: Record<
   | 'settingsBackupCount'
   | 'settingsKpis'
   | 'settingsDefaultView'
+  | 'signInMethods'
 > = {
   'workspace.name': 'settingsName',
   'workspace.principal_person_id': 'settingsPrincipal',
@@ -146,17 +149,9 @@ const settingLabel: Record<
   'retention.backup_count': 'settingsBackupCount',
   'kpis.status_thresholds': 'settingsKpis',
   'tasks.default_view': 'settingsDefaultView',
+  'auth.sign_in_methods': 'signInMethods',
 };
-const Wallpaper = z.enum([
-  'ribbon',
-  'copper',
-  'jade',
-  'neon',
-  'folds',
-  'stone',
-  'arc',
-  'sky',
-]);
+const Wallpaper = z.enum(['ribbon', 'copper', 'jade', 'neon', 'folds', 'stone', 'arc', 'sky']);
 function settingChange(diff: Record<string, Json>, t: T): Change[] {
   const key = SettingKey.safeParse(diff.key);
   if (!key.success) return [];
@@ -173,6 +168,9 @@ function settingValue(key: z.infer<typeof SettingKey>, raw: Json | undefined, t:
   // ADMIN-B47: an uploaded wallpaper is named by its id, which says nothing to a reader.
   if (key === 'workspace.wallpaper') return t('wallpaper_custom');
   if (key === 'workspace.principal_person_id') return t('auditChanged');
+  const methods = SignInMethods.safeParse(raw);
+  if (key === 'auth.sign_in_methods' && methods.success)
+    return methods.data.map((method) => t(`signInMethod_${method}`)).join(', ');
   if (typeof raw === 'string' || typeof raw === 'number') return String(raw);
   return t('auditChanged');
 }
