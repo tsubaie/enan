@@ -223,9 +223,10 @@ jobs:
 
   # The container image, one job for both purposes. On a pull request it proves the Dockerfile
   # still builds (kept local, never published). On a push to main it builds the production image
-  # (linux/amd64), publishes it to GHCR tagged with the commit, and smoke-tests it (a fresh SQLite
-  # volume, migrations on start, a healthy /api/v1/health) before the deploy may use it
-  # (ADR 0039). Both reuse Docker's layer cache from GitHub's cache service; only main writes it.
+  # (linux/amd64), publishes it to GHCR tagged with the commit only, and smoke-tests it (a fresh
+  # SQLite volume, migrations on start, a healthy /api/v1/health naming this commit). Channel tags
+  # move later, once the gate has passed (publish, below, and release.yml; ADR 0050). Both reuse
+  # Docker's layer cache from GitHub's cache service; only main writes it.
   docker:
     name: Container image
     needs: changes
@@ -238,6 +239,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
+      # ADMIN-B54, ADMIN-B55: what the image says about itself. schema-labels.ts has no
+      # dependencies, so Node alone runs it, without installing the workspace.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.2
+      - name: Image identity
+        id: identity
+        run: |
+          node scripts/build/schema-labels.ts >> "$GITHUB_OUTPUT"
+          echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+          cat "$GITHUB_OUTPUT"
       - name: Build the image (pull request)
         if: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         uses: docker/build-push-action@v6
@@ -246,6 +258,13 @@ jobs:
           target: runtime
           build-args: |
             NEXT_BUILD_CPUS=${{ env.NEXT_BUILD_CPUS }}
+            ENAN_REVISION=${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.identity.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.enan.schema=${{ steps.identity.outputs.schema }}
+            org.enan.contract=${{ steps.identity.outputs.contract }}
           cache-from: type=gha,scope=runtime
           push: false
           # Loaded into the runner's Docker so the smoke test below runs it too.
@@ -265,11 +284,16 @@ jobs:
           platforms: linux/amd64
           build-args: |
             NEXT_BUILD_CPUS=${{ env.NEXT_BUILD_CPUS }}
-          tags: |
-            ghcr.io/${{ github.repository }}:${{ github.sha }}
-            ghcr.io/${{ github.repository }}:latest
-          # Links the package to this repository, so the deploy job's GITHUB_TOKEN can pull it.
-          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            ENAN_REVISION=${{ github.sha }}
+          # Only the commit. An image that fails a check below must never become `edge` or `latest`.
+          tags: ghcr.io/${{ github.repository }}:${{ github.sha }}
+          # `source` links the package to this repository, so the deploy job's GITHUB_TOKEN can pull it.
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.identity.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.enan.schema=${{ steps.identity.outputs.schema }}
+            org.enan.contract=${{ steps.identity.outputs.contract }}
           cache-from: type=gha,scope=runtime
           cache-to: type=gha,scope=runtime,mode=max
           push: true
@@ -309,6 +333,9 @@ jobs:
             return 1
           }
           healthy
+          # ADMIN-B54: health names the commit the image was built from.
+          curl -sf "http://127.0.0.1:$port/api/v1/health" | grep -q '"revision":"${{ github.sha }}"' \
+            || { echo "::error::/api/v1/health does not report revision ${{ github.sha }}"; exit 1; }
           docker exec "$name" pnpm db:migrate
           docker exec "$name" pnpm backup:create
           backup=$(docker exec "$name" ls /var/lib/enan/backups | head -n 1)
@@ -316,6 +343,52 @@ jobs:
           docker exec "$name" pnpm backup:restore "/var/lib/enan/backups/$backup" --confirm
           healthy
           docker image inspect "$IMAGE" --format 'image size: {{.Size}} bytes'
+      # ADMIN-B55, ADR 0050: an updater rolls back by starting the previous image on the database
+      # this one migrated, so that must work unless this image's migrations say it cannot
+      # (`-- enan:contract`). The previous image is the newest main that passed every check.
+      - name: The previous image runs on this image's database
+        env:
+          IMAGE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && format('ghcr.io/{0}:{1}', github.repository, github.sha) || 'enan-ci:pr' }}
+          PREVIOUS: ghcr.io/${{ github.repository }}:edge
+          CONTRACT: ${{ steps.identity.outputs.contract }}
+        run: |
+          set -eu
+          if ! docker pull -q "$PREVIOUS" >/dev/null 2>&1; then
+            echo "::notice::$PREVIOUS does not exist yet; nothing to roll back to"
+            exit 0
+          fi
+          schema=$(docker image inspect "$PREVIOUS" --format '{{ index .Config.Labels "org.enan.schema" }}')
+          case "$schema" in '' | '<no value>') schema=0 ;; esac
+          if [ "$CONTRACT" -gt "$schema" ]; then
+            echo "::notice::migration $CONTRACT is marked enan:contract and $PREVIOUS stops at $schema; a rollback across it is not supported"
+            exit 0
+          fi
+          name=ci-exos-rollback-run${{ github.run_number }}-${{ github.run_attempt }}
+          cleanup() {
+            docker rm -f "$name" >/dev/null 2>&1 || true
+            docker volume rm -f "$name-data" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          docker volume create "$name-data" >/dev/null
+          start() {
+            docker rm -f "$name" >/dev/null 2>&1 || true
+            docker run -d --name "$name" --platform linux/amd64 -p 127.0.0.1::3000 \
+              -v "$name-data:/var/lib/enan/data" \
+              -e DATABASE_URL=file:/var/lib/enan/data/enan.db \
+              -e SESSION_SECRET=ci-smoke-only-session-secret-0123456789abcdef \
+              -e APP_URL=http://localhost:3000 -e JOBS_ENABLED=false "$1" >/dev/null
+            port=$(docker port "$name" 3000/tcp | head -n 1 | sed 's/.*://')
+            for attempt in $(seq 1 60); do
+              body=$(curl -sf "http://127.0.0.1:$port/api/v1/health" || true)
+              case "$body" in *'"db":true'*) echo "$1 healthy: $body"; return 0;; esac
+              sleep 3
+            done
+            docker logs "$name" | tail -50
+            echo "::error::$1 did not become healthy on a database migrated by $IMAGE"
+            return 1
+          }
+          start "$IMAGE"
+          start "$PREVIOUS"
 
   # One status to require on the branch: it fails if any group above failed or was skipped. The
   # image may be skipped only on a pull request whose changes do not shape it.
@@ -348,6 +421,30 @@ jobs:
           else
             test "$DOCKER_RESULT" = skipped
           fi
+
+  # ADMIN-B54, ADR 0050: the `edge` channel follows main, but only to an image that passed every
+  # check: the gate, so the smoke test and the rollback check above included. Releases move the
+  # version tags and `latest` (release.yml).
+  publish:
+    name: Publish edge
+    needs: [gate]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-latest"') }}
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Move edge to this commit
+        run: |
+          image=ghcr.io/${{ github.repository }}
+          docker buildx imagetools create --tag "$image:edge" "$image:${{ github.sha }}"
 
   # Deploys main to the maintainer's server once the gate has passed (every check, and the image
   # built, published and smoke-tested above). It runs only when the repository variable

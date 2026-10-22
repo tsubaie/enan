@@ -42,6 +42,10 @@ COPY --from=builder --chown=enan:enan /app/.next/standalone ./
 RUN mkdir -p /var/lib/enan/data /var/lib/enan/files /var/lib/enan/backups && chown -R enan:enan /var/lib/enan
 USER enan
 ENV NODE_ENV=production HOSTNAME=0.0.0.0 PORT=3000 COREPACK_HOME=/opt/corepack NEXT_MANUAL_SIG_HANDLE=true
+# ADMIN-B54: the commit the image was built from, reported by /api/v1/health. It changes on every
+# commit, so it comes after every file layer and invalidates none of them.
+ARG ENAN_REVISION=
+ENV ENAN_REVISION=$ENAN_REVISION
 EXPOSE 3000
 ENTRYPOINT []
 CMD ["node", "server.js"]

@@ -125,17 +125,17 @@ ceo letter v1 done, waiting on sara + khalid comments
 
 What comes back is a proposal, laid out for review:
 
-1. **A suggested rewrite**, with sections that fit the note: meeting, planning or general. Read it alone, read your original, or put them side by side. A one-line *What changed* says what it did. If the note was already tidy, it changes little. It does not invent facts.
-2. **Suggested tasks**, under *Also create*. Each one shows the sentence it came from. The owner is matched to a person in your workspace, or left empty if nobody fits. A task can carry a due date. Titles are editable, and each has a checkbox.
+1. **A suggested rewrite**, with sections that fit the note: meeting, planning or general. Read it alone, read your original, or put them side by side. A one-line _What changed_ says what it did. If the note was already tidy, it changes little. It does not invent facts.
+2. **Suggested tasks**, under _Also create_. Each one shows the sentence it came from. The owner is matched to a person in your workspace, or left empty if nobody fits. A task can carry a due date. Titles are editable, and each has a checkbox.
 
-   | Keep | Task | Owner | Due | From |
-   | :--: | ---- | ----- | --- | ---- |
-   | ☑ | Chase the three largest receivables | Khalid Al-Harbi | Thursday | “khalid to chase top 3 receivables before thurs” |
-   | ☐ | Shortlist two ERP change managers | Noura Al-Otaibi | next week | “noura shortlist 2 erp change managers next wk” |
+   | Keep | Task                                | Owner           | Due       | From                                             |
+   | :--: | ----------------------------------- | --------------- | --------- | ------------------------------------------------ |
+   |  ☑   | Chase the three largest receivables | Khalid Al-Harbi | Thursday  | “khalid to chase top 3 receivables before thurs” |
+   |  ☐   | Shortlist two ERP change managers   | Noura Al-Otaibi | next week | “noura shortlist 2 erp change managers next wk”  |
 
 3. **Suggested tags**, as chips.
 
-You tick what to keep. The button says exactly what will happen, for example *Use rewrite and create 1 task*, and the tasks it creates are linked to the note. Discard has Undo.
+You tick what to keep. The button says exactly what will happen, for example _Use rewrite and create 1 task_, and the tasks it creates are linked to the note. Discard has Undo.
 
 <sub>The note and the table illustrate the shape of a proposal. They are not a transcript of a model's output.</sub>
 
@@ -143,7 +143,7 @@ A note written in a mix of Arabic and English is refined into Arabic, with names
 
 ### Break down a task
 
-A task like *Prepare the Q4 board pack* comes back as up to eight suggested subtasks. Each can have a due date, never later than the parent's. You tick the ones to add. Applying twice does not create duplicates.
+A task like _Prepare the Q4 board pack_ comes back as up to eight suggested subtasks. Each can have a due date, never later than the parent's. You tick the ones to add. Applying twice does not create duplicates.
 
 ### Suggest tags
 
@@ -171,13 +171,13 @@ flowchart LR
 
 ### What the administrator controls
 
-| Control | What it does |
-| ------- | ------------ |
-| Your own key | An [OpenRouter](https://openrouter.ai) key, saved in **Admin → AI**. It is stored encrypted, never shown again, can be tested, and takes effect without a restart. You pay for your own usage. |
-| Model choice | A default model for refining and breaking down, and a fast model for tags. Any OpenRouter text model with structured outputs can be chosen, Claude for example. |
-| Per-feature switches | Refine, breakdown and tag suggestions are turned on or off separately. |
-| Monthly budget | A cap in US dollars, with a warning at 80%. Each person also has an hourly limit: 30 refines or breakdowns, 60 tag suggestions. |
-| Usage | Calls and estimated cost per capability over the last 30 days. |
+| Control              | What it does                                                                                                                                                                                   |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Your own key         | An [OpenRouter](https://openrouter.ai) key, saved in **Admin → AI**. It is stored encrypted, never shown again, can be tested, and takes effect without a restart. You pay for your own usage. |
+| Model choice         | A default model for refining and breaking down, and a fast model for tags. Any OpenRouter text model with structured outputs can be chosen, Claude for example.                                |
+| Per-feature switches | Refine, breakdown and tag suggestions are turned on or off separately.                                                                                                                         |
+| Monthly budget       | A cap in US dollars, with a warning at 80%. Each person also has an hourly limit: 30 refines or breakdowns, 60 tag suggestions.                                                                |
+| Usage                | Calls and estimated cost per capability over the last 30 days.                                                                                                                                 |
 
 ### Coming
 
@@ -200,11 +200,26 @@ Edit `.env` and set:
 Leave `DATABASE_URL` as it is, because it points at the data volume. Then run:
 
 ```bash
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 docker compose logs app | grep SETUP_TOKEN
 ```
 
-Open http://localhost:3000 and finish setup with that token. Migrations run on start. To upgrade, run `git pull` in the folder you installed from, then `docker compose up -d --build` again. A clone in a new folder starts with new, empty volumes, because Compose names the volumes after the folder.
+Open http://localhost:3000 and finish setup with that token. Migrations run on start. `docker compose pull` fetches the published image (`ENAN_TAG` in `.env`: `latest` is the newest release, `edge` the newest main that passed every check, or pin a version such as `0.2`). To build from this checkout instead, run `docker compose up -d --build`.
+
+### Updating
+
+Take a backup first (see [Data and backups](#data-and-backups)), then:
+
+```bash
+git pull                 # the compose file and .env.example may change between releases
+docker compose pull
+docker compose up -d
+```
+
+Migrations run on start. Each release is listed on the [Releases](https://github.com/tsubaie/enan/releases) page; to be told about new ones, choose **Watch → Custom → Releases** on GitHub. A release whose notes carry a **Rollback** warning changes the database in a way the previous release cannot read (ADR 0050): keep the backup until you are sure you will stay on it.
+
+An install built from source with `--build` moves to the published image with `docker compose pull && docker compose up -d` in the same folder; its volumes are kept. A clone in a new folder starts with new, empty volumes, because Compose names the volumes after the folder.
 
 The app listens on `127.0.0.1:3000` only. To use it beyond localhost, put it behind a reverse proxy that terminates TLS and set an `https://` `APP_URL`. Production refuses to start without one.
 
@@ -216,17 +231,17 @@ Every variable is documented in [`.env.example`](.env.example).
 <summary><b>The ones you are most likely to touch</b></summary>
 <br>
 
-| Variable              | Default                         | Purpose                                                                     |
-| --------------------- | ------------------------------- | --------------------------------------------------------------------------- |
-| `SESSION_SECRET`      | (required)                      | 32+ characters. Keep it stable: saved AI keys are encrypted with it.        |
-| `APP_URL`             | `http://localhost:3000`         | The browser origin. It must be `https` in production, except on loopback.   |
-| `DATABASE_URL`        | `file:` path on the data volume | The SQLite file. Keep it on a local disk, not a network share.              |
-| `TRUSTED_PROXY_CIDRS` | empty                           | Your proxy's addresses, so per-address login throttling sees real clients.  |
-| `OPENROUTER_API_KEY`  | empty                           | Optional fallback. A key saved in **Admin → AI** takes precedence.          |
-| `FILES_QUOTA_GB`      | `20`                            | Storage quota for uploaded files.                                           |
-| `MAX_UPLOAD_MB`       | `20`                            | The largest single upload.                                                  |
-| `RECOVERY_TOKEN`      | empty                           | A one-time admin recovery token. Set it, restart, use it, then remove it.   |
-| `LOG_LEVEL`           | `info`                          | `trace` through `fatal`.                                                    |
+| Variable              | Default                         | Purpose                                                                    |
+| --------------------- | ------------------------------- | -------------------------------------------------------------------------- |
+| `SESSION_SECRET`      | (required)                      | 32+ characters. Keep it stable: saved AI keys are encrypted with it.       |
+| `APP_URL`             | `http://localhost:3000`         | The browser origin. It must be `https` in production, except on loopback.  |
+| `DATABASE_URL`        | `file:` path on the data volume | The SQLite file. Keep it on a local disk, not a network share.             |
+| `TRUSTED_PROXY_CIDRS` | empty                           | Your proxy's addresses, so per-address login throttling sees real clients. |
+| `OPENROUTER_API_KEY`  | empty                           | Optional fallback. A key saved in **Admin → AI** takes precedence.         |
+| `FILES_QUOTA_GB`      | `20`                            | Storage quota for uploaded files.                                          |
+| `MAX_UPLOAD_MB`       | `20`                            | The largest single upload.                                                 |
+| `RECOVERY_TOKEN`      | empty                           | A one-time admin recovery token. Set it, restart, use it, then remove it.  |
+| `LOG_LEVEL`           | `info`                          | `trace` through `fatal`.                                                   |
 
 </details>
 
@@ -302,7 +317,7 @@ What exists and what is still planned is tracked in [`docs/STATUS.md`](docs/STAT
 
 ## Why “Enan”
 
-An *enan* (عِنان) is a horse’s rein, the strap a rider holds to steer. In Arabic, to hold the enan of a matter (بيده عِنانُ الأمر) is to be the one directing it. That is the job of this app: to keep the reins of your office in your hands.
+An _enan_ (عِنان) is a horse’s rein, the strap a rider holds to steer. In Arabic, to hold the enan of a matter (بيده عِنانُ الأمر) is to be the one directing it. That is the job of this app: to keep the reins of your office in your hands.
 
 ## بالعربية
 
@@ -312,7 +327,7 @@ An *enan* (عِنان) is a horse’s rein, the strap a rider holds to steer. In
 
 **لماذا «عِنان»؟** العِنان سيرٌ يمسك به الفارس فرسه ويوجّهه، ومنه قولهم: بيده عِنانُ الأمر، أي تدبيره. وهذا ما صُنع له عِنان: أن يبقى عنانُ مكتبك في يدك.
 
-هذه نسخة تطوير أولية، صُنعت في السعودية. خطوات التشغيل في قسم [Quick start](#quick-start) أعلاه: انسخ المستودع، ثم اضبط ملف ‎`.env`‎، ثم شغّل ‎`docker compose up -d --build`‎.
+هذه نسخة تطوير أولية، صُنعت في السعودية. خطوات التشغيل في قسم [Quick start](#quick-start) أعلاه: انسخ المستودع، ثم اضبط ملف ‎`.env`‎، ثم شغّل ‎`docker compose pull`‎ و‎`docker compose up -d`‎.
 
 </div>
 

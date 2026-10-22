@@ -15,6 +15,8 @@ import {
 import { argumentNames, evaluate as evaluateI18n, scanUsages } from '../i18n';
 import { isScanned, parseDenylist, scanText } from '../portability';
 import { parseSpec } from '../lib/specs';
+import { evaluateMigrations } from '../migrations';
+import { baseline, classify, readMigrations, schemaLabels } from '../../build/schema-labels';
 const fixture = (path: string) => fileURLToPath(new URL(`./fixtures/${path}`, import.meta.url));
 const rules = (findings: { rule: string; message: string }[]) =>
   findings.map((f) => `${f.rule}:${f.message}`);
@@ -44,12 +46,23 @@ describe('audit:structure', () => {
     try {
       await cp(fixture('structure'), root, { recursive: true });
       await mkdir(join(root, 'src/core/modules'), { recursive: true });
-      await writeFile(join(root, 'src/core/modules/registry.ts'), "import { server } from '@/modules/good';\nexport const serverModules = [server];\n");
-      await writeFile(join(root, 'src/modules/good/index.ts'), "import { jobs } from './jobs';\nexport const server = { id: 'good', jobs: jobs };\n");
+      await writeFile(
+        join(root, 'src/core/modules/registry.ts'),
+        "import { server } from '@/modules/good';\nexport const serverModules = [server];\n",
+      );
+      await writeFile(
+        join(root, 'src/modules/good/index.ts'),
+        "import { jobs } from './jobs';\nexport const server = { id: 'good', jobs: jobs };\n",
+      );
       expect((await collectModule(root, 'good', [])).jobsRegistered).toBe(true);
-      await writeFile(join(root, 'src/core/modules/registry.ts'), 'export const serverModules = [];');
+      await writeFile(
+        join(root, 'src/core/modules/registry.ts'),
+        'export const serverModules = [];',
+      );
       expect((await collectModule(root, 'good', [])).jobsRegistered).toBe(false);
-    } finally { await rm(root, { recursive: true, force: true }); }
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
   it('rejects a top-level entry that is not in the repository layout', async () => {
     const allowed = parseTopLevel(
@@ -134,5 +147,39 @@ describe('audit:portability', () => {
     expect(isScanned('src/core/config/defaults.ts')).toBe(false);
     expect(isScanned('tests/fixtures/timezones.ts')).toBe(false);
     expect(isScanned('src/modules/tasks/service.ts')).toBe(true);
+  });
+});
+describe('audit:migrations', () => {
+  const at = (position: number, sql: string) => ({
+    position,
+    tag: `${String(position - 1).padStart(4, '0')}_fixture`,
+    ...classify(sql),
+  });
+  it('ADMIN-B55 a destructive migration after the baseline must declare whether it breaks rollback', () => {
+    const rules = (sql: string) =>
+      evaluateMigrations([at(baseline + 1, sql)]).violations.map((finding) => finding.rule);
+    expect(rules('ALTER TABLE `tasks` ADD `x` text;')).toEqual([]);
+    expect(rules('ALTER TABLE `tasks` DROP COLUMN `x`;')).toEqual(['rollback-compatibility']);
+    expect(rules('ALTER TABLE `a` RENAME TO `b`;')).toEqual(['rollback-compatibility']);
+    expect(rules('-- enan:contract\nDROP TABLE `old`;')).toEqual([]);
+    expect(rules('-- enan:compatible rebuild keeps every column\nDROP TABLE `files`;')).toEqual([]);
+    expect(rules('-- enan:compatible\nDROP TABLE `files`;')).toEqual(['compatible-reason']);
+    // A comment that mentions a statement is not the statement.
+    expect(rules('-- we no longer DROP TABLE here\nCREATE TABLE `t` (`id` text);')).toEqual([]);
+    // Migrations up to the baseline predate the rule.
+    expect(evaluateMigrations([at(baseline, 'DROP TABLE `files`;')]).violations).toEqual([]);
+  });
+  it('ADMIN-B55 image labels name the schema and the newest migration a rollback cannot cross', () => {
+    const migrations = [
+      at(1, 'CREATE TABLE `a` (`id` text);'),
+      at(2, '-- enan:contract\nDROP TABLE `a`;'),
+      at(3, ''),
+    ];
+    expect(schemaLabels(migrations)).toEqual({ schema: 3, contract: 2 });
+    expect(schemaLabels(migrations.slice(0, 1))).toEqual({ schema: 1, contract: 0 });
+    // The repository's own history passes, and every migration so far is rollback-compatible.
+    const repository = readMigrations(fileURLToPath(new URL('../../..', import.meta.url)));
+    expect(evaluateMigrations(repository).violations).toEqual([]);
+    expect(schemaLabels(repository).contract).toBe(0);
   });
 });

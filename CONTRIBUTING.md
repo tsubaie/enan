@@ -36,3 +36,25 @@ If an audit fails on something the docs did not anticipate, fix the code or fix 
 ## Pull requests
 
 Use the pull request template: requirement → scenario table, spec sections changed, `pnpm audit:all` summary, and recorded assumptions. One logical change per pull request; keep it under 800 lines unless the description says why.
+
+## Migrations
+
+A migration must leave the database usable by the release before it (ADR 0050), because rolling back an update means starting the previous image on the database the new one migrated. Add tables, columns and indexes freely; drop, rename or tighten them a release later. `audit:migrations` rejects a destructive statement unless the file says which case it is:
+
+- `-- enan:contract`: the previous release cannot run on this. The image is labelled, the release notes say so, and an updater never rolls back across it.
+- `-- enan:compatible <why>`: it only looks destructive, for example a table rebuild that keeps every column and constraint.
+
+## Releasing
+
+Maintainers only. Releases follow [Semantic Versioning](https://semver.org).
+
+1. Open a pull request that sets `version` in `package.json` (for example `0.2.0`) and merge it.
+2. When CI on main has passed for the merge commit, tag it and push the tag:
+
+   ```bash
+   git fetch origin main
+   git tag v0.2.0 origin/main
+   git push origin v0.2.0
+   ```
+
+`release.yml` checks that the commit is on main, that its gate passed and that `package.json` agrees with the tag. It then points `:0.2.0`, `:0.2`, `:0` and `:latest` at the image CI already built and tested for that commit, and creates the GitHub Release with generated notes. A pre-release (`v0.2.0-rc.1`) gets its own tag only. Every merge to main also moves `:edge` once its gate has passed.

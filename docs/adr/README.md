@@ -42,7 +42,7 @@ One decision per file. Format: **Status**, **Context**, **Decision**, **Conseque
 | 0036 | The Sadu mark, and a sage accent in the night theme | accepted, fixed accent superseded by 0037 (sage kept as fallback), mark superseded by 0046 |
 | 0037 | Uploaded wallpapers, and the accent follows the wallpaper | accepted |
 | 0038 | The route bundle budget is 300 KB | accepted |
-| 0039 | A push to main deploys to the server | accepted, amended by 0040 |
+| 0039 | A push to main deploys to the server | accepted, amended by 0040; its image tags changed by 0050 |
 | 0040 | CI on GitHub's hosted runners; deployment is opt-in and configured outside the code | accepted |
 | 0041 | Page changes start their data early and prefetch on intent | accepted |
 | 0042 | Oxlint replaces ESLint | accepted |
@@ -53,5 +53,6 @@ One decision per file. Format: **Status**, **Context**, **Decision**, **Conseque
 | 0047 | The ع-horse mark, redrawn | accepted |
 | 0048 | The product is named Enan | accepted |
 | 0049 | An install may supply its own Arabic faces | accepted |
+| 0050 | Releases, channel tags, and migrations the previous release can run on | accepted |
 
 Open decisions awaiting an ADR: license (see roadmap); chart library confirmation (`recharts`).
