@@ -274,6 +274,9 @@ func (u *Updater) Check(ctx context.Context) {
 	}
 	if u.state.Phase != Idle {
 		// A rollback that failed left an update unfinished; finish reversing it before anything new.
+		// Said first, so the page follows the rollback instead of reading the resume as its answer.
+		u.status.State, u.status.Step, u.status.StartedAt = Updating, "rollback", u.now()
+		u.publish()
 		u.Recover(ctx)
 		return
 	}
@@ -858,8 +861,11 @@ func (u *Updater) Apply(ctx context.Context, command Command) bool {
 	case "pause", "resume":
 		u.state.Paused = command.Command == "pause"
 		_ = u.save()
-		u.publish()
-		// Resumed: check now, so the status stops saying paused an interval early.
+		// Resumed: the check that follows publishes, in one write, so the page never reads a resume
+		// without the check or rollback it starts.
+		if u.state.Paused {
+			u.publish()
+		}
 		return !u.state.Paused
 	case "retry":
 		u.state.Rejected = map[string]string{}

@@ -586,6 +586,7 @@
     "updateResult_checked": "فُحص الآن: عنان محدَّث.",
     "updateResult_available": "فُحص الآن: يتوفر إصدار جديد.",
     "updateResult_updating": "فُحص الآن: يجري تثبيت إصدار جديد.",
+    "updateResult_rollback": "جارٍ إكمال التحديث الذي لم يكتمل…",
     "updateResult_problem": "فُحص الآن، وهناك ما يحتاج إلى انتباهك؛ انظر أدناه.",
     "updateNoAnswer": "لم تستجب خدمة التحديث منذ دقيقة. قد تكون متوقفة؛ حالتها أعلاه.",
     "updateCommand_check": "الفحص",

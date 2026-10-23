@@ -586,6 +586,7 @@
     "updateResult_checked": "Checked just now: Enan is up to date.",
     "updateResult_available": "Checked just now: a new version is available.",
     "updateResult_updating": "Checked just now: a new version is being installed.",
+    "updateResult_rollback": "Finishing the update that was left unfinished…",
     "updateResult_problem": "Checked just now, and something needs your attention; see below.",
     "updateNoAnswer": "The updater has not answered for a minute. It may be stopped; its status is above.",
     "updateCommand_check": "A check",

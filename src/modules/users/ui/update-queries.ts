@@ -28,6 +28,7 @@ export const Status = z.object({
   confirm: z.boolean(),
   updaterUpdate: z.string().optional(),
   intervalSeconds: z.number(),
+  startedAt: z.string().optional(),
 });
 export type Status = z.infer<typeof Status>;
 export const Health = z.enum(['running', 'stalled', 'not_running', 'unreadable']);

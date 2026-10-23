@@ -324,6 +324,46 @@ it('ADMIN-B58 Resume is answered by the check the updater runs on resuming, in A
   expect(screen.getByText(ar.admin.updateResult_checked)).toBeTruthy();
 });
 
+it('ADMIN-B58 Resume after a failed rollback follows the retried rollback to its outcome', () => {
+  const failed = {
+    state: 'rollback_failed',
+    step: 'verify',
+    paused: true,
+    candidate: { version: '1.2.0', digest },
+    startedAt: '2026-09-10T08:00:00Z',
+    finishedAt: '2026-09-10T08:10:00Z',
+  };
+  show('running', status(failed));
+  mount(<UpdatesPage />);
+  fireEvent.click(screen.getByRole('button', { name: en.admin.updateResume }));
+  const line = () => screen.getByText(/./u, { selector: '[role="status"][aria-busy]' });
+  // Resumed: no longer paused, but nothing started yet, so still waiting.
+  show('running', status({ ...failed, paused: false }));
+  expect(line().textContent).toBe(en.admin.updateWaiting_resume);
+  // No new check: the updater puts the previous version back first.
+  show(
+    'running',
+    status({
+      state: 'updating',
+      step: 'rollback',
+      startedAt: '2026-09-10T09:00:01Z',
+      finishedAt: failed.finishedAt,
+    }),
+  );
+  expect(line().textContent).toBe(en.admin.updateResult_rollback);
+  show(
+    'running',
+    status({
+      ...failed,
+      state: 'rolled_back',
+      paused: false,
+      startedAt: '2026-09-10T09:00:01Z',
+      finishedAt: '2026-09-10T09:02:00Z',
+    }),
+  );
+  expect(line().textContent).toBe(en.admin.updateResult_problem);
+});
+
 it('ADMIN-B58 a request the updater does not answer in a minute says so', () => {
   vi.useFakeTimers();
   try {

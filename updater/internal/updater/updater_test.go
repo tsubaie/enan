@@ -30,6 +30,7 @@ type fake struct {
 	backupCode int
 	next       int
 	calls      []string
+	onInspect  func() // runs at every container inspection, to read the status mid-update
 }
 
 func newFake() *fake {
@@ -112,6 +113,9 @@ func (f *fake) find(id string) (*docker.Container, error) {
 }
 
 func (f *fake) InspectContainer(_ context.Context, id string) (docker.Container, error) {
+	if f.onInspect != nil {
+		f.onInspect()
+	}
 	c, err := f.find(id)
 	if err != nil {
 		return docker.Container{}, err
@@ -610,7 +614,17 @@ func aFailedRollbackPausesTheUpdater(t *testing.T) {
 	// Once the old image answers again, resuming finishes the rollback; it backs up nothing new.
 	f.broken["img-1"] = false
 	u.Apply(context.Background(), Command{Command: "resume"})
+	// ADMIN-B58: while the rollback is retried the status says so, and the page keeps following it.
+	var during string
+	f.onInspect = func() {
+		data, _ := os.ReadFile(filepath.Join(u.Config.StatusDir, "status.json"))
+		during = string(data)
+	}
 	u.Check(context.Background())
+	f.onInspect = nil
+	if !strings.Contains(during, `"state": "updating"`) || !strings.Contains(during, `"step": "rollback"`) {
+		t.Fatalf("status during the retried rollback: %s", during)
+	}
 	if u.status.State != RolledBack || u.state.Phase != Idle || app(t, f).Image != "img-1" || strings.Contains(strings.Join(f.calls, ","), "backup") {
 		t.Fatalf("resumed: state %s, phase %s, running %s, calls %v", u.status.State, u.state.Phase, app(t, f).Image, f.calls)
 	}

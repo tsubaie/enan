@@ -167,7 +167,8 @@ function Controls({
   const sent = command.isSuccess && command.data.data.command;
   // Install now and the setting answer in their own panels; these four answer here.
   const send = (name: Asked['name']) => () => {
-    setAsked({ id: Date.now(), name, lastCheckAt: status.lastCheckAt });
+    const { lastCheckAt, startedAt, finishedAt } = status;
+    setAsked({ id: Date.now(), name, from: { lastCheckAt, startedAt, finishedAt } });
     command.mutate({ command: name });
   };
   return (
