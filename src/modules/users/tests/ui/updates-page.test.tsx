@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { useSyncExternalStore } from 'react';
 import { beforeEach, expect, it, vi } from 'vitest';
-import { act, fireEvent, screen } from '@testing-library/react';
+import { act, fireEvent, screen, within } from '@testing-library/react';
 import en from '@/core/i18n/messages/en.json';
 import ar from '@/core/i18n/messages/ar.json';
 import { defaults } from '@/core/config/defaults';
@@ -430,4 +430,20 @@ it('ADMIN-B69 an updater too old for this release says so with the command that 
   expect(screen.queryByRole('checkbox')).toBeNull();
   // What it still does: checking.
   expect(screen.getByRole('button', { name: en.admin.updateCheckNow })).toBeTruthy();
+});
+
+it('ADMIN-B57 ADMIN-B58 Check now is in the Updates card, its answer beside it, and a daily check reads as daily', () => {
+  show('running', status({ intervalSeconds: 86400 }));
+  mount(<UpdatesPage />);
+  const card = screen.getByRole('region', { name: en.admin.updatesTitle });
+  expect(card.textContent).toContain('daily');
+  const check = within(card).getByRole('button', { name: en.admin.updateCheckNow });
+  fireEvent.click(check);
+  // The answer shares the row the button sits in.
+  expect(check.parentElement?.textContent).toContain(en.admin.updateWaiting_check);
+  show('running', status({ intervalSeconds: 7200 }));
+  mount(<UpdatesPage />, 'ar');
+  expect(screen.getByRole('region', { name: ar.admin.updatesTitle }).textContent).toContain(
+    'كل ساعتين',
+  );
 });
