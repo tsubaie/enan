@@ -21,8 +21,9 @@ const io = vi.hoisted(() => ({
 vi.mock('next/server', () => ({
   after: (work: () => Promise<void>) => io.later.push(Promise.resolve().then(work)),
 }));
+const request = vi.hoisted(() => ({ cookie: '' }));
 vi.mock('next/headers', () => ({
-  headers: async () => new Headers(),
+  headers: async () => new Headers(request.cookie ? { cookie: request.cookie } : {}),
   cookies: async () => ({ get: () => undefined, set: () => {}, getAll: () => [] }),
 }));
 vi.mock('nodemailer', () => ({
@@ -130,6 +131,7 @@ beforeEach(async () => {
   member = (await addUser('member@example.test')).id;
   verified.hashes = [];
   verified.gate = null;
+  request.cookie = '';
 });
 afterAll(() => closeDatabase());
 
@@ -332,4 +334,20 @@ it('ADR 0029 the password check of a sign-in never holds the write queue', async
   );
   release();
   expect((await signing).status).toBe(200);
+});
+
+it('ADR 0029 ACCT-B09 a session check that has nothing to refresh never waits in the write queue', async () => {
+  const { currentUser } = await import('../session');
+  const response = await signIn('member@example.test');
+  request.cookie = (response.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  // Another member's save holds the write lock while an API request checks its session.
+  const writing = withTransaction(db(), async (database) => {
+    await database.run(sql`update users set name = name where id = ${member}`);
+    await held;
+  });
+  expect((await currentUser({ slide: true }))?.id).toBe(member);
+  release();
+  await writing;
 });
