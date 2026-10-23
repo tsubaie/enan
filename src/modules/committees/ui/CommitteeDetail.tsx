@@ -3,6 +3,7 @@ import { useTranslations } from 'next-intl';
 import { Tabs } from '@base-ui/react/tabs';
 import { Button } from '@/ui/primitives/button';
 import { ErrorPanel } from '@/ui/layout/ErrorPanel';
+import { ShowMore } from '@/ui/layout/ShowMore';
 import { useDateTime } from '@/ui/format';
 import type { DetailApi } from '@/ui/entity/types';
 import { EntityFooter, EntityUpdated } from '@/ui/entity/EntityFooter';
@@ -127,11 +128,7 @@ function CommitteeActivity({ id }: { id: string }) {
           ))}
         </ul>
       )}
-      {query.hasNextPage && (
-        <Button variant="ghost" onClick={() => void query.fetchNextPage()}>
-          {c('more')}
-        </Button>
-      )}
+      <ShowMore shown={rows.length} more={query.hasNextPage} onMore={query.fetchNextPage} />
     </div>
   );
 }

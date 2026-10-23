@@ -9,12 +9,25 @@ import { mount } from './harness';
 // ADMIN-B43: the audit log reads as a history. The changes are read through the hook inside the
 // app's providers (the harness's clock is 2026-09-10 09:00 UTC), and the list is read as rendered.
 type Json = Parameters<ReturnType<typeof useAuditChanges>>[1];
-function Probe({ entityType, diff }: { entityType: string; diff: Json }) {
-  const changes = useAuditChanges()(entityType, diff);
+function Probe({
+  entityType,
+  diff,
+  created,
+}: {
+  entityType: string;
+  diff: Json;
+  created: boolean;
+}) {
+  const changes = useAuditChanges()(entityType, diff, created);
   return <output>{JSON.stringify(changes)}</output>;
 }
-function changes(entityType: string, diff: Json, locale: 'en' | 'ar' = 'en'): Change[] {
-  mount(<Probe entityType={entityType} diff={diff} />, locale);
+function changes(
+  entityType: string,
+  diff: Json,
+  locale: 'en' | 'ar' = 'en',
+  created = false,
+): Change[] {
+  mount(<Probe entityType={entityType} diff={diff} created={created} />, locale);
   return JSON.parse(screen.getByRole('status').textContent ?? '[]');
 }
 describe('ADMIN-B43 audit changes', () => {
@@ -182,4 +195,76 @@ describe('ADMIN-B43 audit list', () => {
       expect(within(sections[2]!).getByText(/some new action fresh kind/u)).toBeTruthy();
     },
   );
+});
+describe('ADMIN-B71 ADMIN-B72 a change as a diff', () => {
+  const row = (fields: {
+    action: string;
+    entityType: string;
+    diff: Json;
+    id?: string;
+    actorName?: string | null;
+  }) => ({
+    id: 'entry-1',
+    actorName: 'Demo Admin',
+    createdAt: '2026-09-10T08:00:00.000Z',
+    ...fields,
+  });
+  it('ADMIN-B71 an edit shows what a field was and is now; what it wrote but did not change is left out', () => {
+    expect(
+      changes('task', {
+        status: 'next_action',
+        completedAt: null,
+        _before: { status: 'inbox', completedAt: null },
+        _name: 'Draft the agenda',
+      }),
+    ).toEqual([
+      { label: en.admin.auditField_status, value: en.tasks.next_action, before: en.tasks.inbox },
+    ]);
+  });
+  it('ADMIN-B71 a new record lists what it was given, not the fields left empty', () => {
+    expect(changes('task', { title: 'Plan', dueDate: null, description: '' }, 'en', true)).toEqual([
+      { label: en.admin.auditField_title, value: 'Plan' },
+    ]);
+  });
+  it('ADMIN-B71 the entry names its record, a KPI reading its KPI, and marks the old value as was and the new as now', () => {
+    mount(
+      <AuditList
+        rows={[
+          row({
+            action: 'update',
+            entityType: 'kpi_reading',
+            diff: { value: 12, _before: { value: 11 }, _name: 'Board decisions implemented' },
+          }),
+        ]}
+      />,
+    );
+    expect(screen.getByText('Board decisions implemented')).toBeTruthy();
+    const lines = screen.getAllByRole('listitem').map((item) => item.textContent);
+    expect(lines).toContain(`−${en.admin.auditWas}${en.admin.auditField_value}: 11`);
+    expect(lines).toContain(`+${en.admin.auditNow}${en.admin.auditField_value}: 12`);
+  });
+  it('ADMIN-B72 a sign-in reads by its method, and a failed one names the email that was tried', () => {
+    mount(
+      <AuditList
+        rows={[
+          row({
+            id: 'a',
+            action: 'sign_in',
+            entityType: 'session',
+            diff: { method: 'code', email: 'a@example.test' },
+          }),
+          row({
+            id: 'b',
+            action: 'sign_in_failed',
+            entityType: 'session',
+            actorName: null,
+            diff: { method: 'password', email: 'stranger@example.test' },
+          }),
+        ]}
+      />,
+    );
+    expect(screen.getByText('Signed in with an emailed code')).toBeTruthy();
+    expect(screen.getByText('Failed sign-in with a password')).toBeTruthy();
+    expect(screen.getByText('stranger@example.test')).toBeTruthy();
+  });
 });

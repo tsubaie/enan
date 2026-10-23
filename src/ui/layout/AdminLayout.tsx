@@ -30,21 +30,19 @@ export function AdminLayout({ children }: { children: ReactNode }) {
         aria-label={current ? t(current) : c('admin')}
         className="min-w-0 rounded-2xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50 lg:flex-1 lg:overflow-y-auto lg:py-8 lg:pe-8"
       >
-        <div className="max-w-3xl">
-          {current && (
-            <Link
-              href={routes.adminHome()}
-              className="-ms-2 mb-2 inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-sm text-text-muted hover:text-text lg:hidden"
-            >
-              <ChevronLeft className="size-4 rtl:rotate-180" aria-hidden />
-              {c('admin')}
-            </Link>
-          )}
-          <h1 className="mb-6 font-display text-title leading-snug font-semibold">
-            {current ? t(current) : c('admin')}
-          </h1>
-          {children}
-        </div>
+        {current && (
+          <Link
+            href={routes.adminHome()}
+            className="-ms-2 mb-2 inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-sm text-text-muted hover:text-text lg:hidden"
+          >
+            <ChevronLeft className="size-4 rtl:rotate-180" aria-hidden />
+            {c('admin')}
+          </Link>
+        )}
+        <h1 className="mb-6 font-display text-title leading-snug font-semibold">
+          {current ? t(current) : c('admin')}
+        </h1>
+        {children}
       </section>
     </div>
   );

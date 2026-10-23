@@ -42,16 +42,48 @@ export async function applyUpdate<T extends Versioned, Row extends object, P ext
 ): Promise<Row> {
   const row = await ops.update(ctx, current.id, current.revision, patch);
   if (!row) throw revisionConflict(await ops.get(ctx, current.id, true));
+  const action = audit.action ?? 'update';
+  const diff = audit.diff ?? toJson(patch);
   await writeAudit(
     ctx.db,
     ctx.user.id,
-    audit.action ?? 'update',
+    action,
     ops.entityType,
     current.id,
-    audit.diff ?? toJson(patch),
+    withName(action === 'delete' ? diff : withBefore(diff, current), current, action === 'delete'),
     audit.opId ?? null,
   );
   return row;
+}
+// ADMIN-B71: every entry names its record (its title or name) under `_name`, so the log says which
+// one even when the title was not what changed; a deletion also keeps it as a field, shown in red.
+function withName(diff: Json, current: object, deleted: boolean): Json {
+  if (!diff || typeof diff !== 'object' || Array.isArray(diff)) return diff;
+  const named = z
+    .object({ title: z.string(), name: z.string(), fullName: z.string() })
+    .partial()
+    .parse(current);
+  const name = named.title ?? named.name ?? named.fullName;
+  if (name === undefined) return diff;
+  const names = Object.fromEntries(
+    Object.entries(named).filter(([, value]) => value !== undefined),
+  );
+  return toJson(deleted ? { ...names, ...diff } : { ...diff, _name: name });
+}
+// ADMIN-B71: an edit also records what the changed fields read before it, under `_before`, so the
+// audit log can show the change as before and after. Long text is left out: the log only says it
+// was edited, and keeping a second copy of every note body would double the log for nothing.
+function withBefore(diff: Json, current: object): Json {
+  if (!diff || typeof diff !== 'object' || Array.isArray(diff)) return diff;
+  const was = toJson(current);
+  if (!was || typeof was !== 'object' || Array.isArray(was)) return diff;
+  const before: Record<string, Json> = {};
+  for (const key of Object.keys(diff)) {
+    const value = was[key];
+    if (value === undefined || (typeof value === 'string' && value.length > 200)) continue;
+    before[key] = value;
+  }
+  return Object.keys(before).length ? { ...diff, _before: before } : diff;
 }
 export async function restoreByOp<T extends Versioned, Row extends object, P extends object>(
   ctx: Context,
@@ -63,7 +95,15 @@ export async function restoreByOp<T extends Versioned, Row extends object, P ext
   if (!ops.restore) throw new Error(`${ops.entityType} cannot be restored`);
   const row = await ops.restore(ctx, entityId, opId, extra);
   if (!row) throw new AppError('conflict', { reason: 'state' });
-  await writeAudit(ctx.db, ctx.user.id, 'restore', ops.entityType, entityId, {}, opId);
+  await writeAudit(
+    ctx.db,
+    ctx.user.id,
+    'restore',
+    ops.entityType,
+    entityId,
+    withName({}, row, false),
+    opId,
+  );
   return row;
 }
 // EP-B46: rows given in a new order take the places the same rows held before, so reordering a

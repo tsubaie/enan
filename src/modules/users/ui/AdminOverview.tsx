@@ -26,7 +26,7 @@ export function AdminOverview() {
   const summary = useAdminSummary();
   const ready = summary.jobs !== undefined && summary.lastBackupAt !== undefined && !!summary.ai;
   return (
-    <div className="max-w-3xl space-y-8">
+    <div className="space-y-8">
       {ready && <AttentionList items={attentionOf(summary)} summary={summary} />}
       {adminSections.map((section) => (
         <SectionIndex key={section.group} section={section} summary={summary} />

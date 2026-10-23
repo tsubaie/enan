@@ -1,5 +1,9 @@
 import 'server-only';
 import { z } from 'zod';
+import { AuditChange, AuditType, auditTypeEntities } from '@/core/config/audit-schema';
+import { dayStart } from '@/core/time/ai';
+import { getSetting } from '@/core/db/settings-repo';
+import { addDays } from '@/core/time/days';
 import { defineHandler, authenticated } from './handler';
 import { checkConnection, aiConnection } from '@/core/ai/client';
 import { deleteBackup, listBackups } from '@/core/backup/dump';
@@ -100,7 +104,15 @@ export const jobList = defineHandler({
 });
 export const auditList = defineHandler({
   guard: 'admin',
-  input: Empty,
+  // ADMIN-B72: `type` narrows the log to one kind of entry; ADMIN-B73: `change` to what was done,
+  // and `from` and `to` (days, both included) to a span of time in the workspace's time zone.
+  input: z.strictObject({
+    type: AuditType.optional(),
+    change: AuditChange.optional(),
+    from: z.iso.date().optional(),
+    to: z.iso.date().optional(),
+  }),
+  source: 'query',
   response: z.object({
     data: z.array(
       z.object({
@@ -114,7 +126,16 @@ export const auditList = defineHandler({
       }),
     ),
   }),
-  handler: async (_, ctx) => ({ data: JSON.parse(JSON.stringify(await auditEntries(ctx.db))) }),
+  handler: async (input, ctx) => {
+    const zone = await getSetting(ctx.db, 'workspace.timezone');
+    const entries = await auditEntries(ctx.db, {
+      ...(input.type ? { entityTypes: auditTypeEntities[input.type] } : {}),
+      ...(input.change ? { change: input.change } : {}),
+      ...(input.from ? { from: dayStart(zone, input.from) } : {}),
+      ...(input.to ? { to: dayStart(zone, addDays(input.to, 1)) } : {}),
+    });
+    return { data: JSON.parse(JSON.stringify(entries)) };
+  },
 });
 export const jobAction = defineHandler({
   guard: 'admin',

@@ -8,7 +8,7 @@ import { migrateDatabase } from '@/core/db/migrate';
 import { insertUser, lockWorkspace } from '@/core/db/auth-repo';
 import { saveMailSettings } from '@/core/db/mail-settings-repo';
 import { writeSetting } from '@/core/db/settings-repo';
-import { loginAttempts, users } from '@/core/db/system-schema';
+import { auditLog, loginAttempts, users } from '@/core/db/system-schema';
 import { authSessions, authVerifications } from '@/core/db/auth-schema';
 import { id } from '@/core/db/ids';
 import { env } from '@/core/config/env';
@@ -350,4 +350,27 @@ it('ADR 0029 ACCT-B09 a session check that has nothing to refresh never waits in
   expect((await currentUser({ slide: true }))?.id).toBe(member);
   release();
   await writing;
+});
+it('ADMIN-B72 a sign-in and a failed attempt reach the audit log; what is not an email is recorded nowhere', async () => {
+  expect((await signIn('member@example.test')).status).toBe(200);
+  expect((await signIn('member@example.test', 'wrong-password')).status).toBe(401);
+  await signIn('x'.repeat(300));
+  const rows = await db().select().from(auditLog).where(eq(auditLog.entityType, 'session'));
+  expect(rows.map((row) => [row.action, row.actorId]).sort()).toEqual([
+    ['sign_in', member],
+    ['sign_in_failed', null],
+  ]);
+  expect(rows.find((row) => row.action === 'sign_in_failed')?.diff).toEqual({
+    method: 'password',
+    email: 'member@example.test',
+  });
+  expect(await db().select().from(loginAttempts)).toHaveLength(2);
+});
+it('ADMIN-B72 an attempt the lockout refuses is not one more failed sign-in', async () => {
+  for (let attempt = 0; attempt < 6; attempt++) await signIn('member@example.test', 'wrong');
+  const failed = await db()
+    .select()
+    .from(auditLog)
+    .where(and(eq(auditLog.entityType, 'session'), eq(auditLog.action, 'sign_in_failed')));
+  expect(failed).toHaveLength(5);
 });

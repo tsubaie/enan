@@ -283,6 +283,8 @@ export async function listReadings(ctx: Context, kpiId: string) {
 }
 // KPIS-B09: a duplicate date is a 409 that names the row to overwrite, so the client can offer the
 // overwrite rather than silently replacing a reading somebody else entered.
+// ADMIN-B71: a reading or a target names the KPI it belongs to, so its audit entry says which.
+const ofKpi = (kpi: { name: string }, diff: object) => toJson({ ...diff, _name: kpi.name });
 async function addReadingInTransaction(ctx: Context, kpiId: string, input: ReadingCreate) {
   // docs/04 § Concurrency: the immediate transaction holds the write lock for the parent row and
   // its children alike (ADR 0029), so no row lock is taken here.
@@ -296,7 +298,7 @@ async function addReadingInTransaction(ctx: Context, kpiId: string, input: Readi
     createdBy: ctx.user.id,
     updatedBy: ctx.user.id,
   });
-  await writeAudit(ctx.db, ctx.user.id, 'create', 'kpi_reading', row.id, toJson(input));
+  await writeAudit(ctx.db, ctx.user.id, 'create', 'kpi_reading', row.id, ofKpi(before, input));
   return notifyOffTarget(ctx, before, await getKpiDetail(ctx, kpiId));
 }
 async function overwriteReadingInTransaction(
@@ -311,7 +313,7 @@ async function overwriteReadingInTransaction(
     return addReading(ctx, kpiId, { readingDate: day, value: input.value, note: input.note });
   const row = await repo.updateReading(ctx.db, existing.id, existing.revision, input, ctx.user.id);
   if (!row) throw new AppError('conflict', { reason: 'state' });
-  await writeAudit(ctx.db, ctx.user.id, 'update', 'kpi_reading', existing.id, toJson(input));
+  await writeAudit(ctx.db, ctx.user.id, 'update', 'kpi_reading', existing.id, ofKpi(before, input));
   return notifyOffTarget(ctx, before, await getKpiDetail(ctx, kpiId));
 }
 async function requireReading(ctx: Context, kpiId: string, readingId: string) {
@@ -332,11 +334,11 @@ async function patchReadingInTransaction(
     throw new AppError('conflict', { reason: 'revision', current: toJson(current) });
   const row = await repo.updateReading(ctx.db, readingId, revision, fields, ctx.user.id);
   if (!row) throw new AppError('conflict', { reason: 'revision' });
-  await writeAudit(ctx.db, ctx.user.id, 'update', 'kpi_reading', readingId, toJson(fields));
+  await writeAudit(ctx.db, ctx.user.id, 'update', 'kpi_reading', readingId, ofKpi(before, fields));
   return notifyOffTarget(ctx, before, await getKpiDetail(ctx, kpiId));
 }
 async function removeReadingInTransaction(ctx: Context, kpiId: string, readingId: string) {
-  await getKpi(ctx, kpiId);
+  const kpi = await getKpi(ctx, kpiId);
   const current = await requireReading(ctx, kpiId, readingId);
   const opId = id();
   const row = await repo.updateReading(
@@ -347,7 +349,7 @@ async function removeReadingInTransaction(ctx: Context, kpiId: string, readingId
     ctx.user.id,
   );
   if (!row) throw new AppError('conflict', { reason: 'revision' });
-  await writeAudit(ctx.db, ctx.user.id, 'delete', 'kpi_reading', readingId, {}, opId);
+  await writeAudit(ctx.db, ctx.user.id, 'delete', 'kpi_reading', readingId, ofKpi(kpi, {}), opId);
   return { opId };
 }
 export async function listTargets(ctx: Context, kpiId: string) {
@@ -355,22 +357,22 @@ export async function listTargets(ctx: Context, kpiId: string) {
   return { data: await repo.selectTargets(ctx.db, kpiId) };
 }
 async function putTargetsInTransaction(ctx: Context, kpiId: string, input: TargetsPut) {
-  await getKpi(ctx, kpiId);
+  const kpi = await getKpi(ctx, kpiId);
   await repo.upsertTargets(
     ctx.db,
     kpiId,
     ctx.user.id,
     input.items.map((item) => ({ ...item, id: id() })),
   );
-  await writeAudit(ctx.db, ctx.user.id, 'update', 'kpi_targets', kpiId, toJson(input));
+  await writeAudit(ctx.db, ctx.user.id, 'update', 'kpi_targets', kpiId, ofKpi(kpi, input));
   return getKpiDetail(ctx, kpiId);
 }
 async function removeTargetInTransaction(ctx: Context, kpiId: string, targetId: string) {
-  await getKpi(ctx, kpiId);
+  const kpi = await getKpi(ctx, kpiId);
   const opId = id();
   const row = await repo.deleteTarget(ctx.db, targetId, opId);
   if (!row || row.kpiId !== kpiId) throw new AppError('not_found');
-  await writeAudit(ctx.db, ctx.user.id, 'delete', 'kpi_target', targetId, {}, opId);
+  await writeAudit(ctx.db, ctx.user.id, 'delete', 'kpi_target', targetId, ofKpi(kpi, {}), opId);
   return { opId };
 }
 // ADMIN-B36: the public surface. Each call opens its own transaction, or a savepoint inside the

@@ -27,7 +27,11 @@ function wallClock(timezone: string, instant: number) {
 // The instant the current month began in `timezone`: its first local midnight. Each pass moves by
 // the zone's offset there; the second catches a daylight-saving change between the two readings.
 export function monthStart(timezone: string, now = new Date()) {
-  const midnight = dayValue(`${dayAt(timezone, now.toISOString()).slice(0, 8)}01`);
+  return dayStart(timezone, `${dayAt(timezone, now.toISOString()).slice(0, 8)}01`);
+}
+// The instant `day` began in `timezone`: its local midnight, found the same way.
+export function dayStart(timezone: string, day: string) {
+  const midnight = dayValue(day);
   let instant = midnight;
   for (let pass = 0; pass < 2; pass++) instant -= wallClock(timezone, instant) - midnight;
   return new Date(instant);

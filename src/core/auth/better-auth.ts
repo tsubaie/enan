@@ -14,6 +14,7 @@ import { databaseFor, db, pool, queuedWrites } from '@/core/db/client';
 const queued = () => databaseFor(queuedWrites(pool()));
 import { id } from '@/core/db/ids';
 import { recordLogin, userByEmail, userById } from '@/core/db/auth-repo';
+import { writeAudit } from '@/core/db/audit-repo';
 import { getSetting, hasSetting } from '@/core/db/settings-repo';
 import { codeRequests, recordCodeRequest } from '@/core/db/sign-in-code-repo';
 import { users } from '@/core/db/system-schema';
@@ -38,7 +39,14 @@ export const sessionDays = 30;
 export const codeMinutes = 10;
 const sendsPerEmail = 3;
 const sendsPerAddress = 10;
-const Email = z.object({ email: z.string().transform((value) => value.toLowerCase()) });
+// An attempt that does not send a real email is refused by Better Auth and recorded nowhere: what
+// a stranger types is kept only when it is one, as long as an account email may be (ADMIN-B72).
+const Email = z.object({
+  email: z
+    .email()
+    .max(320)
+    .transform((value) => value.toLowerCase()),
+});
 const refused = (code: string) => new APIError('FORBIDDEN', { code, message: code });
 // Enan's errors become Better Auth's, so its client reads one shape.
 async function ours(work: () => Promise<void>) {
@@ -100,18 +108,37 @@ async function rememberLocale(userId: string, set: (name: string, value: string)
 // ADMIN-B20: every password or code attempt is recorded, so the buckets above count it.
 const afterwards = createAuthMiddleware(async (ctx) => {
   const signedIn = ctx.context.newSession;
-  if (signedIn)
+  const guard = guards[ctx.path];
+  const ip = ctx.request ? clientIp(ctx.request) : null;
+  if (signedIn) {
     await rememberLocale(signedIn.user.id, (name, value) =>
       ctx.setCookie(name, value, { path: '/', sameSite: 'lax', maxAge: 31536000 }),
     );
-  if (guards[ctx.path]?.throttle !== 'login') return;
+    if (guard) await auditSignIn(signedIn.user.id, guard.method, signedIn.user.email, ip);
+  }
+  if (guard?.throttle !== 'login') return;
   // A busy hasher's "try again" (429) is not a wrong password, so it fills no bucket.
   if (ctx.context.returned instanceof APIError && ctx.context.returned.statusCode === 429) return;
   const email = Email.safeParse(ctx.body).data?.email;
   if (!email) return;
-  const ip = ctx.request ? clientIp(ctx.request) : null;
-  await recordLogin(queued(), email, ip, Boolean(ctx.context.newSession));
+  await recordLogin(queued(), email, ip, Boolean(signedIn));
+  if (!signedIn) await auditSignIn(null, guard.method, email, ip);
 });
+// ADMIN-B72: every sign-in, by any method, and every failed password or code attempt reach the
+// audit log, with the email and, behind a trusted proxy, the client address (ADR 0013). A failed
+// attempt names nobody: whoever typed the email is not known to be its owner.
+async function auditSignIn(
+  userId: string | null,
+  method: Guard['method'],
+  email: string,
+  ip: string | null,
+) {
+  await writeAudit(queued(), userId, userId ? 'sign_in' : 'sign_in_failed', 'session', null, {
+    method,
+    email,
+    ...(ip ? { address: ip } : {}),
+  });
+}
 // The account behind a session must still be one: deactivated and deleted accounts are refused the
 // way a wrong password is, so the answer says nothing about which it was.
 async function activeOnly(session: { userId: string }) {

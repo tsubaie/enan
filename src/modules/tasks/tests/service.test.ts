@@ -410,3 +410,21 @@ it('SEARCH-B01 SEARCH-B03 the tasks provider matches the written corpus and rank
   const anywhere = await run((ctx) => searchProvider(ctx, normalize('figures'), 5));
   expect(anywhere.map((hit) => [hit.title, hit.rank])).toEqual([['Quarterly pack', 1]]);
 });
+it('ADMIN-B71 an edit keeps what the changed fields read before and names its task; a deletion and a restore name it too', async () => {
+  const { auditLog } = await import('@/core/db/system-schema');
+  const task = await create('Draft the agenda');
+  await run((ctx) =>
+    service.patchTask(ctx, task.id, TaskPatch.parse({ revision: 1, status: 'next_action' })),
+  );
+  const { opId } = await run((ctx) => service.removeTask(ctx, task.id, 2));
+  await run((ctx) => service.restoreTask(ctx, task.id, opId));
+  const rows = await db().select().from(auditLog).where(eq(auditLog.entityId, task.id));
+  const diff = (action: string) => rows.find((row) => row.action === action)?.diff;
+  expect(diff('update')).toMatchObject({
+    status: 'next_action',
+    _before: { status: 'inbox' },
+    _name: 'Draft the agenda',
+  });
+  expect(diff('delete')).toMatchObject({ title: 'Draft the agenda' });
+  expect(diff('restore')).toEqual({ _name: 'Draft the agenda' });
+});

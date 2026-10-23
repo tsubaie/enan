@@ -5,8 +5,13 @@ import en from '@/core/i18n/messages/en.json';
 import ar from '@/core/i18n/messages/ar.json';
 import { ApiError } from '@/core/http/client';
 import { AdminDataPage } from '../../ui/AdminDataPage';
+import { AuditLogPage } from '../../ui/AuditLogPage';
 import { mount } from './harness';
-type Query = { isPending: boolean; error: Error | null; data: { data: object; meta?: object } | undefined };
+type Query = {
+  isPending: boolean;
+  error: Error | null;
+  data: { data: object; meta?: object } | undefined;
+};
 const state = vi.hoisted(() => {
   const query = (data: object): Query => ({ isPending: false, error: null, data: { data } });
   return {
@@ -143,11 +148,11 @@ it('ADMIN-B15 ADMIN-B16 jobs show kind, status and last error; audit rows show w
       },
     ],
   };
-  mount(<AdminDataPage resource="audit" />);
+  mount(<AuditLogPage />);
   // Audit rows read as words (ADMIN-B43); their wording is covered in audit-history.test.tsx.
   expect(screen.getByText(new RegExp(en.admin.auditAction_create, 'u'))).toBeTruthy();
   state.resource.data = { data: [] };
-  mount(<AdminDataPage resource="audit" />, 'ar');
+  mount(<AuditLogPage />, 'ar');
   expect(screen.getByText(ar.admin.noAudit)).toBeTruthy();
 });
 it('ADMIN-B15 a failed resource read offers a retry rather than an empty page', () => {
@@ -155,4 +160,27 @@ it('ADMIN-B15 a failed resource read offers a retry rather than an empty page', 
   mount(<AdminDataPage resource="jobs" />);
   expect(screen.getByRole('alert').textContent).toContain(en.errors.internal);
   expect(screen.getByRole('button', { name: en.common.retry })).toBeTruthy();
+});
+it('ADMIN-B70 the backups page shows the newest five, the next one faded, and the restore panel above them', () => {
+  state.resource.data = {
+    data: Array.from({ length: 7 }, (_, index) => ({
+      id: `backup-${index}`,
+      createdAt: `2026-09-0${index + 1}T08:00:00.000Z`,
+      status: 'verified',
+    })),
+    meta: { runner: true, job: null },
+  };
+  mount(<AdminDataPage resource="backups" />);
+  const deletes = () => screen.getAllByRole('button', { name: /^Delete the backup of/u });
+  // The sixth is drawn faded beneath the list but cannot be reached (EP-B47).
+  expect(deletes()).toHaveLength(5);
+  expect(screen.getByText('Showing 5 of 7')).toBeTruthy();
+  const restore = screen.getByText(en.admin.restoreTitle);
+  const first = deletes()[0];
+  expect(
+    first && restore.compareDocumentPosition(first) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: en.common.more }));
+  expect(deletes()).toHaveLength(7);
+  expect(screen.queryByRole('button', { name: en.common.more })).toBeNull();
 });

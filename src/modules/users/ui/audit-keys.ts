@@ -56,4 +56,5 @@ export const EntityKey = z.enum([
   'wallpaper',
   'updater',
   'trash',
+  'session',
 ]);

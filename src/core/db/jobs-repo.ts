@@ -1,6 +1,22 @@
 import 'server-only';
-import { and, eq, gt, lte, isNull, or, sql, desc, count, inArray, lt, ne, max, not } from 'drizzle-orm';
 import {
+  and,
+  eq,
+  gt,
+  lte,
+  isNull,
+  or,
+  sql,
+  desc,
+  count,
+  inArray,
+  lt,
+  ne,
+  max,
+  not,
+} from 'drizzle-orm';
+import {
+  auditLog,
   jobs,
   jobAttempts,
   schedules,
@@ -309,9 +325,12 @@ export function listJobs(database: Database) {
     .limit(100);
 }
 export async function prune(database: Database) {
+  const monthAgo = new Date(Date.now() - 30 * 86400000);
+  await database.delete(loginAttempts).where(lt(loginAttempts.createdAt, monthAgo));
+  // ADMIN-B72: sign-ins, which anyone can cause by failing one, live as long as the attempts.
   await database
-    .delete(loginAttempts)
-    .where(lt(loginAttempts.createdAt, new Date(Date.now() - 30 * 86400000)));
+    .delete(auditLog)
+    .where(and(eq(auditLog.entityType, 'session'), lt(auditLog.createdAt, monthAgo)));
   await database
     .delete(idempotencyKeys)
     .where(lt(idempotencyKeys.createdAt, new Date(Date.now() - 86400000)));
@@ -330,7 +349,13 @@ export async function prune(database: Database) {
     .groupBy(jobs.kind);
   const kept = newest.flatMap((row) =>
     row.finishedAt
-      ? [and(eq(jobs.kind, row.kind), eq(jobs.status, 'succeeded'), eq(jobs.finishedAt, row.finishedAt))]
+      ? [
+          and(
+            eq(jobs.kind, row.kind),
+            eq(jobs.status, 'succeeded'),
+            eq(jobs.finishedAt, row.finishedAt),
+          ),
+        ]
       : [],
   );
   await database
