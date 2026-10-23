@@ -43,7 +43,7 @@ func sh(t *testing.T, args ...string) string {
 }
 
 // stand-in builds an image that reports version and revision, or never becomes healthy.
-func standIn(t *testing.T, dir, version string, healthy bool) string {
+func standIn(t *testing.T, dir, version string, healthy bool, contract int) string {
 	t.Helper()
 	context := filepath.Join(dir, version)
 	os.MkdirAll(filepath.Join(context, "www/api/v1"), 0o755)
@@ -57,9 +57,9 @@ func standIn(t *testing.T, dir, version string, healthy bool) string {
 COPY www /www
 COPY pnpm /bin/pnpm
 ENV ENAN_REVISION=rev-%[1]s
-LABEL org.opencontainers.image.version=%[1]s org.opencontainers.image.revision=rev-%[1]s org.enan.schema=7 org.enan.contract=0
+LABEL org.opencontainers.image.version=%[1]s org.opencontainers.image.revision=rev-%[1]s org.enan.schema=%[2]d org.enan.contract=%[3]d
 CMD ["httpd", "-f", "-p", "3000", "-h", "/www"]
-`, version)
+`, version, max(7, contract), contract)
 	os.WriteFile(filepath.Join(context, "Dockerfile"), []byte(dockerfile), 0o644)
 	tag := registryHost + "/enan:" + version
 	sh(t, "build", "-q", "-t", tag, context)
@@ -74,7 +74,7 @@ func publishEdge(t *testing.T, tag string) {
 }
 
 func TestIntegration(t *testing.T) {
-	t.Run("ADMIN-B56 against Docker: install, keep settings, roll back, hold a major version", integrationCycle)
+	t.Run("ADMIN-B56 against Docker: install, keep settings, roll back, hold a contract migration", integrationCycle)
 }
 
 func integrationCycle(t *testing.T) {
@@ -101,10 +101,11 @@ func integrationCycle(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 	}
 	dir := t.TempDir()
-	v1 := standIn(t, dir, "1.0.0", true)
-	v2 := standIn(t, dir, "1.1.0", true)
-	v3 := standIn(t, dir, "1.2.0", false)
-	v4 := standIn(t, dir, "2.0.0", true)
+	v1 := standIn(t, dir, "2026.10.0", true, 0)
+	v2 := standIn(t, dir, "2026.11.0", true, 0)
+	v3 := standIn(t, dir, "2026.12.0", false, 0)
+	// A new year, and a migration the running release cannot read: held for the migration only.
+	v4 := standIn(t, dir, "2027.1.0", true, 8)
 	publishEdge(t, v1)
 
 	sh(t, "network", "create", project+"_default")
@@ -152,13 +153,13 @@ func integrationCycle(t *testing.T) {
 	}
 
 	u.Check(ctx)
-	expect(Checked, "1.0.0")
+	expect(Checked, "2026.10.0")
 
 	publishEdge(t, v2)
 	u.Check(ctx)
-	expect(Updated, "1.1.0")
+	expect(Updated, "2026.11.0")
 	inspected := sh(t, "inspect", "-f", `{{range .Config.Env}}{{.}} {{end}}|{{range .Mounts}}{{.Name}}{{end}}|{{index .Config.Labels "com.docker.compose.project"}}|{{.HostConfig.RestartPolicy.Name}}`, project+"-app-1")
-	for _, want := range []string{"SESSION_SECRET=kept", "ENAN_REVISION=rev-1.1.0", project + "-data", "|" + project + "|", "unless-stopped"} {
+	for _, want := range []string{"SESSION_SECRET=kept", "ENAN_REVISION=rev-2026.11.0", project + "-data", "|" + project + "|", "unless-stopped"} {
 		if !strings.Contains(inspected, want) {
 			t.Fatalf("the new container lost %q: %s", want, inspected)
 		}
@@ -169,14 +170,14 @@ func integrationCycle(t *testing.T) {
 
 	publishEdge(t, v3)
 	u.Check(ctx)
-	expect(RolledBack, "1.1.0")
+	expect(RolledBack, "2026.11.0")
 	if u.status.Step != "verify" || u.status.Backup == "" {
 		t.Fatalf("step %s, backup %q", u.status.Step, u.status.Backup)
 	}
 
 	publishEdge(t, v4)
 	u.Check(ctx)
-	if u.status.State != Blocked || !strings.Contains(u.status.Error, "major") {
+	if u.status.State != Blocked || !strings.Contains(u.status.Error, "migration 8") {
 		t.Fatalf("state %s: %s", u.status.State, u.status.Error)
 	}
 }

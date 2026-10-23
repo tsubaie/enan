@@ -222,16 +222,6 @@ func digestIn(image docker.Image, repository string) string {
 	return ""
 }
 
-// major is the first number of a version such as 1.4.2, or -1.
-func major(version string) int {
-	head, _, _ := strings.Cut(version, ".")
-	n, err := strconv.Atoi(head)
-	if err != nil {
-		return -1
-	}
-	return n
-}
-
 // Check runs one update cycle.
 func (u *Updater) Check(ctx context.Context) {
 	if u.state.Paused {
@@ -315,11 +305,9 @@ func (u *Updater) Check(ctx context.Context) {
 	u.install(ctx, app, ref, running, candidate)
 }
 
-// guard returns why a candidate must not be installed automatically, or "".
+// guard returns why a candidate must not be installed automatically, or "". The version number
+// is not consulted: its first part is the year (ADR 0056), and only the migrations decide.
 func (u *Updater) guard(running, candidate *Image) string {
-	if !u.Config.AllowMajor && major(running.Version) >= 0 && major(candidate.Version) > major(running.Version) {
-		return fmt.Sprintf("%s is a new major version after %s; set ENAN_ALLOW_MAJOR=true to install it", candidate.Version, running.Version)
-	}
 	// An older candidate (a channel moved back, or switched): it must be able to read this database.
 	// Not overridable here; going back across a contract is `enan-updater rollback --force`.
 	if running.Contract > candidate.Schema {

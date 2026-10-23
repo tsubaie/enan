@@ -19,7 +19,6 @@ type Config struct {
 	HealthTimeout time.Duration
 	StopTimeout   time.Duration
 	Webhook       string
-	AllowMajor    bool
 	AllowContract bool
 	Project       string // compose project of the app; empty means this container's own project
 	Service       string // compose service of the app
@@ -75,7 +74,7 @@ func Load(env func(string) string) (Config, error) {
 	if config.AppPort, err = strconv.Atoi(get("ENAN_APP_PORT", "3000")); err != nil {
 		return config, fmt.Errorf("ENAN_APP_PORT: %w", err)
 	}
-	for key, into := range map[string]*bool{"ENAN_ALLOW_MAJOR": &config.AllowMajor, "ENAN_ALLOW_CONTRACT": &config.AllowContract} {
+	for key, into := range map[string]*bool{"ENAN_ALLOW_CONTRACT": &config.AllowContract} {
 		if *into, err = strconv.ParseBool(get(key, "false")); err != nil {
 			return config, fmt.Errorf("%s: %q is not true or false", key, env(key))
 		}

@@ -60,8 +60,8 @@ export function eventOf(entry: UpdaterStatus): Event | null {
         key: `rollback_failed:${candidate}:${entry.finishedAt}`,
         title: named(entry.candidate),
       };
-    // Held for the operator (a major version or a contract migration). An image held because it
-    // failed before was already reported as failed.
+    // Held for the operator (a contract migration). An image held because it failed before was
+    // already reported as failed.
     case 'blocked':
       if (entry.step !== 'guard') return null;
       return { kind: 'update.blocked', key: `blocked:${candidate}`, title: named(entry.candidate) };

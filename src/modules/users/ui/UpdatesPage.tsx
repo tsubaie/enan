@@ -130,7 +130,7 @@ function Facts({ status }: { status: Status }) {
 }
 
 // Try again clears the updater's list of images that failed; it does nothing for an update held
-// back as a new major version or a contract migration (step `guard`), which waits for the operator.
+// back as a contract migration (step `guard`), which waits for the operator.
 const retryable = (status: Status) =>
   status.state === 'rolled_back' || (status.state === 'blocked' && status.step === 'check');
 // ADMIN-B58: what an administrator can ask of the updater from here.
