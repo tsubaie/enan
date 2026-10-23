@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { afterEach } from 'vitest';
 import { cleanup, render } from '@testing-library/react';
 import { NextIntlClientProvider, type DateTimeFormatOptions } from 'next-intl';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -32,6 +33,9 @@ export const formats = {
     signedPercent: { style: 'percent', maximumFractionDigits: 0, signDisplay: 'exceptZero' },
   },
 } as const;
+// Unmounted after every scenario, not only before the next: a file's last scenario would otherwise
+// leave React work queued that runs after the jsdom environment is gone ("window is not defined").
+afterEach(() => cleanup());
 export function newClient() {
   return new QueryClient({ defaultOptions: { queries: { retry: false } } });
 }
