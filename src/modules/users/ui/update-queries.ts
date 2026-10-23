@@ -28,6 +28,8 @@ export const Status = z.object({
   confirm: z.boolean(),
   updaterUpdate: z.string().optional(),
   intervalSeconds: z.number(),
+  // ADR 0060: what the updater understands; ADMIN-B74 needs 2 to replace it from here.
+  protocol: z.number().default(0),
   startedAt: z.string().optional(),
 });
 export type Status = z.infer<typeof Status>;
@@ -43,10 +45,10 @@ const Updates = z.object({
   }),
 });
 export type Command =
-  | { command: 'check' | 'resume' | 'retry' }
+  | { command: 'check' | 'resume' | 'retry' | 'update_updater' }
   | { command: 'install'; digest: string; confirm: boolean }
   | { command: 'settings'; automatic: boolean; window: string };
-export const Sent = z.enum(['check', 'resume', 'retry', 'install', 'settings']);
+export const Sent = z.enum(['check', 'resume', 'retry', 'install', 'settings', 'update_updater']);
 export const State = z.enum([
   'checking',
   'checked',

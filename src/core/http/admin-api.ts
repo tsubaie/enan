@@ -21,6 +21,7 @@ import {
   UpdaterCommand,
   UpdaterHealth,
   UpdaterStatus,
+  selfUpdateProtocol,
 } from '@/core/updates/updater';
 const Empty = z.strictObject({});
 const Connection = z.object({
@@ -184,6 +185,25 @@ export const updates = defineHandler({
   transaction: false,
   handler: async () => ({ data: await readUpdates() }),
 });
+// What the updater's status rules out for a request: a paused updater installs nothing, a release
+// that needs confirming is not installed without it (ADMIN-B67), and only an updater that can
+// replace itself is asked to, for a newer image it knows of (ADMIN-B74). The updater refuses them too.
+function refuseUnfit(input: UpdaterCommand, status: UpdaterStatus | null) {
+  if (input.command === 'install') refuseInstall(input, status);
+  if (
+    input.command === 'update_updater' &&
+    (!status?.updaterUpdate || status.protocol < selfUpdateProtocol)
+  )
+    throw new AppError('conflict', { reason: 'no_updater_update' });
+}
+function refuseInstall(
+  input: Extract<UpdaterCommand, { command: 'install' }>,
+  status: UpdaterStatus | null,
+) {
+  if (status?.paused) throw new AppError('conflict', { reason: 'updater_paused' });
+  if (status?.confirm && status.candidate?.digest === input.digest && !input.confirm)
+    throw new AppError('rule_violation', { reason: 'confirmation_required' });
+}
 // ADMIN-B58, ADMIN-B67, ADMIN-B68: Check now, Pause, Resume, Retry, Install now and the automatic
 // setting are left for the updater, which acts on them as they arrive. Refused while there is no updater
 // to read them, and written to the audit log.
@@ -196,12 +216,7 @@ export const updateCommand = defineHandler({
     const { health, status, commands } = await readUpdates();
     if (health === 'not_running' || !commands)
       throw new AppError('conflict', { reason: 'updater_not_running' });
-    if (input.command === 'install') {
-      // A paused updater installs nothing (ADMIN-B67); the updater refuses it too.
-      if (status?.paused) throw new AppError('conflict', { reason: 'updater_paused' });
-      if (status?.confirm && status.candidate?.digest === input.digest && !input.confirm)
-        throw new AppError('rule_violation', { reason: 'confirmation_required' });
-    }
+    refuseUnfit(input, status);
     await writeAudit(
       ctx.db,
       authenticated(ctx).user.id,

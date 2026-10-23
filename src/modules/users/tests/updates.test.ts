@@ -340,3 +340,22 @@ it('ADMIN-B69 an updater too old for this release is reported to the page, and t
   await updater({ state: 'checked', running: { version: '1.1.0' } });
   expect((await (await admin.updates(request('GET'))).json()).data.outdated).toBe(false);
 });
+
+it('ADMIN-B74 Update the updater is left for an updater that can replace itself, and refused for one that cannot', async () => {
+  const send = () => admin.updateCommand(request('POST', { command: 'update_updater' }));
+  // Nothing newer known: nothing to install.
+  await updater({ state: 'checked', protocol: 2 });
+  expect((await send()).status).toBe(409);
+  // An updater from before it could replace itself would ignore the request.
+  await updater({ state: 'checked', protocol: 1, updaterUpdate: 'sha256:two' });
+  expect((await send()).status).toBe(409);
+  await updater({ state: 'checked', protocol: 2, updaterUpdate: 'sha256:two' });
+  const sent = await send();
+  expect(sent.status).toBe(202);
+  expect((await commandsLeft(current())).commands).toEqual(['update_updater']);
+  const audit = await db()
+    .select()
+    .from(auditLog)
+    .where(and(eq(auditLog.entityType, 'updater'), eq(auditLog.action, 'update_update_updater')));
+  expect(audit).toHaveLength(1);
+});

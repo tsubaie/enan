@@ -54,7 +54,7 @@ One decision per file. Format: **Status**, **Context**, **Decision**, **Conseque
 | 0048 | The product is named Enan | accepted |
 | 0049 | An install may supply its own Arabic faces | accepted |
 | 0050 | Releases, channel tags, and migrations the previous release can run on | accepted; version numbering and the manual release superseded by 0056 |
-| 0051 | Installs update themselves through an opt-in updater service | accepted; the major-version guard superseded by 0056; the opt-in, window and contract variable superseded by 0057 |
+| 0051 | Installs update themselves through an opt-in updater service | accepted; the major-version guard superseded by 0056; the opt-in, window and contract variable superseded by 0057; the updater replacing itself superseded by 0062 |
 | 0052 | The push deploy is removed; the maintainer's install updates itself | accepted |
 | 0053 | Email and new sign-in methods extend the own auth; their credentials are sealed in the database | accepted; extending the own auth superseded by 0055 |
 | 0054 | Slow work happens before the write lock | accepted |
@@ -65,5 +65,6 @@ One decision per file. Format: **Status**, **Context**, **Decision**, **Conseque
 | 0059 | The updater and Enan act on events, not polls | accepted |
 | 0060 | The updater follows the app's channel and says what it understands | accepted |
 | 0061 | Lists show more on request, and the audit log reads as a diff | accepted |
+| 0062 | The updater replaces itself through a helper | accepted |
 
 Open decisions awaiting an ADR: license (see roadmap); chart library confirmation (`recharts`).

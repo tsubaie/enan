@@ -25,7 +25,8 @@ import {
   StateChip,
   Version,
 } from './update-parts';
-import { History, Outcome, UpdaterOutdated, UpdaterUpdate } from './UpdateDetails';
+import { History, Outcome, UpdaterOutdated } from './UpdateDetails';
+import { UpdaterUpdate } from './UpdaterUpdate';
 import { Automatic, Install } from './UpdateInstall';
 
 export function UpdatesPage() {
@@ -54,7 +55,11 @@ function Updates({
       <UpdaterPanel health={health} status={status}>
         {live && <Controls status={live} command={command} enabled={commands} />}
       </UpdaterPanel>
-      {outdated ? <UpdaterOutdated /> : status?.updaterUpdate && <UpdaterUpdate />}
+      {outdated ? (
+        <UpdaterOutdated />
+      ) : (
+        live && <UpdaterUpdate status={live} command={command} enabled={commands} />
+      )}
       {askable && <Install status={askable} command={command} enabled={commands} />}
       {command.error && <ErrorPanel error={command.error} />}
       {issue && <Outcome status={issue} />}

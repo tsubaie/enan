@@ -72,6 +72,8 @@ type Updater struct {
 	Now      func() time.Time
 	// Self is the updater's own container id, for its self-update check; empty outside a container.
 	Self string
+	// selfAsked is an administrator's request to replace this updater (ADR 0062).
+	selfAsked bool
 
 	state  State
 	status Status
@@ -746,7 +748,8 @@ func (u *Updater) cleanImages(ctx context.Context, keep ...*Image) {
 	}
 }
 
-// checkSelf alerts once per new updater image; the operator applies it (README § Automatic updates).
+// checkSelf notes and alerts once per newer updater image, which the updater installs on request or
+// by itself (ADR 0062). An image built from the same updater source is not newer.
 func (u *Updater) checkSelf(ctx context.Context) {
 	if u.Self == "" {
 		return
@@ -765,6 +768,10 @@ func (u *Updater) checkSelf(ctx context.Context) {
 	}
 	latest, err := u.Registry.Digest(ctx, ref)
 	if err != nil || latest == digestIn(image, ref.Repository) {
+		u.status.UpdaterUpdate = ""
+		return
+	}
+	if labels, err := u.Registry.Labels(ctx, ref, latest, image.Platform()); err == nil && sameSource(image, labels) {
 		u.status.UpdaterUpdate = ""
 		return
 	}
@@ -877,6 +884,8 @@ func (u *Updater) Apply(ctx context.Context, command Command) bool {
 		u.Rollback(ctx, command.Force)
 	case "install":
 		u.Install(ctx, command.Digest, command.Confirm)
+	case "update_updater":
+		u.selfAsked = true
 	case "settings":
 		if command.Window != nil {
 			if *command.Window != "" {
@@ -906,6 +915,7 @@ func (u *Updater) Apply(ctx context.Context, command Command) bool {
 // where it cannot be (ADR 0059).
 func (u *Updater) Run(ctx context.Context) error {
 	u.Recover(ctx)
+	u.recordReplaced(ctx)
 	// Watching starts before the first read of the folder, so a command left in between still wakes.
 	wake := watch(ctx, u.Config.CommandsDir)
 	if wake == nil {
@@ -920,6 +930,11 @@ func (u *Updater) Run(ctx context.Context) error {
 		if due || !u.now().Before(next) {
 			u.Check(ctx)
 			next = u.now().Add(u.Config.Interval)
+		}
+		// ADR 0062: once the helper is under way this updater takes no more work; the helper stops it.
+		if u.selfDue() && u.SelfUpdate(ctx) {
+			<-ctx.Done()
+			return nil
 		}
 		wait := next.Sub(u.now())
 		if wake == nil {

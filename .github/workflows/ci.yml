@@ -403,6 +403,8 @@ jobs:
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
+            # ADR 0062: the updater's own source, so a rebuild for an app-only commit is not newer.
+            org.enan.updater.source=${{ hashFiles('updater/**') }}
           cache-from: type=gha,scope=updater
           cache-to: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'type=gha,scope=updater,mode=max' || '' }}
           provenance: false

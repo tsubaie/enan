@@ -57,16 +57,6 @@ export function Outcome({ status }: { status: Status }) {
   );
 }
 
-export function UpdaterUpdate() {
-  const t = useTranslations('admin');
-  return (
-    <Panel title={t('updaterUpdateAvailable')}>
-      <p className="mb-3 text-sm font-light text-text-muted">{t('updaterUpdateHelp')}</p>
-      <Code>{commands.replaceUpdater}</Code>
-    </Panel>
-  );
-}
-
 // ADMIN-B69: an updater older than this release needs ignores what it does not know, so the page
 // says so and offers what it can still do.
 export function UpdaterOutdated() {

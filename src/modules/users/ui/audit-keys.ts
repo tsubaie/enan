@@ -31,6 +31,7 @@ export const ActionKey = z.enum([
   'update_resume',
   'update_retry',
   'update_install',
+  'update_update_updater',
   'update_settings',
   'purge',
 ]);

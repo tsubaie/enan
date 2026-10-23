@@ -128,6 +128,7 @@ jobs:
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
+            org.enan.updater.source=${{ hashFiles('updater/**') }}
           outputs: type=image,name=${{ env.IMAGE }}-updater,push-by-digest=true,name-canonical=true,push=true
           provenance: false
 

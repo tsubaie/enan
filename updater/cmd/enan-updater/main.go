@@ -10,6 +10,9 @@
 //	enan-updater retry        allow images that failed before to be tried again
 //	enan-updater rollback [--force]
 //	                          go back to the image the last update replaced
+//	enan-updater update_updater
+//	                          replace this updater with the newer image of its channel (ADR 0062)
+//	enan-updater replace ID   the helper that does it, run from the new image
 //	enan-updater healthcheck  exit 1 when the updater has stopped checking (Docker HEALTHCHECK)
 package main
 
@@ -50,7 +53,15 @@ func main() {
 		show(filepath.Join(config.StatusDir, "history.jsonl"))
 	case "healthcheck":
 		healthcheck(config)
-	case "check", "pause", "resume", "retry", "rollback":
+	case "replace":
+		// ADR 0062: the helper a self-update starts, from the new image, for the updater it replaces.
+		if len(os.Args) < 3 {
+			fail(fmt.Errorf("replace needs the id of the updater to replace"))
+		}
+		if err := updater.Replace(context.Background(), docker.New(config.Socket), config, os.Args[2], time.Now); err != nil {
+			fail(err)
+		}
+	case "check", "pause", "resume", "retry", "rollback", "update_updater":
 		force := len(os.Args) > 2 && os.Args[2] == "--force"
 		queue(config, updater.Command{Command: command, Force: force})
 	default:
