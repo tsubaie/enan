@@ -40,10 +40,10 @@ const Updates = z.object({
   }),
 });
 export type Command =
-  | { command: 'check' | 'pause' | 'resume' | 'retry' }
+  | { command: 'check' | 'resume' | 'retry' }
   | { command: 'install'; digest: string; confirm: boolean }
   | { command: 'settings'; automatic: boolean; window: string };
-export const Sent = z.enum(['check', 'pause', 'resume', 'retry', 'install', 'settings']);
+export const Sent = z.enum(['check', 'resume', 'retry', 'install', 'settings']);
 export const State = z.enum([
   'checking',
   'checked',

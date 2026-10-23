@@ -85,11 +85,11 @@ export function Version({ image }: { image: Status['running'] }) {
   );
 }
 
-// ADMIN-B58: what the page is waiting for after Check now, Pause, Resume or Try again, and the
+// ADMIN-B58: what the page is waiting for after Check now, Resume or Try again, and the
 // status it was asked from, so it can tell when the updater has answered.
 export type Asked = {
   id: number;
-  name: 'check' | 'pause' | 'resume' | 'retry';
+  name: 'check' | 'resume' | 'retry';
   lastCheckAt: string | undefined;
 };
 const results: Partial<
@@ -100,8 +100,8 @@ const results: Partial<
   updating: 'updateResult_updating',
 };
 
-// The answer to a request, once the updater's status shows it: a pause is answered when the status
-// says paused, anything else when a check newer than the one the page was showing has finished.
+// The answer to a request, once the updater's status shows it: a check newer than the one the page
+// was showing has finished.
 export function Followup({ asked, status }: { asked: Asked; status: Status }) {
   const t = useTranslations('admin');
   const [slow, setSlow] = useState(false);
@@ -110,13 +110,9 @@ export function Followup({ asked, status }: { asked: Asked; status: Status }) {
     const timer = setTimeout(() => setSlow(true), 60_000);
     return () => clearTimeout(timer);
   }, []);
-  const done =
-    asked.name === 'pause'
-      ? status.paused
-      : status.lastCheckAt !== asked.lastCheckAt && status.state !== 'checking';
+  const done = status.lastCheckAt !== asked.lastCheckAt && status.state !== 'checking';
   let text: string;
   if (!done) text = slow ? t('updateNoAnswer') : t(`updateWaiting_${asked.name}`);
-  else if (asked.name === 'pause') text = t('updatePausedNow');
   else text = t(results[status.state] ?? 'updateResult_problem');
   return (
     <p role="status" aria-busy={!done} className="text-sm text-text-muted">

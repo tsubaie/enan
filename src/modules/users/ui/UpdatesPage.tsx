@@ -1,14 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import {
-  CircleCheck,
-  CirclePause,
-  ExternalLink,
-  RefreshCw,
-  RotateCcw,
-  ShieldAlert,
-} from 'lucide-react';
+import { CircleCheck, ExternalLink, RefreshCw, RotateCcw, ShieldAlert } from 'lucide-react';
 import { type z } from 'zod';
 import { useDateTime, useRelativeTime } from '@/ui/format';
 import { Button } from '@/ui/primitives/button';
@@ -157,7 +150,8 @@ function Facts({ status }: { status: Status }) {
 // back as a contract migration (step `guard`), which waits for the operator.
 const retryable = (status: Status) =>
   status.state === 'rolled_back' || (status.state === 'blocked' && status.step === 'check');
-// ADMIN-B58: what an administrator can ask of the updater from here.
+// ADMIN-B58: what an administrator can ask of the updater from here. Pausing is left to the server:
+// with installs on demand nothing needs stopping, and a paused updater is offered Resume.
 function Controls({
   status,
   command,
@@ -183,15 +177,10 @@ function Controls({
           <RefreshCw className="size-4" aria-hidden />
           {t('updateCheckNow')}
         </Button>
-        {status.paused ? (
+        {status.paused && (
           <Button variant="secondary" disabled={busy} onClick={send('resume')}>
             <CircleCheck className="size-4" aria-hidden />
             {t('updateResume')}
-          </Button>
-        ) : (
-          <Button variant="secondary" disabled={busy} onClick={send('pause')}>
-            <CirclePause className="size-4" aria-hidden />
-            {t('updatePause')}
           </Button>
         )}
         {retryable(status) && (
@@ -201,6 +190,7 @@ function Controls({
           </Button>
         )}
       </div>
+      {status.paused && <p className="text-sm text-text-muted">{t('updatePausedWhy')}</p>}
       {!enabled && <p className="text-sm text-danger">{t('updateCommandsUnavailable')}</p>}
       {asked && sent === asked.name ? (
         <Followup key={asked.id} asked={asked} status={status} />

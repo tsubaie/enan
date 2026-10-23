@@ -254,7 +254,7 @@ docker compose exec updater enan-updater retry     # try an image that failed be
 docker compose exec updater enan-updater rollback  # go back to the image the last update replaced
 ```
 
-The page also shows the running version, the last check, any failed or held update with its backup and restore command, and Check now, Pause and Try again. A paused updater neither checks nor installs.
+The page also shows the running version, the last check, any failed or held update with its backup and restore command, and Check now and Try again. A paused updater neither checks nor installs; it pauses itself when putting the previous version back fails, or when you run `enan-updater pause`, and the page then offers Resume.
 
 The updater is given the Docker socket, which is equivalent to root on the host. It listens on no port and talks only to the image registry and your webhook; the app itself never gets the socket. To go without it, set `ENAN_UPDATER_REPLICAS=0` and run `docker compose up -d`. The updater does not replace itself: when a newer updater is out, it says so once, and you run `docker compose pull updater && docker compose up -d updater`.
 

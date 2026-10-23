@@ -128,16 +128,18 @@ it('ADMIN-B57 without the updater the page is told it is not running, and comman
 
 it('ADMIN-B58 a command is left for the updater and written to the audit log', async () => {
   await updater({ state: 'checked', running: { version: '1.0.0' } });
-  const sent = await admin.updateCommand(request('POST', { command: 'pause' }));
+  const sent = await admin.updateCommand(request('POST', { command: 'resume' }));
   expect(sent.status).toBe(202);
-  expect(await sent.json()).toEqual({ data: { command: 'pause' } });
-  expect((await commandsLeft(current())).commands).toEqual(['pause']);
+  expect(await sent.json()).toEqual({ data: { command: 'resume' } });
+  expect((await commandsLeft(current())).commands).toEqual(['resume']);
   const audit = await db()
     .select()
     .from(auditLog)
-    .where(and(eq(auditLog.entityType, 'updater'), eq(auditLog.action, 'update_pause')));
+    .where(and(eq(auditLog.entityType, 'updater'), eq(auditLog.action, 'update_resume')));
   expect(audit).toHaveLength(1);
   expect((await admin.updateCommand(request('POST', { command: 'rollback' }))).status).toBe(400);
+  // Pausing is the server's: with installs on demand, Enan has nothing to stop.
+  expect((await admin.updateCommand(request('POST', { command: 'pause' }))).status).toBe(400);
   expect((await admin.updateCommand(request('POST', { command: 'check', x: 1 }))).status).toBe(400);
 });
 

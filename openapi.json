@@ -6781,7 +6781,6 @@
               "command": {
                 "enum": [
                   "check",
-                  "pause",
                   "resume",
                   "retry"
                 ],

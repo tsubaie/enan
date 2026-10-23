@@ -123,15 +123,17 @@ it('ADMIN-B57 a rolled back update names the step, the error, the backup and how
   expect(state.command.mutate).toHaveBeenCalledWith({ command: 'retry' });
 });
 
-it('ADMIN-B58 Check now and Pause send their commands; a paused updater offers Resume', () => {
+it('ADMIN-B58 Check now sends its command and nothing offers Pause; a paused updater says why and offers Resume', () => {
   show('running', status());
   mount(<UpdatesPage />);
   fireEvent.click(screen.getByRole('button', { name: en.admin.updateCheckNow }));
-  fireEvent.click(screen.getByRole('button', { name: en.admin.updatePause }));
-  expect(state.command.mutate.mock.calls).toEqual([[{ command: 'check' }], [{ command: 'pause' }]]);
+  expect(state.command.mutate.mock.calls).toEqual([[{ command: 'check' }]]);
+  expect(screen.queryByRole('button', { name: /pause/i })).toBeNull();
+  expect(screen.queryByRole('button', { name: en.admin.updateResume })).toBeNull();
   show('running', status({ paused: true }));
   mount(<UpdatesPage />);
   expect(screen.getByText(en.admin.updateState_paused)).toBeTruthy();
+  expect(screen.getByText(en.admin.updatePausedWhy)).toBeTruthy();
   expect(
     screen.getByRole('button', { name: en.admin.updateCheckNow }).hasAttribute('disabled'),
   ).toBe(true);
@@ -313,13 +315,13 @@ it('ADMIN-B58 Check now says it is checking, then what the check found', () => {
   expect(line().getAttribute('aria-busy')).toBe('false');
 });
 
-it('ADMIN-B58 Pause is answered when the updater says paused, in Arabic', () => {
-  show('running', status());
+it('ADMIN-B58 Resume is answered by the check the updater runs on resuming, in Arabic', () => {
+  show('running', status({ paused: true, state: 'paused' }));
   mount(<UpdatesPage />, 'ar');
-  fireEvent.click(screen.getByRole('button', { name: ar.admin.updatePause }));
-  expect(screen.getByText(ar.admin.updateWaiting_pause)).toBeTruthy();
-  show('running', status({ paused: true }));
-  expect(screen.getByText(ar.admin.updatePausedNow)).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: ar.admin.updateResume }));
+  expect(screen.getByText(ar.admin.updateWaiting_resume)).toBeTruthy();
+  show('running', status({ lastCheckAt: '2026-09-10T09:00:00Z' }));
+  expect(screen.getByText(ar.admin.updateResult_checked)).toBeTruthy();
 });
 
 it('ADMIN-B58 a request the updater does not answer in a minute says so', () => {

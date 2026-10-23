@@ -133,8 +133,9 @@ export async function readUpdates(now = new Date()) {
 }
 
 // ADMIN-B58, ADMIN-B67, ADMIN-B68: what Enan may ask of the updater (updater.Command in Go).
+// Pausing is the server's (`enan-updater pause`); Enan only resumes an updater that is paused.
 export const UpdaterCommand = z.discriminatedUnion('command', [
-  z.strictObject({ command: z.enum(['check', 'pause', 'resume', 'retry']) }),
+  z.strictObject({ command: z.enum(['check', 'resume', 'retry']) }),
   // Exactly the release the page showed; a contract migration only once confirmed.
   z.strictObject({
     command: z.literal('install'),
