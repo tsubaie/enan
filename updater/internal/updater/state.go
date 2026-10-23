@@ -13,9 +13,10 @@ import (
 
 // Protocol is what this updater understands of Enan's requests and status, raised whenever Enan
 // starts relying on something new: 1 is announce mode, Install now and the automatic setting
-// (ADR 0057) and acting on events (ADR 0059); 2 is replacing itself (ADR 0062). Enan warns when the updater's is older than it needs
+// (ADR 0057) and acting on events (ADR 0059); 2 is replacing itself (ADR 0062); 3 is one Install
+// now for the updater and the app together, with or without a release of the app (ADR 0063). Enan warns when the updater's is older than it needs
 // (ADR 0060); an updater from before this field writes none, which reads as 0.
-const Protocol = 2
+const Protocol = 3
 
 // Image identifies an app image by what its labels and the registry say about it.
 type Image struct {
@@ -60,6 +61,15 @@ type State struct {
 	Rejected map[string]string `json:"rejected,omitempty"`
 	// Alerts already sent, so a condition that persists alerts once.
 	Alerted map[string]bool `json:"alerted,omitempty"`
+	// ADR 0063: an Install now that replaces the updater first, for the new one to carry out.
+	Pending *Pending `json:"pending,omitempty"`
+}
+
+// Pending is the app install an Install now asked for, kept across the updater replacing itself.
+// An empty Digest is an Install now with only a newer updater to install.
+type Pending struct {
+	Digest  string `json:"digest,omitempty"`
+	Confirm bool   `json:"confirm,omitempty"`
 }
 
 const previousSuffix = "-enan-previous"

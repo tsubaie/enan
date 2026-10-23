@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Download, ExternalLink } from 'lucide-react';
+import { Download } from 'lucide-react';
 import { Button } from '@/ui/primitives/button';
 import { Checkbox } from '@/ui/primitives/checkbox';
 import {
@@ -14,11 +14,12 @@ import {
 import { Input } from '@/ui/primitives/input';
 import { Field } from '@/ui/layout/Field';
 import { type Status, type useCommand } from './update-queries';
-import { Panel, releases, Version } from './update-parts';
+import { Candidate, Panel, Version } from './update-parts';
 
 type Send = ReturnType<typeof useCommand>;
 
-// ADMIN-B67: an install under way, or a release waiting for Install now.
+// ADMIN-B67: an install under way, or a release waiting for Install now. ADMIN-B75: one card and
+// one Install now for whatever is newer, Enan or its updater; the reader need not tell them apart.
 export function Install({
   status,
   command,
@@ -29,7 +30,8 @@ export function Install({
   enabled: boolean;
 }) {
   if (status.state === 'updating') return <Progress status={status} />;
-  if (status.state === 'available')
+  const updater = status.protocol >= 3 && Boolean(status.updaterUpdate);
+  if (status.state === 'available' || updater)
     return <Available status={status} command={command} enabled={enabled} />;
   return null;
 }
@@ -46,33 +48,27 @@ function Available({
 }) {
   const t = useTranslations('admin');
   const [confirming, setConfirming] = useState(false);
-  const candidate = status.candidate;
-  if (!candidate?.digest) return null;
-  const digest = candidate.digest;
+  // Only the updater newer: no release of Enan to name, and nothing of Enan's to back up.
+  const candidate = status.state === 'available' ? status.candidate : undefined;
+  const digest = candidate?.digest;
+  if (!digest && !status.updaterUpdate) return null;
   const install = (confirm: boolean) =>
     command.mutate(
-      { command: 'install', digest, confirm },
+      digest ? { command: 'install', digest, confirm } : { command: 'install', confirm },
       { onSuccess: () => setConfirming(false) },
     );
   return (
     <Panel title={t('updateAvailableTitle')} tone="border-accent/40">
       <div className="grid gap-3 text-sm">
-        <p className="flex flex-wrap items-center gap-2">
-          {t('updateCandidate')} <Version image={candidate} />
-          {candidate.version && (
-            <a
-              href={`${releases}${candidate.version}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-xs text-accent underline-offset-4 hover:underline"
-            >
-              {t('updateReleaseNotes')}
-              <ExternalLink className="size-3" aria-hidden />
-            </a>
-          )}
-        </p>
+        {candidate && <Candidate candidate={candidate} />}
         <p className="font-light text-text-muted">
-          {t(status.confirm ? 'updateAvailableContract' : 'updateAvailableHelp')}
+          {t(
+            !candidate
+              ? 'updateAvailableSmall'
+              : status.confirm
+                ? 'updateAvailableContract'
+                : 'updateAvailableHelp',
+          )}
         </p>
         <div>
           <Button
@@ -125,12 +121,22 @@ function ConfirmInstall({
   );
 }
 
-const steps: ('backup' | 'switch' | 'verify')[] = ['backup', 'switch', 'verify'];
+// ADMIN-B75: the updater's own step comes first when it is newer, named only as preparing.
+const steps: ('updater' | 'backup' | 'switch' | 'verify')[] = [
+  'updater',
+  'backup',
+  'switch',
+  'verify',
+];
 
 // ADMIN-B67: where an install stands; done and rolled back are the outcomes the page shows after.
 function Progress({ status }: { status: Status }) {
   const t = useTranslations('admin');
-  const at = steps.findIndex((step) => step === status.step);
+  // Checking and downloading the release are preparing it too.
+  const current = ['check', 'pull', 'updater'].includes(status.step ?? '')
+    ? 'updater'
+    : status.step;
+  const at = steps.findIndex((step) => step === current);
   return (
     <Panel title={t('updateInstalling')}>
       <p className="mb-3 text-sm text-text-muted">

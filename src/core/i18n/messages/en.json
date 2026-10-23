@@ -742,6 +742,8 @@
     "updateConfirmCancel": "Not now",
     "updateConfirmInstall": "Back up and install",
     "updateInstalling": "Installing a new version",
+    "updateProgress_updater": "Preparing the update",
+    "updateAvailableSmall": "A small update to Enan is ready. It takes under a minute, needs no backup and changes nothing you use; nothing is installed until you choose Install now.",
     "updateProgress_backup": "Taking a backup",
     "updateProgress_switch": "Switching to the new version",
     "updateProgress_verify": "Making sure it works",

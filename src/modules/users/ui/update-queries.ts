@@ -47,6 +47,8 @@ const Updates = z.object({
 export type Command =
   | { command: 'check' | 'resume' | 'retry' | 'update_updater' }
   | { command: 'install'; digest: string; confirm: boolean }
+  // ADMIN-B75: only the updater newer; it installs whatever is waiting.
+  | { command: 'install'; confirm: boolean }
   | { command: 'settings'; automatic: boolean; window: string };
 export const Sent = z.enum(['check', 'resume', 'retry', 'install', 'settings', 'update_updater']);
 export const State = z.enum([

@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useId, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
+import { ExternalLink } from 'lucide-react';
 import { cn } from '@/ui/cn';
 import { defaults } from '@/core/config/defaults';
 import { State, type Status } from './update-queries';
@@ -124,6 +125,27 @@ export function Followup({ asked, status }: { asked: Asked; status: Status }) {
   return (
     <p role="status" aria-busy={!done} className="text-sm text-text-muted">
       {text}
+    </p>
+  );
+}
+
+// ADMIN-B67: the release an install is for, with its notes.
+export function Candidate({ candidate }: { candidate: NonNullable<Status['candidate']> }) {
+  const t = useTranslations('admin');
+  return (
+    <p className="flex flex-wrap items-center gap-2">
+      {t('updateCandidate')} <Version image={candidate} />
+      {candidate.version && (
+        <a
+          href={`${releases}${candidate.version}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-xs text-accent underline-offset-4 hover:underline"
+        >
+          {t('updateReleaseNotes')}
+          <ExternalLink className="size-3" aria-hidden />
+        </a>
+      )}
     </p>
   );
 }

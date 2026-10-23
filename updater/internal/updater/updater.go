@@ -420,6 +420,18 @@ func (u *Updater) Install(ctx context.Context, digest string, confirm bool) {
 		u.Log.Warn("install refused: the updater is paused or busy", "digest", digest)
 		return
 	}
+	// ADR 0063: one Install now. A newer updater goes first, and installs the release once it runs;
+	// one that failed before does not stand in the way of the release (Try again clears it).
+	if u.status.UpdaterUpdate != "" && u.Self != "" && u.state.Rejected["updater:"+u.status.UpdaterUpdate] == "" {
+		u.state.Pending = &Pending{Digest: digest, Confirm: confirm}
+		_ = u.save()
+		u.selfAsked = true
+		return
+	}
+	if digest == "" {
+		u.Log.Info("install: nothing newer to install")
+		return
+	}
 	u.status = Status{Channel: u.status.Channel, Running: u.status.Running, UpdaterUpdate: u.status.UpdaterUpdate, LastCheckAt: u.status.LastCheckAt, StartedAt: u.now(), State: Updating, Step: "check"}
 	u.publish()
 	if !strings.HasPrefix(digest, "sha256:") {
@@ -915,7 +927,7 @@ func (u *Updater) Apply(ctx context.Context, command Command) bool {
 // where it cannot be (ADR 0059).
 func (u *Updater) Run(ctx context.Context) error {
 	u.Recover(ctx)
-	u.recordReplaced(ctx)
+	u.resume(ctx, u.recordReplaced(ctx))
 	// Watching starts before the first read of the folder, so a command left in between still wakes.
 	wake := watch(ctx, u.Config.CommandsDir)
 	if wake == nil {

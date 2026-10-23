@@ -7,7 +7,7 @@ import { addDays } from '@/core/time/days';
 import { defineHandler, authenticated } from './handler';
 import { checkConnection, aiConnection } from '@/core/ai/client';
 import { deleteBackup, listBackups } from '@/core/backup/dump';
-import { writeAudit } from '@/core/db/audit-repo';
+import { writeAudit, toJson } from '@/core/db/audit-repo';
 import { Manifest } from '@/core/backup/manifest';
 import { enqueue, latestJob, listJobs } from '@/core/db/jobs-repo';
 import { env } from '@/core/config/env';
@@ -22,6 +22,7 @@ import {
   UpdaterHealth,
   UpdaterStatus,
   selfUpdateProtocol,
+  oneUpdateProtocol,
 } from '@/core/updates/updater';
 const Empty = z.strictObject({});
 const Connection = z.object({
@@ -201,6 +202,9 @@ function refuseInstall(
   status: UpdaterStatus | null,
 ) {
   if (status?.paused) throw new AppError('conflict', { reason: 'updater_paused' });
+  // ADMIN-B75: without a release, Install now is for a newer updater that can install itself.
+  if (!input.digest && (!status?.updaterUpdate || status.protocol < oneUpdateProtocol))
+    throw new AppError('conflict', { reason: 'nothing_to_install' });
   if (status?.confirm && status.candidate?.digest === input.digest && !input.confirm)
     throw new AppError('rule_violation', { reason: 'confirmation_required' });
 }
@@ -223,7 +227,7 @@ export const updateCommand = defineHandler({
       `update_${input.command}`,
       'updater',
       null,
-      input,
+      toJson(input),
     );
     await queueCommand(input);
     return { data: { command: input.command } };
