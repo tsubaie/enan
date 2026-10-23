@@ -8,7 +8,10 @@ import { emailOTP } from 'better-auth/plugins';
 import { z } from 'zod';
 import { env, secureCookies } from '@/core/config/env';
 import { logger } from '@/core/config/logger';
-import { db } from '@/core/db/client';
+import { databaseFor, db, pool, queuedWrites } from '@/core/db/client';
+// ADR 0029: Better Auth writes through its own queries, so its writes take their turn in the
+// write queue; its reads, the password check and calls to Google never hold it.
+const queued = () => databaseFor(queuedWrites(pool()));
 import { id } from '@/core/db/ids';
 import { recordLogin, userByEmail, userById } from '@/core/db/auth-repo';
 import { getSetting, hasSetting } from '@/core/db/settings-repo';
@@ -70,7 +73,7 @@ async function sendThrottle(email: string, ip: string | null) {
   const sent = await codeRequests(db(), email, ip);
   if (sent.byEmail >= sendsPerEmail || sent.byAddress >= sendsPerAddress)
     throw new AppError('rate_limited', { scope: 'sign_in_code', retryAfterSeconds: 900 });
-  await recordCodeRequest(db(), email, ip);
+  await recordCodeRequest(queued(), email, ip);
 }
 const before = createAuthMiddleware(async (ctx) => {
   if (ctx.request?.method === 'POST' && ctx.request.headers.get('x-requested-with') !== 'Enan')
@@ -107,7 +110,7 @@ const afterwards = createAuthMiddleware(async (ctx) => {
   const email = Email.safeParse(ctx.body).data?.email;
   if (!email) return;
   const ip = ctx.request ? clientIp(ctx.request) : null;
-  await recordLogin(db(), email, ip, Boolean(ctx.context.newSession));
+  await recordLogin(queued(), email, ip, Boolean(ctx.context.newSession));
 });
 // The account behind a session must still be one: deactivated and deleted accounts are refused the
 // way a wrong password is, so the answer says nothing about which it was.
@@ -230,7 +233,7 @@ async function build() {
     baseURL: config.APP_URL,
     basePath: '/api/auth',
     secret: config.SESSION_SECRET,
-    database: drizzleAdapter(db(), {
+    database: drizzleAdapter(queued(), {
       provider: 'sqlite',
       schema: {
         user: users,
@@ -267,12 +270,15 @@ async function build() {
     telemetry: { enabled: false },
   });
 }
-let instance: ReturnType<typeof build> | undefined;
+// Built for the connection it was given: a restore closes the pool and the next query opens a new
+// one (ADMIN-B38), so an instance still holding the closed one is rebuilt rather than kept.
+let built: { client: ReturnType<typeof pool>; instance: ReturnType<typeof build> } | undefined;
 export function auth() {
-  instance ??= build();
-  return instance;
+  const client = pool();
+  if (built?.client !== client) built = { client, instance: build() };
+  return built.instance;
 }
 // A saved or removed Google client takes effect on the next request.
 export function resetAuth() {
-  instance = undefined;
+  built = undefined;
 }

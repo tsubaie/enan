@@ -78,10 +78,18 @@ export async function saveMail(database: Database, actor: string, input: unknown
   const previous = await readMailSettings(database);
   // A blank password keeps the saved one, which is re-sealed when the host or user it is bound to
   // changes. A saved password that no longer opens is dropped rather than carried forward.
-  const kept =
-    previous?.encryptedPassword && !value.password
-      ? unseal(previous.encryptedPassword, purpose, context(previous.host, previous.username))
+  // With nothing saved yet, the form was filled from the environment and says a password is kept
+  // (ADMIN-B60): that is SMTP_PASSWORD, kept while it is still the same server and user.
+  const config = env();
+  const fromEnvironment =
+    !previous && value.host === config.SMTP_HOST && value.username === (config.SMTP_USER ?? '')
+      ? (config.SMTP_PASSWORD ?? null)
       : null;
+  const kept = value.password
+    ? null
+    : previous?.encryptedPassword
+      ? unseal(previous.encryptedPassword, purpose, context(previous.host, previous.username))
+      : fromEnvironment;
   const password = value.password || kept;
   await saveMailSettings(database, {
     host: value.host,

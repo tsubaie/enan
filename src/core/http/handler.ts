@@ -2,7 +2,8 @@ import 'server-only';
 import { z } from 'zod';
 import { db, withTransaction, DatabaseBusyError, type Database } from '@/core/db/client';
 import { currentUser, type Context } from '@/core/auth/session';
-import { digest } from '@/core/auth/password';
+import { createHmac } from 'node:crypto';
+import { env } from '@/core/config/env';
 import { id } from '@/core/db/ids';
 import { replayRequest, storeRequest, maintenance } from '@/core/db/http-repo';
 import { AppError, statuses } from './errors';
@@ -169,7 +170,11 @@ async function execute<I extends z.ZodType, O extends z.ZodType>(
   // waits at BEGIN until the first attempt commits, then replays its stored response.
   const outcome = await withTransaction(db(), async (database) => {
     const key = options.idempotent ? z.uuid().parse(request.headers.get('idempotency-key')) : null;
-    const hash = digest(JSON.stringify({ method: request.method, url: request.url, input }));
+    // Keyed, because the input can hold a password (an account change asks for the current one):
+    // a plain SHA-256 of it in a stolen backup could be guessed at GPU speed, bypassing argon2.
+    const hash = createHmac('sha256', env().SESSION_SECRET)
+      .update(JSON.stringify({ method: request.method, url: request.url, input }))
+      .digest('hex');
     if (key && ctx.user) {
       const previous = await replayRequest(database, ctx.user.id, key);
       if (previous) {

@@ -45,3 +45,10 @@ it('ADMIN-B31 a backup is neither deleted nor pruned while a restore or a backup
   expect(await pruneBackups(1)).toEqual([]);
   await expect(names(space.backups)).resolves.toContain(id);
 });
+it('ADMIN-B31 a second server chunk never takes over the lock this process holds', async () => {
+  // Each Next.js chunk loads its own copy of the module, as this second import does.
+  vi.resetModules();
+  const other = await import('../maintenance');
+  const inner = await withBackupLock(() => other.withBackupLock(async () => 'stolen'));
+  expect(inner).toEqual({ acquired: true, value: { acquired: false } });
+});

@@ -48,3 +48,26 @@ it('ADMIN-B37 a full queue refuses with a retryable queue-scoped rate limit, not
   expect(await queued()).toBe(queueCapacity);
   expect(await db().select().from(jobs).where(eq(jobs.kind, 'system.backup'))).toEqual([]);
 });
+
+it('ADR 0029 a transaction whose commit fails keeps its turn in the write queue until it rolls back', async () => {
+  const { queuedWrites, withWriteLock, DatabaseBusyError } = await import('../client');
+  let rolledBack = false;
+  // A connection whose commit fails the way a full disk would; the rollback that follows works.
+  const tx = {
+    commit: async () => {
+      throw new Error('SQLITE_FULL');
+    },
+    rollback: async () => {
+      rolledBack = true;
+    },
+  };
+  // cast: only the transaction call is used, and it answers with the stand-in above.
+  const client = { transaction: async () => tx } as never;
+  const opened = await queuedWrites(client).transaction('write');
+  await expect(opened.commit()).rejects.toThrow('SQLITE_FULL');
+  // The file is still locked by the open transaction: the next writer must still wait.
+  await expect(withWriteLock(async () => 'next', 50)).rejects.toBeInstanceOf(DatabaseBusyError);
+  await opened.rollback();
+  expect(rolledBack).toBe(true);
+  await expect(withWriteLock(async () => 'next', 50)).resolves.toBe('next');
+});

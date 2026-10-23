@@ -18,6 +18,7 @@ export async function setLocaleCookie(locale: string) {
  * since been deactivated or deleted counts for nothing.
  */
 async function session(slide: boolean) {
+  // A slide that writes the session takes its turn in the write queue at the adapter.
   const found = await (await auth()).api.getSession({
     headers: await headers(),
     query: { disableRefresh: !slide },

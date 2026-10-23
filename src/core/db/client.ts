@@ -2,7 +2,13 @@ import 'server-only';
 import { existsSync, mkdirSync, renameSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { createClient, type Client } from '@libsql/client';
+import {
+  createClient,
+  type Client,
+  type InStatement,
+  type Transaction as LibsqlTransaction,
+  type TransactionMode,
+} from '@libsql/client';
 import { is } from 'drizzle-orm';
 import { drizzle, type LibSQLDatabase } from 'drizzle-orm/libsql';
 import { SQLiteTransaction } from 'drizzle-orm/sqlite-core';
@@ -224,4 +230,66 @@ export async function withWriteLock<T>(work: () => Promise<T>, windowMs = busyRe
   } finally {
     release();
   }
+}
+const writes = /^\s*(?:insert|update|delete|replace)\b/iu;
+const writing = (statement: InStatement) =>
+  writes.test(typeof statement === 'string' ? statement : statement.sql);
+// A method read through the proxy runs on the real object, whose private fields it needs.
+const bound = <T>(target: object, value: T) =>
+  typeof value === 'function' ? value.bind(target) : value;
+// A transaction that holds its turn in the write queue from BEGIN until it commits or rolls back.
+function queuedTransaction(client: Client, mode?: TransactionMode) {
+  return new Promise<LibsqlTransaction>((resolve, reject) => {
+    withWriteLock(async () => {
+      const tx = await client.transaction(mode);
+      await new Promise<void>((ended) => {
+        // A commit that fails leaves the transaction open and the file locked: the turn is kept
+        // until the rollback that always follows it (drizzle), never handed to the next writer.
+        const end = (name: 'commit' | 'rollback') => async () => {
+          if (name === 'commit') {
+            await tx.commit();
+            ended();
+            return;
+          }
+          try {
+            await tx.rollback();
+          } finally {
+            ended();
+          }
+        };
+        resolve(
+          new Proxy(tx, {
+            get: (target, key) =>
+              key === 'commit' || key === 'rollback'
+                ? end(key)
+                : bound(target, Reflect.get(target, key)),
+          }),
+        );
+      });
+    }).catch(reject);
+  });
+}
+/**
+ * ADR 0029 for code that writes through a library's own queries (Better Auth's adapter): the
+ * client's writes and transactions take their turn in the write queue, its reads do not. Slow work
+ * around them (a password check, a call to Google) never holds the queue, and a write never meets
+ * an open transaction in the driver, where it would block the process and then fail busy.
+ */
+export function queuedWrites(client: Client): Client {
+  return new Proxy(client, {
+    get(target, key) {
+      if (key === 'execute')
+        return (statement: InStatement) =>
+          writing(statement)
+            ? withWriteLock(() => target.execute(statement))
+            : target.execute(statement);
+      if (key === 'batch')
+        return (statements: InStatement[], mode?: Parameters<Client['batch']>[1]) =>
+          statements.some(writing)
+            ? withWriteLock(() => target.batch(statements, mode))
+            : target.batch(statements, mode);
+      if (key === 'transaction') return (mode?: TransactionMode) => queuedTransaction(target, mode);
+      return bound(target, Reflect.get(target, key));
+    },
+  });
 }

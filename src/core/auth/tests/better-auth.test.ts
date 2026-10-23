@@ -21,8 +21,9 @@ const io = vi.hoisted(() => ({
 vi.mock('next/server', () => ({
   after: (work: () => Promise<void>) => io.later.push(Promise.resolve().then(work)),
 }));
+const request = vi.hoisted(() => ({ cookie: '' }));
 vi.mock('next/headers', () => ({
-  headers: async () => new Headers(),
+  headers: async () => new Headers(request.cookie ? { cookie: request.cookie } : {}),
   cookies: async () => ({ get: () => undefined, set: () => {}, getAll: () => [] }),
 }));
 vi.mock('nodemailer', () => ({
@@ -35,13 +36,15 @@ vi.mock('nodemailer', () => ({
     }),
   },
 }));
-const verified = vi.hoisted(() => ({ hashes: [] as string[] }));
+const verified = vi.hoisted(() => ({ hashes: [] as string[], gate: null as Promise<void> | null }));
 vi.mock('../password', async (original) => {
   const actual = await original<typeof import('../password')>();
   return {
     ...actual,
-    verifyPassword: (hash: string, value: string) => {
+    verifyPassword: async (hash: string, value: string) => {
       verified.hashes.push(hash);
+      // A test can hold the password check open, the way a slow argon2 run would.
+      await verified.gate;
       return actual.verifyPassword(hash, value);
     },
     // Better Auth answers an unknown address by hashing the password, at the same argon2 cost.
@@ -127,6 +130,8 @@ beforeEach(async () => {
   await clearDatabase();
   member = (await addUser('member@example.test')).id;
   verified.hashes = [];
+  verified.gate = null;
+  request.cookie = '';
 });
 afterAll(() => closeDatabase());
 
@@ -268,4 +273,81 @@ it('ADMIN-B20 a sign-in turned away because the hasher is busy (429) is not coun
     .from(loginAttempts)
     .where(and(eq(loginAttempts.email, 'member@example.test'), eq(loginAttempts.succeeded, false)));
   expect(failed).toHaveLength(0);
+});
+
+it('ADMIN-B38 after a restore reopens the database, sign-in uses the new connection', async () => {
+  const before = await auth();
+  // What a restore does to this process: the pool is closed, and the next query opens a new one.
+  closeDatabase();
+  expect(await auth()).not.toBe(before);
+  expect((await signIn('member@example.test')).status).toBe(200);
+});
+
+it('ADR 0029 a sign-in waits its turn behind an open write transaction instead of failing busy', async () => {
+  const { POST } = await import('../../../app/api/auth/[...all]/route');
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  const finished: string[] = [];
+  // A request's transaction, open and holding the write lock while it awaits something.
+  const writing = withTransaction(db(), async (database) => {
+    await database.run(sql`update users set name = name where id = ${member}`);
+    await held;
+    finished.push('transaction');
+  });
+  const signing = POST(
+    new Request(new URL('/api/auth/sign-in/email', env().APP_URL), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: env().APP_URL,
+        'X-Requested-With': 'Enan',
+      },
+      body: JSON.stringify({ email: 'member@example.test', password }),
+    }),
+  ).then((response) => (finished.push('sign-in'), response));
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  release();
+  await writing;
+  expect((await signing).status).toBe(200);
+  expect(finished).toEqual(['transaction', 'sign-in']);
+});
+
+it('ADR 0029 the password check of a sign-in never holds the write queue', async () => {
+  const { POST } = await import('../../../app/api/auth/[...all]/route');
+  let release: () => void = () => {};
+  verified.gate = new Promise<void>((resolve) => (release = resolve));
+  const signing = POST(
+    new Request(new URL('/api/auth/sign-in/email', env().APP_URL), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: env().APP_URL,
+        'X-Requested-With': 'Enan',
+      },
+      body: JSON.stringify({ email: 'member@example.test', password }),
+    }),
+  );
+  await vi.waitFor(() => expect(verified.hashes.length).toBe(1));
+  // The sign-in is inside its password check; another member's save goes ahead meanwhile.
+  await withTransaction(db(), (database) =>
+    database.run(sql`update users set name = 'Saved meanwhile' where id = ${member}`),
+  );
+  release();
+  expect((await signing).status).toBe(200);
+});
+
+it('ADR 0029 ACCT-B09 a session check that has nothing to refresh never waits in the write queue', async () => {
+  const { currentUser } = await import('../session');
+  const response = await signIn('member@example.test');
+  request.cookie = (response.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  // Another member's save holds the write lock while an API request checks its session.
+  const writing = withTransaction(db(), async (database) => {
+    await database.run(sql`update users set name = name where id = ${member}`);
+    await held;
+  });
+  expect((await currentUser({ slide: true }))?.id).toBe(member);
+  release();
+  await writing;
 });
