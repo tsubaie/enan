@@ -6,7 +6,13 @@ import { emitUnattended } from '@/core/notifications/emit';
 import { routes } from '@/core/routes';
 import { lastSucceeded } from '@/core/db/jobs-repo';
 import type { Database } from '@/core/db/client';
-import { healthOf, readUpdates, stalledAfter, type UpdaterStatus } from '@/core/updates/updater';
+import {
+  healthOf,
+  outdated,
+  readUpdates,
+  stalledAfter,
+  type UpdaterStatus,
+} from '@/core/updates/updater';
 import { selectAdminIds } from './repo';
 
 // ADMIN-B59, ADR 0022: the update kinds. The administration area owns the updater's page, so this
@@ -18,6 +24,7 @@ export const kinds = [
   'update.rollback_failed',
   'update.blocked',
   'update.stalled',
+  'update.updater_outdated',
 ];
 export const updatesJob = 'users.updates';
 
@@ -91,13 +98,26 @@ function stalledEvent(status: UpdaterStatus): Event {
   };
 }
 
+// ADMIN-B69: the updater is older than this release of Enan needs. Keyed by what it understands,
+// so a newer but still too old updater is news again.
+function outdatedEvent(status: UpdaterStatus): Event {
+  return {
+    kind: 'update.updater_outdated',
+    key: `outdated:${status.protocol}`,
+    title: named(status.running),
+  };
+}
+// When this process started: a new release of Enan is a new process, and that is when an updater
+// can fall behind it.
+const processStart = new Date();
+
 // NOTIF-B06: a subject resolves only for an administrator, from the updater's own record.
 export async function resolve(ctx: Context, ids: readonly string[]) {
   const subjects = new Map<string, NotificationSubject>();
   if (ctx.user.role !== 'admin') return subjects;
   const { status, history } = await readUpdates();
   const events = [
-    ...(status ? [stalledEvent(status)] : []),
+    ...(status ? [stalledEvent(status), outdatedEvent(status)] : []),
     ...[...(status ? [status] : []), ...history].flatMap((entry) => eventOf(entry) ?? []),
   ];
   const href = routes.admin('updates');
@@ -109,9 +129,38 @@ export async function resolve(ctx: Context, ids: readonly string[]) {
   return subjects;
 }
 
-// ADMIN-B59: every few minutes, the outcomes the updater recorded since the last run become
-// notifications for every active administrator, and so does an updater that just went quiet.
-export async function notifyUpdates(database: Database, job: string, now = new Date()) {
+// What the updater's state says rather than its history, each raised once: an updater that went
+// quiet on the run in which it crossed the limit, and one too old for this release (ADMIN-B69) on
+// the first run since Enan started.
+function stateEvents(
+  status: UpdaterStatus,
+  now: Date,
+  since: number,
+  previous: Date | null,
+  started: Date,
+) {
+  const events: Event[] = [];
+  const last = status.lastCheckAt ? Date.parse(status.lastCheckAt) : NaN;
+  if (
+    healthOf(status, now) === 'stalled' &&
+    !Number.isNaN(last) &&
+    last + stalledAfter(status) > since
+  )
+    events.push(stalledEvent(status));
+  if (outdated(status) && started.getTime() > (previous?.getTime() ?? -Infinity))
+    events.push(outdatedEvent(status));
+  return events;
+}
+
+// ADMIN-B59: whenever the updater writes its status, and daily, the outcomes it recorded since the
+// last run become notifications for every active administrator, and so does an updater that just
+// went quiet or is too old for this release (ADMIN-B69).
+export async function notifyUpdates(
+  database: Database,
+  job: string,
+  now = new Date(),
+  started = processStart,
+) {
   const { status, history } = await readUpdates(now);
   if (!status) return;
   const previous = await lastSucceeded(database, updatesJob, job);
@@ -124,14 +173,7 @@ export async function notifyUpdates(database: Database, job: string, now = new D
     .reverse()
     .filter((entry) => fresh(entry.finishedAt))
     .flatMap((entry) => eventOf(entry) ?? []);
-  const last = status.lastCheckAt ? Date.parse(status.lastCheckAt) : NaN;
-  // Raised once: on the run in which the updater crossed the limit, not on every run after it.
-  if (
-    healthOf(status, now) === 'stalled' &&
-    !Number.isNaN(last) &&
-    last + stalledAfter(status) > since
-  )
-    events.push(stalledEvent(status));
+  events.push(...stateEvents(status, now, since, previous, started));
   if (!events.length) return;
   const to = await selectAdminIds(database);
   await emitUnattended(

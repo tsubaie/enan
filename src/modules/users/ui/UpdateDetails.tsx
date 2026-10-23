@@ -67,6 +67,18 @@ export function UpdaterUpdate() {
   );
 }
 
+// ADMIN-B69: an updater older than this release needs ignores what it does not know, so the page
+// says so and offers what it can still do.
+export function UpdaterOutdated() {
+  const t = useTranslations('admin');
+  return (
+    <Panel title={t('updaterOutdated')} tone="border-danger/40">
+      <p className="mb-3 text-sm font-light text-text-muted">{t('updaterOutdatedHelp')}</p>
+      <Code>{commands.replaceUpdater}</Code>
+    </Panel>
+  );
+}
+
 // ADMIN-B57: the updater's last outcomes, newest first.
 export function History({ history }: { history: Status[] }) {
   const t = useTranslations('admin');

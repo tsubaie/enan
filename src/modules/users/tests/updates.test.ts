@@ -49,6 +49,8 @@ const entry = (fields: object) => ({
   channel: 'latest',
   state: 'checked',
   intervalSeconds: 900,
+  // ADMIN-B69: an updater that understands what this release asks of it.
+  protocol: 1,
   lastCheckAt: minutes(-1),
   paused: false,
   ...fields,
@@ -75,12 +77,12 @@ const lastRun = (finishedAt: Date) =>
     .insert(jobs)
     .values({ id: id(), kind: updatesJob, payload: {}, status: 'succeeded', finishedAt });
 // As the runner calls it: the run is already marked succeeded when its publish effect runs.
-async function run(at: Date) {
+async function run(at: Date, started?: Date) {
   const job = id();
   await db()
     .insert(jobs)
     .values({ id: job, kind: updatesJob, payload: {}, status: 'succeeded', finishedAt: at });
-  await notifyUpdates(db(), job, at);
+  await notifyUpdates(db(), job, at, started);
 }
 const rows = () =>
   db()
@@ -321,4 +323,20 @@ it('ADMIN-B59 a status the updater writes queues the notification run at once, o
   } finally {
     unwatch();
   }
+});
+
+it('ADMIN-B69 an updater too old for this release is reported to the page, and to administrators once per start of Enan', async () => {
+  // An updater from before the protocol writes none.
+  await updater({ state: 'checked', protocol: undefined, running: { version: '1.1.0' } });
+  const read = await admin.updates(request('GET'));
+  expect((await read.json()).data.outdated).toBe(true);
+  const started = new Date(minutes(-1));
+  await lastRun(new Date(minutes(-5)));
+  await run(now, started);
+  expect((await rows()).map((row) => row.kind)).toEqual(['update.updater_outdated']);
+  await run(new Date(minutes(5)), started);
+  expect(await rows()).toHaveLength(1);
+  // A current updater is not reported.
+  await updater({ state: 'checked', running: { version: '1.1.0' } });
+  expect((await (await admin.updates(request('GET'))).json()).data.outdated).toBe(false);
 });

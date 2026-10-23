@@ -165,6 +165,7 @@ func (u *Updater) publish() {
 		u.status.TimeZone = u.Config.Zone.String()
 	}
 	u.status.IntervalSeconds = int(u.Config.Interval.Seconds())
+	u.status.Protocol = Protocol
 	if err := u.store.write("status.json", u.status); err != nil {
 		u.Log.Error("writing status", "error", err)
 	}

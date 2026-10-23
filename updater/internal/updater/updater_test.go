@@ -319,6 +319,7 @@ func TestScenarios(t *testing.T) {
 		{"ADMIN-B56 a shutdown during verification records nothing and the next start finishes the update", aShutdownDuringVerificationIsLeftForRecovery},
 		{"ADMIN-B56 a second updater is refused", aSecondUpdaterIsRefused},
 		{"ADMIN-B56 commands are read once", commandsAreReadOnce},
+		{"ADMIN-B69 every status says what this updater understands", everyStatusSaysItsProtocol},
 		{"ADMIN-B58 a command is acted on when it arrives, not at the next poll", aCommandIsActedOnWhenItArrives},
 		{"ADMIN-B56 the history keeps the last outcomes", historyKeepsTheLastOutcomes},
 		{"ADMIN-B56 an update held back is one history entry, not one per check", aHeldUpdateIsOneHistoryEntry},
@@ -657,6 +658,15 @@ func commandsAreReadOnce(t *testing.T) {
 	}
 	if again := u.Commands(); len(again) != 0 {
 		t.Fatalf("commands read twice: %v", again)
+	}
+}
+
+func everyStatusSaysItsProtocol(t *testing.T) {
+	u, _, _ := setup(t)
+	u.Check(context.Background())
+	status, _ := os.ReadFile(filepath.Join(u.Config.StatusDir, "status.json"))
+	if Protocol < 1 || !strings.Contains(string(status), fmt.Sprintf(`"protocol": %d`, Protocol)) {
+		t.Fatalf("status.json %s", status)
 	}
 }
 

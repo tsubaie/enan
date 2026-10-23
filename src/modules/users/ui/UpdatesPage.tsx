@@ -7,7 +7,14 @@ import { useDateTime, useRelativeTime } from '@/ui/format';
 import { Button } from '@/ui/primitives/button';
 import { ErrorPanel } from '@/ui/layout/ErrorPanel';
 import Loading from '@/ui/layout/Loading';
-import { type Health, latestIssue, type Status, useCommand, useUpdates } from './update-queries';
+import {
+  type Answer,
+  type Health,
+  latestIssue,
+  type Status,
+  useCommand,
+  useUpdates,
+} from './update-queries';
 import {
   type Asked,
   Code,
@@ -18,7 +25,7 @@ import {
   StateChip,
   Version,
 } from './update-parts';
-import { History, Outcome, UpdaterUpdate } from './UpdateDetails';
+import { History, Outcome, UpdaterOutdated, UpdaterUpdate } from './UpdateDetails';
 import { Automatic, Install } from './UpdateInstall';
 
 export function UpdatesPage() {
@@ -26,31 +33,40 @@ export function UpdatesPage() {
   const command = useCommand();
   if (query.isPending) return <Loading />;
   if (query.error) return <ErrorPanel error={query.error} retry={() => void query.refetch()} />;
-  const { health, status, history, commands } = query.data.data;
+  return <Updates answer={query.data.data} command={command} />;
+}
+
+// What the updater said, and what can be asked of it.
+function Updates({
+  answer,
+  command,
+}: {
+  answer: Answer['data'];
+  command: ReturnType<typeof useCommand>;
+}) {
+  const { health, status, history, commands, outdated } = answer;
   const issue = latestIssue(status, history);
   const live = health === 'not_running' ? null : status;
+  // ADMIN-B69: an older updater neither announces nor installs on request, so neither is offered.
+  const askable = outdated ? null : live;
   return (
     <div className="space-y-5">
       <UpdaterPanel health={health} status={status} />
-      {live && (
-        <>
-          <Install status={live} command={command} enabled={commands} />
-          <Controls status={live} command={command} enabled={commands} />
-        </>
-      )}
+      {outdated ? <UpdaterOutdated /> : status?.updaterUpdate && <UpdaterUpdate />}
+      {askable && <Install status={askable} command={command} enabled={commands} />}
+      {live && <Controls status={live} command={command} enabled={commands} />}
       {command.error && <ErrorPanel error={command.error} />}
       {issue && <Outcome status={issue} />}
-      {status?.updaterUpdate && <UpdaterUpdate />}
-      {live && (
+      {askable && (
         // Keyed by the saved setting, so the form shows what the updater recorded once it has.
         <Automatic
-          key={`${live.automatic}:${live.window ?? ''}`}
-          status={live}
+          key={`${askable.automatic}:${askable.window ?? ''}`}
+          status={askable}
           command={command}
           enabled={commands}
         />
       )}
-      {history.length > 0 && <History history={history} />}
+      <History history={history} />
     </div>
   );
 }

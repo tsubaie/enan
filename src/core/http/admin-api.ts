@@ -156,6 +156,8 @@ export const updates = defineHandler({
       status: UpdaterStatus.nullable(),
       history: z.array(UpdaterStatus),
       commands: z.boolean(),
+      // ADMIN-B69: the updater is older than this release of Enan needs.
+      outdated: z.boolean(),
     }),
   }),
   transaction: false,

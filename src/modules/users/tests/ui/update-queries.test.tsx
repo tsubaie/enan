@@ -18,6 +18,7 @@ const answer = () => ({
     health: 'running',
     history: [],
     commands: true,
+    outdated: false,
     status: {
       channel: 'latest',
       state: 'checked',

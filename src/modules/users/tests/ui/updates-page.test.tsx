@@ -47,11 +47,19 @@ const status = (fields: object = {}) => ({
   confirm: false,
   timeZone: extremeZones.east,
   intervalSeconds: 900,
+  // ADMIN-B69: an updater that understands what this release asks of it.
+  protocol: 1,
   ...fields,
 });
 const digest = `sha256:${'a'.repeat(64)}`;
-function show(health: string, current: object | null, history: object[] = [], commands = true) {
-  state.updates = { health, status: current, history, commands };
+function show(
+  health: string,
+  current: object | null,
+  history: object[] = [],
+  commands = true,
+  outdated = false,
+) {
+  state.updates = { health, status: current, history, commands, outdated };
   act(() => state.listeners.forEach((listener) => listener()));
 }
 beforeEach(() => {
@@ -379,7 +387,13 @@ it('ADMIN-B58 a request the updater does not answer in a minute says so', () => 
 
 it('ADMIN-B58 the page refreshes only while the updater works or a command waits for its answer', () => {
   const answer = (fields: object = {}) => ({
-    data: { health: 'running' as const, status: status(fields), history: [], commands: true },
+    data: {
+      health: 'running' as const,
+      status: status(fields),
+      history: [],
+      commands: true,
+      outdated: false,
+    },
   });
   const quiet = answer();
   const sent = (status: 'pending' | 'success' | 'error', submittedAt: number, before = quiet) => ({
@@ -399,4 +413,21 @@ it('ADMIN-B58 the page refreshes only while the updater works or a command waits
   expect(refreshEvery(quiet, sent('error', now - 1000), now)).toBe(false);
   // After a minute the page says the updater may be stopped and stops asking.
   expect(refreshEvery(quiet, sent('success', now - 61_000), now)).toBe(false);
+});
+
+it('ADMIN-B69 an updater too old for this release says so with the command that replaces it, and hides what it would ignore', () => {
+  show(
+    'running',
+    status({ protocol: 0, state: 'available', candidate: { digest } }),
+    [],
+    true,
+    true,
+  );
+  mount(<UpdatesPage />);
+  expect(screen.getByRole('heading', { name: en.admin.updaterOutdated })).toBeTruthy();
+  expect(screen.getByText(/docker compose pull updater/u)).toBeTruthy();
+  expect(screen.queryByRole('button', { name: en.admin.updateInstallNow })).toBeNull();
+  expect(screen.queryByRole('checkbox')).toBeNull();
+  // What it still does: checking.
+  expect(screen.getByRole('button', { name: en.admin.updateCheckNow })).toBeTruthy();
 });

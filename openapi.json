@@ -1153,6 +1153,12 @@
                 "default": false,
                 "type": "boolean"
               },
+              "protocol": {
+                "default": 0,
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
               "restoreCommand": {
                 "type": "string"
               },
@@ -1184,7 +1190,8 @@
               "paused",
               "automatic",
               "confirm",
-              "intervalSeconds"
+              "intervalSeconds",
+              "protocol"
             ],
             "type": "object"
           },
@@ -1234,6 +1241,9 @@
                 },
                 "type": "array"
               },
+              "outdated": {
+                "type": "boolean"
+              },
               "status": {
                 "anyOf": [
                   {
@@ -1249,7 +1259,8 @@
               "health",
               "status",
               "history",
-              "commands"
+              "commands",
+              "outdated"
             ],
             "type": "object"
           }
@@ -3205,7 +3216,8 @@
                         "update.failed",
                         "update.rollback_failed",
                         "update.blocked",
-                        "update.stalled"
+                        "update.stalled",
+                        "update.updater_outdated"
                       ],
                       "type": "string"
                     },

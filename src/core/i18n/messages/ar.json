@@ -619,6 +619,8 @@
     "updateLog": "آخر أسطر سجل الإصدار الجديد",
     "updaterUpdateAvailable": "يتوفر إصدار أحدث من خدمة التحديث",
     "updaterUpdateHelp": "لا تستبدل خدمة التحديث نفسها. لتثبيت الإصدار الجديد، شغّل هذا على الخادم:",
+    "updaterOutdated": "خدمة التحديث أقدم من هذا الإصدار من عنان",
+    "updaterOutdatedHelp": "لا تعرف بعض ما تطلبه منها هذه الصفحة، لذا أُخفي «ثبّت الآن» والتثبيت التلقائي حتى تُستبدل، وقد يكون ما تعرضه ناقصًا. لا تستبدل خدمة التحديث نفسها؛ شغّل هذا على الخادم:",
     "updateHistory": "التحديثات الأخيرة",
     "jobKind_users_updates": "إشعارات التحديث",
     "auditEntity_updater": "التحديث التلقائي",
@@ -1191,7 +1193,8 @@
     "updateRollbackFailed": "فشل التحديث والرجوع: {title}",
     "updateBlocked": "تحديث بانتظار موافقتك: {title}",
     "updateStalled": "توقّفت خدمة التحديث عن الفحص: {title}",
-    "updateAvailable": "يتوفر إصدار جديد: {title}"
+    "updateAvailable": "يتوفر إصدار جديد: {title}",
+    "updateUpdaterOutdated": "خدمة التحديث أقدم مما يحتاجه هذا الإصدار من عنان: {title}"
   },
   "mail": {
     "testSubject": "رسالة تجريبية من {workspace}",

@@ -37,8 +37,16 @@ export const UpdaterStatus = z.object({
   confirm: z.boolean().default(false),
   updaterUpdate: z.string().optional(),
   intervalSeconds: z.number().int().positive().default(900),
+  // ADR 0060: what the updater understands (updater.Protocol in Go); none is an older updater.
+  protocol: z.number().int().nonnegative().default(0),
 });
 export type UpdaterStatus = z.infer<typeof UpdaterStatus>;
+
+// ADR 0060: the protocol this release of Enan needs from the updater. Raise it, and updater.Protocol
+// in Go, when the app starts relying on something an older updater does not do.
+export const updaterProtocol = 1;
+export const outdated = (status: UpdaterStatus | null) =>
+  status !== null && status.protocol < updaterProtocol;
 
 // The updater's health as the page reports it: `running` means it checked recently enough.
 export const UpdaterHealth = z.enum(['running', 'stalled', 'not_running', 'unreadable']);
@@ -129,7 +137,7 @@ export async function readUpdates(now = new Date()) {
     }
     health = status ? healthOf(status, now) : 'unreadable';
   }
-  return { health, status, history: parseHistory(history), commands };
+  return { health, status, history: parseHistory(history), commands, outdated: outdated(status) };
 }
 
 // ADMIN-B58, ADMIN-B67, ADMIN-B68: what Enan may ask of the updater (updater.Command in Go).

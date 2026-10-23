@@ -38,6 +38,8 @@ const Updates = z.object({
     status: Status.nullable(),
     history: z.array(Status),
     commands: z.boolean(),
+    // ADMIN-B69: the updater is older than this release of Enan needs.
+    outdated: z.boolean(),
   }),
 });
 export type Command =
@@ -74,7 +76,7 @@ export const outcomeTitle: Record<
   blocked: 'updateOutcomeBlocked',
 };
 const key = ['admin', 'updates'];
-type Answer = z.infer<typeof Updates>;
+export type Answer = z.infer<typeof Updates>;
 
 // ADMIN-B58: the page refreshes only while something is happening: the updater is checking or
 // installing, or a command sent in the last minute has not yet changed what the updater says.

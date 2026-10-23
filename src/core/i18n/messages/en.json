@@ -619,6 +619,8 @@
     "updateLog": "The new version's last log lines",
     "updaterUpdateAvailable": "A newer updater is available",
     "updaterUpdateHelp": "The updater does not replace itself. To install the new one, run this on the server:",
+    "updaterOutdated": "The updater is older than this version of Enan",
+    "updaterOutdatedHelp": "It does not know some of what this page asks of it, so Install now and automatic installing are hidden until it is replaced, and what it shows may be incomplete. The updater does not replace itself; run this on the server:",
     "updateHistory": "Recent updates",
     "jobKind_users_updates": "Update notifications",
     "auditEntity_updater": "automatic updates",
@@ -1191,7 +1193,8 @@
     "updateRollbackFailed": "Update and rollback failed: {title}",
     "updateBlocked": "Update waiting for you: {title}",
     "updateStalled": "The updater stopped checking: {title}",
-    "updateAvailable": "New version available: {title}"
+    "updateAvailable": "New version available: {title}",
+    "updateUpdaterOutdated": "The updater is older than this version of Enan needs: {title}"
   },
   "mail": {
     "testSubject": "Test email from {workspace}",

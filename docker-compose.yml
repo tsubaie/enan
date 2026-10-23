@@ -41,7 +41,8 @@ services:
   # ENAN_UPDATER_REPLICAS=0 to go without it (README § Automatic updates). The Docker socket is given to this
   # service only, never to the app.
   updater:
-    image: ghcr.io/tsubaie/enan-updater:${ENAN_UPDATER_TAG:-latest}
+    # ADR 0060: the updater comes from the app's channel, so it cannot fall behind the app.
+    image: ghcr.io/tsubaie/enan-updater:${ENAN_UPDATER_TAG:-${ENAN_CHANNEL:-${ENAN_TAG:-latest}}}
     deploy:
       replicas: ${ENAN_UPDATER_REPLICAS:-1}
     restart: unless-stopped
