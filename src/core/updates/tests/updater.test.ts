@@ -82,8 +82,8 @@ describe('the updater as Enan reads it', () => {
 
 describe('commands for the updater', () => {
   it('ADMIN-B58 a command is one complete JSON file under a name the updater reads', async () => {
-    await queueCommand('pause');
-    await queueCommand('check');
+    await queueCommand({ command: 'pause' });
+    await queueCommand({ command: 'check' });
     const { files, commands } = await commandsLeft(dirs);
     expect(files).toHaveLength(2);
     expect(files.every((file) => file.endsWith('.json') && !file.startsWith('.'))).toBe(true);

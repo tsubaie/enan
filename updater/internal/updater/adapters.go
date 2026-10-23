@@ -84,6 +84,8 @@ func Summary(event string, status Status) string {
 		return fmt.Sprintf("Enan update to %s failed and the rollback failed too; the app may be down: %s", version(status.Candidate), status.Error)
 	case Blocked:
 		return fmt.Sprintf("Enan update to %s is waiting: %s", version(status.Candidate), status.Error)
+	case Available:
+		return fmt.Sprintf("Enan %s is available; install it from Administration → Updates.", version(status.Candidate))
 	case Failed:
 		return fmt.Sprintf("Enan update check failed at %s: %s", status.Step, status.Error)
 	case "updater_update_available":

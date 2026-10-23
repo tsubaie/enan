@@ -1,4 +1,4 @@
-import { mkdir, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { updaterDirs } from '../lanes';
 
@@ -18,4 +18,12 @@ export async function updaterWrote(status: object | null, history: object[] = []
 }
 export async function commandsLeft() {
   return (await readdir(updaterDirs().commands)).filter((file) => file.endsWith('.json'));
+}
+// ADMIN-B67, ADMIN-B68: what Enan asked of the updater, oldest first.
+export async function commandsSent(): Promise<object[]> {
+  const dir = updaterDirs().commands;
+  const files = (await commandsLeft()).sort();
+  return Promise.all(
+    files.map(async (file) => JSON.parse(await readFile(join(dir, file), 'utf8')) as object), // cast: the file is JSON Enan wrote
+  );
 }

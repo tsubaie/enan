@@ -1,6 +1,6 @@
 # enan-updater
 
-The opt-in service that keeps an Enan install on the newest image of its channel. What it does and why are in [ADR 0051](../docs/adr/0051-installs-update-themselves.md) and ADMIN-B56 in [the admin spec](../docs/features/admin.md); how to run it is in the [README](../README.md#automatic-updates).
+The service that announces new releases of an Enan install's channel and installs one when an administrator chooses, or allows it. What it does and why are in [ADR 0051](../docs/adr/0051-installs-update-themselves.md), [ADR 0057](../docs/adr/0057-updates-are-announced-and-installed-when-an-administrator-chooses.md) and ADMIN-B56, ADMIN-B67 and ADMIN-B68 in [the admin spec](../docs/features/admin.md); how to run it is in the [README](../README.md#automatic-updates).
 
 Go, standard library only. Run from this folder:
 

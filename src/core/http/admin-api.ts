@@ -161,28 +161,33 @@ export const updates = defineHandler({
   transaction: false,
   handler: async () => ({ data: await readUpdates() }),
 });
-// ADMIN-B58: Check now, Pause, Resume and Retry are left for the updater, which acts within its
-// poll. Refused while there is no updater to read them, and written to the audit log.
+// ADMIN-B58, ADMIN-B67, ADMIN-B68: Check now, Pause, Resume, Retry, Install now and the automatic
+// setting are left for the updater, which acts within its poll. Refused while there is no updater
+// to read them, and written to the audit log.
 export const updateCommand = defineHandler({
   guard: 'admin',
-  input: z.strictObject({ command: UpdaterCommand }),
-  response: z.object({ data: z.object({ command: UpdaterCommand }) }),
+  input: UpdaterCommand,
+  response: z.object({ data: z.object({ command: z.string() }) }),
   status: 202,
   handler: async (input, ctx) => {
-    const { health, commands } = await readUpdates();
+    const { health, status, commands } = await readUpdates();
     if (health === 'not_running' || !commands)
       throw new AppError('conflict', { reason: 'updater_not_running' });
+    if (input.command === 'install') {
+      // A paused updater installs nothing (ADMIN-B67); the updater refuses it too.
+      if (status?.paused) throw new AppError('conflict', { reason: 'updater_paused' });
+      if (status?.confirm && status.candidate?.digest === input.digest && !input.confirm)
+        throw new AppError('rule_violation', { reason: 'confirmation_required' });
+    }
     await writeAudit(
       ctx.db,
       authenticated(ctx).user.id,
       `update_${input.command}`,
       'updater',
       null,
-      {
-        command: input.command,
-      },
+      input,
     );
-    await queueCommand(input.command);
+    await queueCommand(input);
     return { data: { command: input.command } };
   },
 });

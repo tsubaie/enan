@@ -49,6 +49,7 @@ const aboutKey: Record<
   | 'taskOverdue'
   | 'kpiOffTarget'
   | 'jobFinished'
+  | 'updateAvailable'
   | 'updateInstalled'
   | 'updateFailed'
   | 'updateRollbackFailed'
@@ -60,6 +61,7 @@ const aboutKey: Record<
   'kpi.off_target': 'kpiOffTarget',
   'job.finished': 'jobFinished',
   // ADMIN-B59: the title is the version the update is about.
+  'update.available': 'updateAvailable',
   'update.installed': 'updateInstalled',
   'update.failed': 'updateFailed',
   'update.rollback_failed': 'updateRollbackFailed',

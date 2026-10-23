@@ -212,3 +212,90 @@ it('ADMIN-B59 an update notification resolves to the version and the Updates pag
   const member = await addUser('member', 'member@example.test');
   expect((await resolve(ctx(member), [subject])).size).toBe(0);
 });
+
+const digest = `sha256:${'b'.repeat(64)}`;
+const auditOf = (action: string) =>
+  db()
+    .select()
+    .from(auditLog)
+    .where(and(eq(auditLog.entityType, 'updater'), eq(auditLog.action, action)));
+
+it('ADMIN-B67 Install now leaves exactly the announced digest for the updater, audited', async () => {
+  await updater({ state: 'available', candidate: { version: '2026.11.0', digest } });
+  const sent = await admin.updateCommand(request('POST', { command: 'install', digest }));
+  expect(sent.status).toBe(202);
+  expect((await commandsLeft(current())).bodies).toEqual([
+    { command: 'install', digest, confirm: false },
+  ]);
+  expect(await auditOf('update_install')).toHaveLength(1);
+  for (const bad of [{ command: 'install' }, { command: 'install', digest: 'latest' }])
+    expect((await admin.updateCommand(request('POST', bad))).status).toBe(400);
+});
+
+it('ADMIN-B67 a contract release needs the confirmation, and a paused updater installs nothing', async () => {
+  await updater({ state: 'available', confirm: true, candidate: { digest } });
+  const refused = await admin.updateCommand(request('POST', { command: 'install', digest }));
+  expect(refused.status).toBe(422);
+  expect((await commandsLeft(current())).files).toEqual([]);
+  const confirmed = await admin.updateCommand(
+    request('POST', { command: 'install', digest, confirm: true }),
+  );
+  expect(confirmed.status).toBe(202);
+  await updater({ state: 'available', paused: true, candidate: { digest } });
+  const paused = await admin.updateCommand(request('POST', { command: 'install', digest }));
+  expect(paused.status).toBe(409);
+  expect((await commandsLeft(current())).files).toEqual([]);
+});
+
+it('ADMIN-B68 turning automatic installing on or off reaches the updater and the audit log; members are refused', async () => {
+  await updater({ state: 'checked' });
+  for (const automatic of [true, false]) {
+    const body = { command: 'settings', automatic, window: automatic ? '02:00-05:00' : '' };
+    expect((await admin.updateCommand(request('POST', body))).status).toBe(202);
+  }
+  expect((await commandsLeft(current())).bodies).toEqual([
+    { command: 'settings', automatic: true, window: '02:00-05:00' },
+    { command: 'settings', automatic: false, window: '' },
+  ]);
+  const audit = await auditOf('update_settings');
+  expect(audit.map((row) => row.diff)).toEqual(
+    expect.arrayContaining([expect.objectContaining({ automatic: true, window: '02:00-05:00' })]),
+  );
+  expect(audit).toHaveLength(2);
+  for (const window of ['2:00-05:00', '02:00-02:00', '02:00'])
+    expect(
+      (await admin.updateCommand(request('POST', { command: 'settings', automatic: true, window })))
+        .status,
+    ).toBe(400);
+  session.user = await addUser('member', 'member@example.test');
+  const member = await admin.updateCommand(
+    request('POST', { command: 'settings', automatic: true, window: '' }),
+  );
+  expect(member.status).toBe(403);
+  expect((await commandsLeft(current())).files).toHaveLength(2);
+});
+
+it('ADMIN-B67 ADMIN-B59 an announced release is one update.available for every active administrator, once', async () => {
+  await addUser('member', 'member@example.test');
+  const announced = entry({
+    state: 'available',
+    candidate: { version: '2026.11.0', digest },
+    finishedAt: minutes(-2),
+  });
+  await updater(announced, [announced]);
+  await lastRun(new Date(minutes(-5)));
+  await run(now);
+  const written = await rows();
+  expect(written.map((row) => [row.userId, row.kind])).toEqual([
+    [harness.user?.id, 'update.available'],
+  ]);
+  await run(new Date(minutes(5)));
+  expect(await rows()).toHaveLength(1);
+  const resolved = await resolve({ db: db(), user: harness.user as User, requestId: id() }, [
+    written[0]?.subjectId ?? '',
+  ]);
+  expect(resolved.get(written[0]?.subjectId ?? '')).toEqual({
+    title: '2026.11.0',
+    href: '/admin/updates',
+  });
+});

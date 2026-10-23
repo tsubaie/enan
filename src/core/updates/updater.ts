@@ -28,6 +28,12 @@ export const UpdaterStatus = z.object({
   finishedAt: z.string().optional(),
   lastCheckAt: z.string().optional(),
   paused: z.boolean().default(false),
+  // ADMIN-B68: installing without Install now, and the daily window it waits for.
+  automatic: z.boolean().default(false),
+  window: z.string().optional(),
+  timeZone: z.string().optional(),
+  // ADMIN-B67: the candidate has a migration the running release cannot read.
+  confirm: z.boolean().default(false),
   updaterUpdate: z.string().optional(),
   intervalSeconds: z.number().int().positive().default(900),
 });
@@ -103,7 +109,25 @@ export async function readUpdates(now = new Date()) {
   return { health, status, history: parseHistory(history), commands };
 }
 
-export const UpdaterCommand = z.enum(['check', 'pause', 'resume', 'retry']);
+// ADMIN-B58, ADMIN-B67, ADMIN-B68: what Enan may ask of the updater (updater.Command in Go).
+export const UpdaterCommand = z.discriminatedUnion('command', [
+  z.strictObject({ command: z.enum(['check', 'pause', 'resume', 'retry']) }),
+  // Exactly the release the page showed; a contract migration only once confirmed.
+  z.strictObject({
+    command: z.literal('install'),
+    digest: z.string().regex(/^sha256:[0-9a-f]{64}$/u),
+    confirm: z.boolean().default(false),
+  }),
+  // A window is a daily span such as 02:00-05:00, in the updater's time zone; '' is any time.
+  z.strictObject({
+    command: z.literal('settings'),
+    automatic: z.boolean(),
+    window: z
+      .string()
+      .regex(/^$|^([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d$/u)
+      .refine((window) => !window || window.slice(0, 5) !== window.slice(6), 'empty window'),
+  }),
+]);
 export type UpdaterCommand = z.infer<typeof UpdaterCommand>;
 
 // ADMIN-B58: a command is a file the updater picks up within its poll and then deletes. Written
@@ -111,6 +135,6 @@ export type UpdaterCommand = z.infer<typeof UpdaterCommand>;
 export async function queueCommand(command: UpdaterCommand) {
   const dir = env().UPDATER_COMMANDS_DIR;
   const name = `${Date.now()}-${randomUUID()}.json`;
-  await writeFile(join(dir, `.${name}.tmp`), JSON.stringify({ command }));
+  await writeFile(join(dir, `.${name}.tmp`), JSON.stringify(command));
   await rename(join(dir, `.${name}.tmp`), join(dir, name));
 }

@@ -24,7 +24,7 @@ export async function commandsLeft(dirs: Folders) {
   const bodies = await Promise.all(
     files.map(async (file) => JSON.parse(await readFile(join(dirs.commands, file), 'utf8'))),
   );
-  return { files, commands: bodies.map((body) => String(body.command)) };
+  return { files, bodies, commands: bodies.map((body) => String(body.command)) };
 }
 export const readOnly = (dirs: Folders) => chmod(dirs.commands, 0o500);
 export const writable = (dirs: Folders) => chmod(dirs.commands, 0o700);

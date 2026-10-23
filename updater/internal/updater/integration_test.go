@@ -74,7 +74,7 @@ func publishEdge(t *testing.T, tag string) {
 }
 
 func TestIntegration(t *testing.T) {
-	t.Run("ADMIN-B56 against Docker: install, keep settings, roll back, hold a contract migration", integrationCycle)
+	t.Run("ADMIN-B56 ADMIN-B67 ADMIN-B68 against Docker: announce, Install now, keep settings, roll back, automatic on and off", integrationCycle)
 }
 
 func integrationCycle(t *testing.T) {
@@ -104,8 +104,9 @@ func integrationCycle(t *testing.T) {
 	v1 := standIn(t, dir, "2026.10.0", true, 0)
 	v2 := standIn(t, dir, "2026.11.0", true, 0)
 	v3 := standIn(t, dir, "2026.12.0", false, 0)
-	// A new year, and a migration the running release cannot read: held for the migration only.
-	v4 := standIn(t, dir, "2027.1.0", true, 8)
+	v4 := standIn(t, dir, "2027.1.0", true, 0)
+	// A migration the running release cannot read: it waits for a confirmed Install now.
+	v5 := standIn(t, dir, "2027.1.1", true, 8)
 	publishEdge(t, v1)
 
 	sh(t, "network", "create", project+"_default")
@@ -152,11 +153,35 @@ func integrationCycle(t *testing.T) {
 		time.Sleep(500 * time.Millisecond)
 	}
 
+	// Commands as Enan leaves them in the commands volume (src/core/updates/updater.ts).
+	send := func(body string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(u.Config.CommandsDir, fmt.Sprintf("%d.json", time.Now().UnixNano())), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		for _, command := range u.Commands() {
+			if u.Apply(ctx, command) {
+				u.Check(ctx)
+			}
+		}
+	}
+	announced := func(version string) string {
+		t.Helper()
+		u.Check(ctx)
+		if u.status.State != Available || u.status.Candidate == nil || u.status.Candidate.Version != version {
+			t.Fatalf("state %s, candidate %+v: %s", u.status.State, u.status.Candidate, u.status.Error)
+		}
+		return u.status.Candidate.Digest
+	}
+
 	u.Check(ctx)
 	expect(Checked, "2026.10.0")
 
+	// A new install announces and installs nothing until Install now.
 	publishEdge(t, v2)
-	u.Check(ctx)
+	digest := announced("2026.11.0")
+	expect(Available, "2026.10.0")
+	send(fmt.Sprintf(`{"command":"install","digest":%q,"confirm":false}`, digest))
 	expect(Updated, "2026.11.0")
 	inspected := sh(t, "inspect", "-f", `{{range .Config.Env}}{{.}} {{end}}|{{range .Mounts}}{{.Name}}{{end}}|{{index .Config.Labels "com.docker.compose.project"}}|{{.HostConfig.RestartPolicy.Name}}`, project+"-app-1")
 	for _, want := range []string{"SESSION_SECRET=kept", "ENAN_REVISION=rev-2026.11.0", project + "-data", "|" + project + "|", "unless-stopped"} {
@@ -168,16 +193,26 @@ func integrationCycle(t *testing.T) {
 		t.Fatal("the replaced container was kept after a verified update")
 	}
 
+	// A failing release installed with Install now is rolled back.
 	publishEdge(t, v3)
-	u.Check(ctx)
+	send(fmt.Sprintf(`{"command":"install","digest":%q,"confirm":false}`, announced("2026.12.0")))
 	expect(RolledBack, "2026.11.0")
 	if u.status.Step != "verify" || u.status.Backup == "" {
 		t.Fatalf("step %s, backup %q", u.status.Step, u.status.Backup)
 	}
 
+	// Turned on from the page, the next release installs by itself.
+	send(`{"command":"settings","automatic":true,"window":""}`)
 	publishEdge(t, v4)
 	u.Check(ctx)
-	if u.status.State != Blocked || !strings.Contains(u.status.Error, "migration 8") {
-		t.Fatalf("state %s: %s", u.status.State, u.status.Error)
+	expect(Updated, "2027.1.0")
+
+	// Turned off, the next one only announces; it also needs confirming.
+	send(`{"command":"settings","automatic":false,"window":""}`)
+	publishEdge(t, v5)
+	announced("2027.1.1")
+	if !u.status.Confirm {
+		t.Fatal("a contract migration was not marked for confirmation")
 	}
+	expect(Available, "2027.1.0")
 }
