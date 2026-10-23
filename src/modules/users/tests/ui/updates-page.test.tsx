@@ -489,3 +489,58 @@ it('ADMIN-B74 an updater too old to replace itself gets the server commands inst
   expect(within(card).getByText(/docker compose pull updater/u)).toBeTruthy();
   expect(within(card).queryByRole('button', { name: en.admin.updaterUpdateNow })).toBeNull();
 });
+
+it('ADMIN-B75 one card and one Install now for whatever is newer, with no separate updater card', () => {
+  const card = () => screen.getByRole('region', { name: en.admin.updateAvailableTitle });
+  // A release and a newer updater: one Install now, for the release.
+  show(
+    'running',
+    status({
+      protocol: 3,
+      updaterUpdate: 'sha256:two',
+      state: 'available',
+      candidate: { version: '2026.11.0', digest },
+    }),
+  );
+  mount(<UpdatesPage />);
+  expect(screen.queryByRole('region', { name: en.admin.updaterUpdateAvailable })).toBeNull();
+  fireEvent.click(within(card()).getByRole('button', { name: en.admin.updateInstallNow }));
+  expect(state.command.mutate).toHaveBeenLastCalledWith(
+    { command: 'install', digest, confirm: false },
+    expect.anything(),
+  );
+  // Only the updater newer: the same card, worded as a small update, and Install now with no release.
+  show('running', status({ protocol: 3, updaterUpdate: 'sha256:two' }));
+  expect(within(card()).getByText(en.admin.updateAvailableSmall)).toBeTruthy();
+  fireEvent.click(within(card()).getByRole('button', { name: en.admin.updateInstallNow }));
+  expect(state.command.mutate).toHaveBeenLastCalledWith(
+    { command: 'install', confirm: false },
+    expect.anything(),
+  );
+  // While the updater replaces itself, the progress names it only as preparing.
+  show(
+    'running',
+    status({ protocol: 3, updaterUpdate: 'sha256:two', state: 'updating', step: 'updater' }),
+  );
+  const installing = screen.getByRole('region', { name: en.admin.updateInstalling });
+  expect(
+    within(installing).getByRole('status').querySelector('[aria-current="step"]')?.textContent,
+  ).toBe(en.admin.updateProgress_updater);
+});
+
+it('ADMIN-B75 checking and downloading a release count as preparing it', () => {
+  show(
+    'running',
+    status({
+      protocol: 3,
+      state: 'updating',
+      step: 'pull',
+      candidate: { version: '2026.11.0', digest },
+    }),
+  );
+  mount(<UpdatesPage />);
+  const installing = screen.getByRole('region', { name: en.admin.updateInstalling });
+  expect(
+    within(installing).getByRole('status').querySelector('[aria-current="step"]')?.textContent,
+  ).toBe(en.admin.updateProgress_updater);
+});

@@ -742,6 +742,8 @@
     "updateConfirmCancel": "ليس الآن",
     "updateConfirmInstall": "انسخ احتياطيًا وثبّت",
     "updateInstalling": "جارٍ تثبيت إصدار جديد",
+    "updateProgress_updater": "تجهيز التحديث",
+    "updateAvailableSmall": "تحديث صغير لعنان جاهز. يستغرق أقل من دقيقة، ولا يحتاج إلى نسخة احتياطية، ولا يغيّر شيئًا مما تستخدمه، ولا يُثبَّت شيء حتى تختار «ثبّت الآن».",
     "updateProgress_backup": "أخذ نسخة احتياطية",
     "updateProgress_switch": "الانتقال إلى الإصدار الجديد",
     "updateProgress_verify": "التأكد من أنه يعمل",

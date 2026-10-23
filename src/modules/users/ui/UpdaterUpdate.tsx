@@ -21,7 +21,8 @@ export function UpdaterUpdate({
   const t = useTranslations('admin');
   // Kept once pressed, so the card stays to say how it went after the newer updater is the current.
   const [asked, setAsked] = useState(false);
-  if (!status.updaterUpdate && !asked) return null;
+  // ADMIN-B75: from protocol 3, Install now covers the updater too, in the one card.
+  if ((!status.updaterUpdate && !asked) || (status.protocol >= 3 && !asked)) return null;
   if (status.protocol < 2 || !enabled) return <FromTheServer />;
   const answer = asked ? answerOf(status, command.isPending) : null;
   return (

@@ -234,8 +234,11 @@ it('ADMIN-B67 Install now leaves exactly the announced digest for the updater, a
     { command: 'install', digest, confirm: false },
   ]);
   expect(await auditOf('update_install')).toHaveLength(1);
-  for (const bad of [{ command: 'install' }, { command: 'install', digest: 'latest' }])
-    expect((await admin.updateCommand(request('POST', bad))).status).toBe(400);
+  expect(
+    (await admin.updateCommand(request('POST', { command: 'install', digest: 'latest' }))).status,
+  ).toBe(400);
+  // ADMIN-B75: without a release, Install now is only for a newer updater; here there is none.
+  expect((await admin.updateCommand(request('POST', { command: 'install' }))).status).toBe(409);
 });
 
 it('ADMIN-B67 a contract release needs the confirmation, and a paused updater installs nothing', async () => {
@@ -358,4 +361,13 @@ it('ADMIN-B74 Update the updater is left for an updater that can replace itself,
     .from(auditLog)
     .where(and(eq(auditLog.entityType, 'updater'), eq(auditLog.action, 'update_update_updater')));
   expect(audit).toHaveLength(1);
+});
+
+it('ADMIN-B75 Install now with only a newer updater is left for an updater that installs both, and refused otherwise', async () => {
+  const send = () => admin.updateCommand(request('POST', { command: 'install' }));
+  await updater({ state: 'checked', protocol: 2, updaterUpdate: 'sha256:two' });
+  expect((await send()).status).toBe(409);
+  await updater({ state: 'checked', protocol: 3, updaterUpdate: 'sha256:two' });
+  expect((await send()).status).toBe(202);
+  expect((await commandsLeft(current())).bodies).toEqual([{ command: 'install', confirm: false }]);
 });

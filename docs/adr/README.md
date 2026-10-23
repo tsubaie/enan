@@ -65,6 +65,7 @@ One decision per file. Format: **Status**, **Context**, **Decision**, **Conseque
 | 0059 | The updater and Enan act on events, not polls | accepted |
 | 0060 | The updater follows the app's channel and says what it understands | accepted |
 | 0061 | Lists show more on request, and the audit log reads as a diff | accepted |
-| 0062 | The updater replaces itself through a helper | accepted |
+| 0062 | The updater replaces itself through a helper | accepted; its separate action on the page superseded by 0063 |
+| 0063 | One Install now for the updater and the app | accepted |
 
 Open decisions awaiting an ADR: license (see roadmap); chart library confirmation (`recharts`).

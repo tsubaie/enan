@@ -6822,8 +6822,7 @@
               }
             },
             "required": [
-              "command",
-              "digest"
+              "command"
             ],
             "type": "object"
           },

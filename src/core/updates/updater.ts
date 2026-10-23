@@ -47,6 +47,8 @@ export type UpdaterStatus = z.infer<typeof UpdaterStatus>;
 export const updaterProtocol = 1;
 // ADMIN-B74, ADR 0062: the protocol from which the updater can replace itself on request.
 export const selfUpdateProtocol = 2;
+// ADMIN-B75, ADR 0063: the protocol from which one Install now covers the updater and the app.
+export const oneUpdateProtocol = 3;
 export const outdated = (status: UpdaterStatus | null) =>
   status !== null && status.protocol < updaterProtocol;
 
@@ -150,7 +152,11 @@ export const UpdaterCommand = z.discriminatedUnion('command', [
   // Exactly the release the page showed; a contract migration only once confirmed.
   z.strictObject({
     command: z.literal('install'),
-    digest: z.string().regex(/^sha256:[0-9a-f]{64}$/u),
+    // ADMIN-B75: none when only the updater is newer; it installs whatever is waiting.
+    digest: z
+      .string()
+      .regex(/^sha256:[0-9a-f]{64}$/u)
+      .optional(),
     confirm: z.boolean().default(false),
   }),
   // A window is a daily span such as 02:00-05:00, in the updater's time zone; '' is any time.

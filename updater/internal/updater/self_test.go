@@ -65,6 +65,11 @@ func TestSelfUpdate(t *testing.T) {
 		{"ADMIN-B74 the helper keeps the new updater once it checks, and removes the old one", replaceKeepsANewUpdaterThatChecks},
 		{"ADMIN-B74 the helper puts the old updater back when the new one does not check", replacePutsTheOldUpdaterBack},
 		{"ADMIN-B74 the old updater records a failed replacement, and that image is not tried again by itself", replacementIsRecorded},
+		{"ADMIN-B75 Install now replaces a newer updater first and keeps the release for it", installNowReplacesTheUpdaterFirst},
+		{"ADMIN-B75 the new updater installs the release it was replaced for, without replacing itself again", theNewUpdaterInstallsTheRelease},
+		{"ADMIN-B75 after a failed replacement the release is not installed: one outcome", aFailedReplacementInstallsNothing},
+		{"ADMIN-B75 Install now with only a newer updater replaces it and installs nothing else", installNowWithOnlyANewerUpdater},
+		{"ADMIN-B75 an updater that failed before does not stand in the way of a release", aFailedUpdaterDoesNotBlockTheRelease},
 	} {
 		t.Run(scenario.name, scenario.run)
 	}
@@ -212,5 +217,83 @@ func replacementIsRecorded(t *testing.T) {
 	u.Apply(context.Background(), Command{Command: "update_updater"})
 	if !u.selfDue() {
 		t.Fatal("asking again did not try it")
+	}
+}
+
+// releaseSetup adds a newer app release, announced, beside the newer updater.
+func releaseSetup(t *testing.T) (*Updater, *fake) {
+	t.Helper()
+	u, f := selfSetup(t)
+	u.Apply(context.Background(), Command{Command: "settings", Automatic: ptr(false)})
+	f.image("img-2", "sha256:two", "1.1.0", 8, 0)
+	f.publish("latest", "sha256:two")
+	u.Check(context.Background())
+	if u.status.State != Available || u.status.UpdaterUpdate == "" {
+		t.Fatalf("state %s, updater %q", u.status.State, u.status.UpdaterUpdate)
+	}
+	return u, f
+}
+
+func installNowReplacesTheUpdaterFirst(t *testing.T) {
+	u, f := releaseSetup(t)
+	u.Apply(context.Background(), Command{Command: "install", Digest: "sha256:two"})
+	if u.state.Pending == nil || u.state.Pending.Digest != "sha256:two" || !u.selfDue() {
+		t.Fatalf("pending %+v, due %v", u.state.Pending, u.selfDue())
+	}
+	if slices.Contains(f.calls, "backup") || app(t, f).Image != "img-1" {
+		t.Fatalf("the app was installed by the old updater: %v", f.calls)
+	}
+	if !u.SelfUpdate(context.Background()) || u.status.Candidate == nil || u.status.Step != "updater" {
+		t.Fatalf("status %s/%s, candidate %+v", u.status.State, u.status.Step, u.status.Candidate)
+	}
+}
+
+func theNewUpdaterInstallsTheRelease(t *testing.T) {
+	u, f := releaseSetup(t)
+	u.Apply(context.Background(), Command{Command: "install", Digest: "sha256:two"})
+	f.calls = nil
+	// The new updater starts with the state and status the old one left.
+	u.selfAsked = false
+	u.resume(context.Background(), false)
+	if u.state.Pending != nil || u.status.State != Updated || app(t, f).Image != "img-2" {
+		t.Fatalf("state %s, pending %+v, running %s: %s", u.status.State, u.state.Pending, app(t, f).Image, u.status.Error)
+	}
+	if u.selfDue() || helperOf(f) != nil {
+		t.Fatal("the new updater replaced itself again")
+	}
+}
+
+func aFailedReplacementInstallsNothing(t *testing.T) {
+	u, f := releaseSetup(t)
+	u.Apply(context.Background(), Command{Command: "install", Digest: "sha256:two"})
+	f.calls = nil
+	_ = u.store.write(replacedFile, replaced{Digest: "sha256:upd-2", Error: "the new updater stopped before it checked", At: time.Now()})
+	u.resume(context.Background(), u.recordReplaced(context.Background()))
+	if u.state.Pending != nil || u.status.State != Failed || u.status.Step != "updater" || app(t, f).Image != "img-1" {
+		t.Fatalf("state %s/%s, pending %+v, running %s", u.status.State, u.status.Step, u.state.Pending, app(t, f).Image)
+	}
+}
+
+func installNowWithOnlyANewerUpdater(t *testing.T) {
+	u, f := selfSetup(t)
+	u.Apply(context.Background(), Command{Command: "settings", Automatic: ptr(false)})
+	u.Check(context.Background())
+	u.Apply(context.Background(), Command{Command: "install"})
+	if !u.selfDue() || u.state.Pending == nil || u.state.Pending.Digest != "" {
+		t.Fatalf("due %v, pending %+v", u.selfDue(), u.state.Pending)
+	}
+	u.selfAsked = false
+	u.resume(context.Background(), false)
+	if slices.Contains(f.calls, "backup") || u.state.Pending != nil {
+		t.Fatalf("something besides the updater was installed: %v", f.calls)
+	}
+}
+
+func aFailedUpdaterDoesNotBlockTheRelease(t *testing.T) {
+	u, f := releaseSetup(t)
+	u.state.Rejected["updater:sha256:upd-2"] = "updater at an earlier time"
+	u.Apply(context.Background(), Command{Command: "install", Digest: "sha256:two"})
+	if u.state.Pending != nil || u.selfDue() || u.status.State != Updated || app(t, f).Image != "img-2" {
+		t.Fatalf("state %s, pending %+v, running %s: %s", u.status.State, u.state.Pending, app(t, f).Image, u.status.Error)
 	}
 }

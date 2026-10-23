@@ -54,9 +54,12 @@ func (u *Updater) selfDue() bool {
 func (u *Updater) SelfUpdate(ctx context.Context) bool {
 	digest := u.status.UpdaterUpdate
 	u.selfAsked = false
-	u.status = Status{Channel: u.status.Channel, Running: u.status.Running, UpdaterUpdate: digest, LastCheckAt: u.status.LastCheckAt, StartedAt: u.now(), State: Updating, Step: "updater"}
+	u.status = Status{Channel: u.status.Channel, Running: u.status.Running, Candidate: u.status.Candidate, UpdaterUpdate: digest, LastCheckAt: u.status.LastCheckAt, StartedAt: u.now(), State: Updating, Step: "updater"}
 	u.publish()
 	fail := func(err error) bool {
+		// The Install now it was for ends here too: one outcome, nothing installed later by surprise.
+		u.state.Pending = nil
+		_ = u.save()
 		u.fail(ctx, "updater", err, "updater:"+digest)
 		return false
 	}
@@ -204,18 +207,37 @@ func cameUp(ctx context.Context, engine Engine, store store, id string, since ti
 }
 
 // recordReplaced reads a failed replacement's word: it is shown, alerted once, and that image is not
-// tried again by itself; Try again or Update the updater tries it again (ADMIN-B74).
-func (u *Updater) recordReplaced(ctx context.Context) {
+// tried again by itself; Install now tries it again (ADMIN-B74). It reports whether there was one.
+func (u *Updater) recordReplaced(ctx context.Context) bool {
 	var result replaced
 	data, err := os.ReadFile(u.store.path(replacedFile))
 	if err != nil || json.Unmarshal(data, &result) != nil {
-		return
+		return false
 	}
 	_ = os.Remove(u.store.path(replacedFile))
 	u.state.Rejected["updater:"+result.Digest] = fmt.Sprintf("updater at %s", result.At.UTC().Format(time.RFC3339))
 	_ = u.save()
 	u.status.UpdaterUpdate = result.Digest
 	u.fail(ctx, "updater", fmt.Errorf("the new updater did not come up, so the previous one was put back: %s", result.Error), "updater:"+result.Digest)
+	return true
+}
+
+// resume carries out the Install now an updater replaced itself for (ADR 0063): the new updater
+// installs the release it was asked for. After a failed replacement nothing more is installed; the
+// failure is the one outcome of that Install now.
+func (u *Updater) resume(ctx context.Context, replacementFailed bool) {
+	pending := u.state.Pending
+	if pending == nil {
+		return
+	}
+	u.state.Pending = nil
+	_ = u.save()
+	if replacementFailed || pending.Digest == "" {
+		return
+	}
+	// This is the newer updater the status still names, from before it ran.
+	u.status.UpdaterUpdate = ""
+	u.Install(ctx, pending.Digest, pending.Confirm)
 }
 
 // sameSource reports whether two updater images were built from the same source: CI labels each
