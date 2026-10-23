@@ -207,6 +207,8 @@ docker compose logs app | grep SETUP_TOKEN
 
 Open http://localhost:3000 and finish setup with that token. Migrations run on start. `docker compose pull` fetches the published image (`ENAN_TAG` in `.env`: `latest` is the newest release, `edge` the newest main that passed every check, or pin a year, month or release such as `2026`, `2026.10` or `2026.10.1`). To build from this checkout instead, run `docker compose up -d --build`.
 
+Releases are published for Intel/AMD (`linux/amd64`) and ARM (`linux/arm64`), so an Apple Silicon Mac or an ARM server runs them natively ([ADR 0058](docs/adr/0058-releases-add-arm-images.md)). `edge` is built for Intel/AMD only; on an ARM machine, use a release, or add `platform: linux/amd64` to the `app` service to run `edge` emulated.
+
 ### Updating
 
 Take a backup first (see [Data and backups](#data-and-backups)), then:
