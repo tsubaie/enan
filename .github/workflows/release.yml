@@ -1,8 +1,9 @@
 name: Release
-# ADMIN-B54, ADR 0050, ADR 0056: pushing a tag `vYYYY.M.N` on a commit of main publishes that
-# commit's image under the release's tags and creates the GitHub Release. Nothing is rebuilt: the
-# image is the one CI built, smoke-tested and checked for that commit. prepare-release.yml pushes
-# the tag; see CONTRIBUTING.md § Releasing.
+# ADMIN-B54, ADR 0050, ADR 0056, ADR 0058: pushing a tag `vYYYY.M.N` on a commit of main publishes
+# that commit's image under the release's tags and creates the GitHub Release. The linux/amd64
+# image is not rebuilt: it is the one CI built, smoke-tested and checked for that commit. A
+# linux/arm64 image is added, built here from the same commit on an ARM runner and smoke-tested on
+# it before anything is tagged. prepare-release.yml pushes the tag; see CONTRIBUTING.md § Releasing.
 on:
   push:
     tags: ['v*']
@@ -10,20 +11,21 @@ concurrency:
   group: release
   cancel-in-progress: false
 
+env:
+  TAG: ${{ github.ref_name }}
+  SHA: ${{ github.sha }}
+  IMAGE: ghcr.io/${{ github.repository }}
+
 jobs:
-  release:
-    name: Release
+  check:
+    name: The tag names a checked commit of main
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-latest"') }}
     timeout-minutes: 10
     permissions:
-      contents: write
-      packages: write
+      contents: read
       checks: read
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      TAG: ${{ github.ref_name }}
-      SHA: ${{ github.sha }}
-      IMAGE: ghcr.io/${{ github.repository }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -56,13 +58,102 @@ jobs:
             --jq '[.check_runs[] | select(.conclusion == "success")] | length')
           [ "$passed" -gt 0 ] \
             || { echo "::error::the Gate has not passed for $SHA; wait for CI on main, then push the tag again"; exit 1; }
+
+  # ADR 0058: the linux/arm64 images, built natively and pushed by digest only. Nothing is tagged
+  # until the release job below, so an image that fails here never reaches a channel.
+  arm64:
+    name: linux/arm64 images
+    needs: check
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON_ARM || '"ubuntu-24.04-arm"') }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      app: ${{ steps.app.outputs.digest }}
+      updater: ${{ steps.updater.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.2
+      # The same labels CI gives the linux/amd64 image of this commit (ci.yml, Image identity).
+      - name: Image identity
+        id: identity
+        run: |
+          node scripts/build/schema-labels.ts >> "$GITHUB_OUTPUT"
+          echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+          cat "$GITHUB_OUTPUT"
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Tag the image
+      - name: Build the app image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: runtime
+          platforms: linux/arm64
+          build-args: ENAN_REVISION=${{ github.sha }}
+          labels: &labels |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.identity.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.enan.schema=${{ steps.identity.outputs.schema }}
+            org.enan.contract=${{ steps.identity.outputs.contract }}
+          load: true
+          tags: enan-release:arm64
+      - name: Smoke-test the app image
+        run: scripts/build/smoke-image.sh enan-release:arm64 linux/arm64 "$SHA"
+      # The same build again, from the layers above, pushed under its digest alone.
+      - name: Push the app image
+        id: app
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: runtime
+          platforms: linux/arm64
+          build-args: ENAN_REVISION=${{ github.sha }}
+          labels: *labels
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          provenance: false
+      - name: Push the updater image
+        id: updater
+        uses: docker/build-push-action@v6
+        with:
+          context: updater
+          platforms: linux/arm64
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          outputs: type=image,name=${{ env.IMAGE }}-updater,push-by-digest=true,name-canonical=true,push=true
+          provenance: false
+
+  release:
+    name: Release
+    needs: arm64
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-latest"') }}
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      packages: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      ARM_APP: ${{ needs.arm64.outputs.app }}
+      ARM_UPDATER: ${{ needs.arm64.outputs.updater }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Tag the images
         run: |
           set -eu
           version=${TAG#v}
@@ -72,9 +163,14 @@ jobs:
             *-*) ;;
             *) tags="$tags --tag $IMAGE:${version%.*} --tag $IMAGE:${version%%.*} --tag $IMAGE:latest" ;;
           esac
-          docker buildx imagetools create $tags "$IMAGE:$SHA"
+          # CI's linux/amd64 image of this commit and the linux/arm64 one built above, as one index.
+          # $tags is several --tag arguments, split on purpose.
+          # shellcheck disable=SC2086
+          docker buildx imagetools create $tags "$IMAGE:$SHA" "$IMAGE@$ARM_APP"
           # The updater (ADR 0051) is released with the app, under the same tags.
-          docker buildx imagetools create ${tags//$IMAGE:/$IMAGE-updater:} "$IMAGE-updater:$SHA"
+          # shellcheck disable=SC2086
+          docker buildx imagetools create ${tags//$IMAGE:/$IMAGE-updater:} "$IMAGE-updater:$SHA" "$IMAGE-updater@$ARM_UPDATER"
+          docker buildx imagetools inspect "$IMAGE:$version"
       - name: Publish the release
         run: |
           set -eu
@@ -83,9 +179,11 @@ jobs:
             echo "::notice::the release $TAG already exists"
             exit 0
           fi
+          # A release holds several platforms, and then `.Image` is keyed by platform; the labels
+          # are the same on each, so linux/amd64's are read.
           label() {
-            docker buildx imagetools inspect "$1" --format '{{ json .Image.Config.Labels }}' \
-              | jq -r --arg name "$2" '.[$name] // "0"'
+            docker buildx imagetools inspect "$1" --format '{{ json .Image }}' \
+              | jq -r --arg name "$2" '(.["linux/amd64"] // .).config.Labels[$name] // "0"'
           }
           notes=""
           previous=$(git describe --tags --abbrev=0 --match 'v*' "$SHA^" 2>/dev/null || true)
@@ -93,7 +191,7 @@ jobs:
             contract=$(label "$IMAGE:$SHA" org.enan.contract)
             schema=$(label "$IMAGE:${previous#v}" org.enan.schema)
             if [ "$contract" -gt "$schema" ]; then
-              notes="**Rollback:** this release's database migrations cannot be read by $previous (ADR 0050). Back up before updating; an updater installs it only when allowed to and never rolls back across it."
+              notes="**Rollback:** this release's database migrations cannot be read by $previous (ADR 0050). Back up before updating; Install now asks you to confirm it, it is never installed automatically, and an updater never rolls back across it (ADR 0057)."
             fi
           fi
           prerelease=""
