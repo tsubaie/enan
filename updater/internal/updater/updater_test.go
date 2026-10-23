@@ -289,7 +289,7 @@ func TestScenarios(t *testing.T) {
 		{"ADMIN-B56 a new image is backed up, installed and verified", aNewImageIsBackedUpInstalledAndVerified},
 		{"ADMIN-B56 a failing image is rolled back, the database untouched, and not retried", aFailingImageIsRolledBackAndNotRetried},
 		{"ADMIN-B56 a failed backup switches nothing", aFailedBackupSwitchesNothing},
-		{"ADMIN-B56 a new major version or a contract migration waits for the operator", guards},
+		{"ADMIN-B56 a contract migration waits for the operator; a new year does not", guards},
 		{"ADMIN-B56 an update interrupted after the switch is finished", anUpdateInterruptedAfterTheSwitchIsFinished},
 		{"ADMIN-B56 an update interrupted during the switch is reversed", anUpdateInterruptedDuringTheSwitchIsReversed},
 		{"ADMIN-B56 pause and resume", pauseAndResume},
@@ -458,8 +458,8 @@ func guards(t *testing.T) {
 		allow            func(*Config)
 		blocked          bool
 	}{
-		{"a new major version", "2.0.0", 8, 0, nil, true},
-		{"a new major version, allowed", "2.0.0", 8, 0, func(c *Config) { c.AllowMajor = true }, false},
+		{"a new year", "2027.1.0", 8, 0, nil, false},
+		{"a new year with a migration the running release cannot read", "2027.1.0", 9, 8, nil, true},
 		{"a migration the running release cannot read", "1.1.0", 9, 8, nil, true},
 		{"a contract migration the running release already has", "1.1.0", 9, 7, nil, false},
 		{"a contract migration, allowed", "1.1.0", 9, 8, func(c *Config) { c.AllowContract = true }, false},
@@ -635,7 +635,7 @@ func historyKeepsTheLastOutcomes(t *testing.T) {
 
 func aHeldUpdateIsOneHistoryEntry(t *testing.T) {
 	u, f, sent := setup(t)
-	f.image("img-2", "sha256:two", "2.0.0", 8, 0)
+	f.image("img-2", "sha256:two", "1.1.0", 9, 8)
 	f.publish("latest", "sha256:two")
 	for range 5 {
 		u.Check(context.Background())

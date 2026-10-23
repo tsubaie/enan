@@ -53,11 +53,12 @@ One decision per file. Format: **Status**, **Context**, **Decision**, **Conseque
 | 0047 | The ع-horse mark, redrawn | accepted |
 | 0048 | The product is named Enan | accepted |
 | 0049 | An install may supply its own Arabic faces | accepted |
-| 0050 | Releases, channel tags, and migrations the previous release can run on | accepted |
-| 0051 | Installs update themselves through an opt-in updater service | accepted |
+| 0050 | Releases, channel tags, and migrations the previous release can run on | accepted; version numbering and the manual release superseded by 0056 |
+| 0051 | Installs update themselves through an opt-in updater service | accepted; the major-version guard superseded by 0056 |
 | 0052 | The push deploy is removed; the maintainer's install updates itself | accepted |
 | 0053 | Email and new sign-in methods extend the own auth; their credentials are sealed in the database | accepted; extending the own auth superseded by 0055 |
 | 0054 | Slow work happens before the write lock | accepted |
 | 0055 | Better Auth replaces the own auth | accepted |
+| 0056 | Calendar versions, published by a workflow | accepted |
 
 Open decisions awaiting an ADR: license (see roadmap); chart library confirmation (`recharts`).

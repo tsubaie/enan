@@ -205,7 +205,7 @@ docker compose up -d
 docker compose logs app | grep SETUP_TOKEN
 ```
 
-Open http://localhost:3000 and finish setup with that token. Migrations run on start. `docker compose pull` fetches the published image (`ENAN_TAG` in `.env`: `latest` is the newest release, `edge` the newest main that passed every check, or pin a version such as `0.2`). To build from this checkout instead, run `docker compose up -d --build`.
+Open http://localhost:3000 and finish setup with that token. Migrations run on start. `docker compose pull` fetches the published image (`ENAN_TAG` in `.env`: `latest` is the newest release, `edge` the newest main that passed every check, or pin a year, month or release such as `2026`, `2026.10` or `2026.10.1`). To build from this checkout instead, run `docker compose up -d --build`.
 
 ### Updating
 
@@ -217,7 +217,7 @@ docker compose pull
 docker compose up -d
 ```
 
-Migrations run on start. Each release is listed on the [Releases](https://github.com/tsubaie/enan/releases) page; to be told about new ones, choose **Watch → Custom → Releases** on GitHub. A release whose notes carry a **Rollback** warning changes the database in a way the previous release cannot read (ADR 0050): keep the backup until you are sure you will stay on it.
+Migrations run on start. Versions are calendar versions, `YEAR.MONTH.N` (for example `2026.10.0`, then `2026.10.1`, then `2026.11.0`), so the number says how recent an install is ([ADR 0056](docs/adr/0056-calendar-versions-published-by-a-workflow.md)). Each release is listed on the [Releases](https://github.com/tsubaie/enan/releases) page; to be told about new ones, choose **Watch → Custom → Releases** on GitHub. A release whose notes carry a **Rollback** warning changes the database in a way the previous release cannot read (ADR 0050): keep the backup until you are sure you will stay on it.
 
 An install built from source with `--build` moves to the published image with `docker compose pull && docker compose up -d` in the same folder; its volumes are kept. A clone in a new folder starts with new, empty volumes, because Compose names the volumes after the folder.
 
@@ -235,15 +235,15 @@ Every 15 minutes it checks the registry. When a new image is out, it:
 2. replaces the app container with one on the new image;
 3. waits for the new version to report itself healthy.
 
-If the new version fails, it puts the previous container back. It never restores the database by itself: the status names the backup it took and the command to restore it. It holds back a new major version, and a release whose database changes the previous release cannot read, until you allow them. Set these in `.env`:
+If the new version fails, it puts the previous container back. It never restores the database by itself: the status names the backup it took and the command to restore it. It holds back a release whose database changes the previous release cannot read, until you allow it. Set these in `.env`:
 
-| Variable                                  | Default              | Purpose                                                                                                         |
-| ----------------------------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `ENAN_CHANNEL`                            | the app's `ENAN_TAG` | `latest` (releases), `edge` (every checked commit), or a version such as `0`                                    |
-| `ENAN_UPDATE_INTERVAL`                    | `15m`                | How often to check                                                                                              |
-| `ENAN_UPDATE_WINDOW`, `ENAN_UPDATE_TZ`    | empty, `UTC`         | Only update inside a daily window, for example `02:00-05:00`                                                    |
-| `ENAN_ALERT_WEBHOOK`                      | empty                | A URL that receives a JSON POST for every update, failure and rollback; its `text` field works with Slack as is |
-| `ENAN_ALLOW_MAJOR`, `ENAN_ALLOW_CONTRACT` | `false`              | Let through the updates described above                                                                         |
+| Variable                               | Default              | Purpose                                                                                                         |
+| -------------------------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `ENAN_CHANNEL`                         | the app's `ENAN_TAG` | `latest` (releases), `edge` (every checked commit), or a year or month such as `2026` or `2026.10`              |
+| `ENAN_UPDATE_INTERVAL`                 | `15m`                | How often to check                                                                                              |
+| `ENAN_UPDATE_WINDOW`, `ENAN_UPDATE_TZ` | empty, `UTC`         | Only update inside a daily window, for example `02:00-05:00`                                                    |
+| `ENAN_ALERT_WEBHOOK`                   | empty                | A URL that receives a JSON POST for every update, failure and rollback; its `text` field works with Slack as is |
+| `ENAN_ALLOW_CONTRACT`                  | `false`              | Let through the release described above                                                                         |
 
 ```bash
 docker compose exec updater enan-updater status    # the last check, the running version, any error

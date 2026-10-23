@@ -1,0 +1,94 @@
+name: Prepare release
+# ADMIN-B54, ADR 0056: run by hand. Computes the next calendar version (YYYY.M.N), bumps
+# package.json through a pull request that it merges once the Gate passes, waits for CI on the merge
+# commit, and pushes the tag `vYYYY.M.N`, which runs release.yml. Does nothing when nothing merged
+# since the last release.
+#
+# Needs the secret RELEASE_TOKEN: a fine-grained token on this repository with Contents and Pull
+# requests read and write. GITHUB_TOKEN cannot do this, because a pull request or tag it pushes
+# starts no workflow, so neither the Gate nor release.yml would run.
+on:
+  workflow_dispatch:
+concurrency:
+  group: prepare-release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Prepare release
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-latest"') }}
+    # Two Gate runs, one on the pull request and one on main.
+    timeout-minutes: 120
+    permissions: {}
+    env:
+      GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+    steps:
+      - name: The token is configured
+        run: '[ -n "$GH_TOKEN" ] || { echo "::error::set the RELEASE_TOKEN secret (see this workflow)"; exit 1; }'
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.2
+      - name: Next version
+        id: next
+        run: |
+          set -eu
+          last=$(git describe --tags --abbrev=0 --match 'v*' HEAD 2>/dev/null || true)
+          commits=$(git rev-list --count ${last:+"$last.."}HEAD)
+          version=$(git tag -l 'v*' | node scripts/build/release-version.ts next "$commits")
+          if [ -z "$version" ]; then
+            echo "::notice::nothing merged since $last; no release"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Bump package.json through a pull request
+        id: pr
+        if: steps.next.outputs.version != ''
+        env:
+          VERSION: ${{ steps.next.outputs.version }}
+        run: |
+          set -eu
+          branch="chore/release-$VERSION"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -c "$branch"
+          npm pkg set version="$VERSION"
+          git commit -qam "chore(release): $VERSION"
+          git push -q origin "$branch"
+          url=$(gh pr create --base main --head "$branch" --title "chore(release): $VERSION" \
+            --body "Sets \`package.json\` to \`$VERSION\`. Opened by the Prepare release workflow, which merges it once the Gate passes and then tags \`v$VERSION\` (ADR 0056).")
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Merge once the Gate passes, then tag
+        if: steps.next.outputs.version != ''
+        env:
+          VERSION: ${{ steps.next.outputs.version }}
+          URL: ${{ steps.pr.outputs.url }}
+          HEAD_SHA: ${{ steps.pr.outputs.sha }}
+        run: |
+          set -eu
+          # Waits until the Gate of a commit has finished; fails unless it passed.
+          gate() {
+            for _ in $(seq 1 110); do
+              result=$(gh api "repos/$GITHUB_REPOSITORY/commits/$1/check-runs?check_name=Gate" \
+                --jq '[.check_runs[] | select(.status == "completed") | .conclusion] | first // ""')
+              case "$result" in
+                success) return 0 ;;
+                "") sleep 30 ;;
+                *) echo "::error::the Gate of $1 is $result; see $URL"; return 1 ;;
+              esac
+            done
+            echo "::error::the Gate of $1 did not finish in time"
+            return 1
+          }
+          gate "$HEAD_SHA"
+          gh pr merge "$URL" --squash --delete-branch --match-head-commit "$HEAD_SHA"
+          sha=$(gh pr view "$URL" --json mergeCommit --jq .mergeCommit.oid)
+          gate "$sha"
+          git fetch -q origin main
+          git tag "v$VERSION" "$sha"
+          git push -q origin "v$VERSION"
+          echo "::notice::tagged v$VERSION on $sha; release.yml publishes it"

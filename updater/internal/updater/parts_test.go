@@ -82,29 +82,21 @@ func TestWindow(t *testing.T) {
 }
 
 func TestLoad(t *testing.T) {
-	env := map[string]string{"ENAN_UPDATE_INTERVAL": "1h", "ENAN_UPDATE_WINDOW": "02:00-04:00", "ENAN_UPDATE_TZ": "Asia/Riyadh", "ENAN_ALLOW_MAJOR": "true"}
+	env := map[string]string{"ENAN_UPDATE_INTERVAL": "1h", "ENAN_UPDATE_WINDOW": "02:00-04:00", "ENAN_UPDATE_TZ": "Asia/Riyadh", "ENAN_ALLOW_CONTRACT": "true"}
 	config, err := Load(func(key string) string { return env[key] })
 	if err != nil {
 		t.Fatal(err)
 	}
-	if config.Interval != time.Hour || !config.AllowMajor || config.Window == nil || config.Socket != "/var/run/docker.sock" || config.Service != "app" {
+	if config.Interval != time.Hour || !config.AllowContract || config.Window == nil || config.Socket != "/var/run/docker.sock" || config.Service != "app" {
 		t.Fatalf("%+v", config)
 	}
-	for key, value := range map[string]string{"ENAN_UPDATE_INTERVAL": "10s", "ENAN_ALLOW_MAJOR": "maybe", "DOCKER_HOST": "tcp://docker:2375", "ENAN_UPDATE_TZ": "Mars/Base"} {
+	for key, value := range map[string]string{"ENAN_UPDATE_INTERVAL": "10s", "ENAN_ALLOW_CONTRACT": "maybe", "DOCKER_HOST": "tcp://docker:2375", "ENAN_UPDATE_TZ": "Mars/Base"} {
 		bad := map[string]string{key: value}
 		if key == "ENAN_UPDATE_TZ" {
 			bad["ENAN_UPDATE_WINDOW"] = "02:00-04:00"
 		}
 		if _, err := Load(func(k string) string { return bad[k] }); err == nil {
 			t.Fatalf("%s=%s accepted", key, value)
-		}
-	}
-}
-
-func TestMajor(t *testing.T) {
-	for version, want := range map[string]int{"1.2.3": 1, "0.4.0": 0, "": -1, "x": -1, "12.0.0-rc.1": 12} {
-		if got := major(version); got != want {
-			t.Fatalf("major(%q) = %d, want %d", version, got, want)
 		}
 	}
 }

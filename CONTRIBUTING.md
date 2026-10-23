@@ -46,15 +46,14 @@ A migration must leave the database usable by the release before it (ADR 0050), 
 
 ## Releasing
 
-Maintainers only. Releases follow [Semantic Versioning](https://semver.org).
+Maintainers only. Versions are calendar versions, `YYYY.M.N`: the year, the month without a leading zero, and a counter within the month from 0, for example `2026.10.0`, `2026.10.1`, `2026.11.0` ([ADR 0056](docs/adr/0056-calendar-versions-published-by-a-workflow.md)).
 
-1. Open a pull request that sets `version` in `package.json` (for example `0.2.0`) and merge it.
-2. When CI on main has passed for the merge commit, tag it and push the tag:
+Run **Actions → Prepare release → Run workflow** (or `gh workflow run prepare-release.yml`). It:
 
-   ```bash
-   git fetch origin main
-   git tag v0.2.0 origin/main
-   git push origin v0.2.0
-   ```
+1. computes the next version from today's date (UTC) and the existing tags, and stops if nothing merged since the last release;
+2. opens a pull request that sets `version` in `package.json`, and merges it once its Gate passes;
+3. waits for the Gate on the merge commit, then tags it `vYYYY.M.N` and pushes the tag.
 
-`release.yml` checks that the commit is on main, that its gate passed and that `package.json` agrees with the tag. It then points `:0.2.0`, `:0.2`, `:0` and `:latest` at the image CI already built and tested for that commit, and creates the GitHub Release with generated notes. A pre-release (`v0.2.0-rc.1`) gets its own tag only. Every merge to main also moves `:edge` once its gate has passed.
+The workflow needs the repository secret `RELEASE_TOKEN`, a fine-grained token on this repository with Contents and Pull requests read and write. A pull request or tag pushed with the built-in `GITHUB_TOKEN` starts no workflow, so neither the Gate nor `release.yml` would run.
+
+`release.yml` then checks that the tag is `vYYYY.M.N`, that the commit is on main, that its gate passed and that `package.json` agrees with the tag. It points `:2026.10.0`, `:2026.10`, `:2026` and `:latest` at the image CI already built and tested for that commit, and creates the GitHub Release with generated notes. A pre-release (`v2026.10.0-rc.1`, tagged by hand) gets its own tag only. Every merge to main also moves `:edge` once its gate has passed.

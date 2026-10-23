@@ -128,14 +128,15 @@ it('ADMIN-B57 the page reads in Arabic, with versions and commands kept left to 
   const blocked = status({
     state: 'blocked',
     step: 'guard',
-    error: '2.0.0 is a new major version after 1.1.0; set ENAN_ALLOW_MAJOR=true to install it',
-    candidate: { version: '2.0.0' },
+    error:
+      'migration 9 of 2027.1.0 cannot be undone by going back to 2026.12.0 (ADR 0050); back up, then set ENAN_ALLOW_CONTRACT=true to install it',
+    candidate: { version: '2027.1.0' },
   });
   show('running', blocked, [blocked]);
   mount(<UpdatesPage />, 'ar');
   expect(screen.getByRole('heading', { name: ar.admin.updatesTitle })).toBeTruthy();
   expect(screen.getByRole('heading', { name: ar.admin.updateOutcomeBlocked })).toBeTruthy();
-  expect(screen.getAllByText('2.0.0')[0]?.closest('bdi')?.getAttribute('dir')).toBe('ltr');
+  expect(screen.getAllByText('2027.1.0')[0]?.closest('bdi')?.getAttribute('dir')).toBe('ltr');
   // Held back for the operator: trying again would change nothing.
   expect(screen.queryByRole('button', { name: ar.admin.updateRetry })).toBeNull();
 });
