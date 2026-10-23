@@ -16,9 +16,14 @@ it('ADMIN-B12 NOTIF-B10 ADMIN-B59 a migrated database schedules the backup, prun
     'system.prune',
     'system.trash_purge',
     'tasks.reminders',
-    // ADMIN-B59: update notifications, every five minutes.
+    // ADMIN-B59: update notifications, daily: a safety net behind watching the updater's status.
     'users.updates',
   ]);
+  const [updates] = await db()
+    .select({ cron: schedules.cron })
+    .from(schedules)
+    .where(eq(schedules.kind, 'users.updates'));
+  expect(updates?.cron).toBe('30 4 * * *');
   await scheduleDue(new Date('2026-10-21T12:00:00Z'));
   // The purge publishes through the transaction it is given; a write on the pool would deadlock.
   const purge = await claim('test-owner', 'system.notifications_purge', 1, 1);

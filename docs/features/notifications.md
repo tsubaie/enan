@@ -71,8 +71,9 @@ Indexes: `(user_id, read_at, created_at desc)` for the feed; a unique partial in
     `failed` (ADR 0010). Its subject is the note or task the job ran on. System and scheduled jobs
     have nobody waiting and emit nothing.
   - `update.available`, `update.installed`, `update.failed`, `update.rollback_failed`, `update.blocked`,
-    `update.stalled` — what the updater did (ADMIN-B59), for every active administrator, owned by
-    the users module; scheduled, with no actor.
+    `update.stalled`, `update.updater_outdated` — what the updater did (ADMIN-B59) or that it is too
+    old for this release (ADMIN-B69), for every active administrator, owned by the users module;
+    queued by the updater's status and daily, with no actor.
 - NOTIF-B05 **Time-derived kinds come from the scheduler**, never from a request, and are keyed so
   a re-run on the same day writes nothing new (ADR 0010 dedup keys). `task.due_today` and
   `task.overdue` are the two, from the `tasks.reminders` job at 04:00 UTC each day.

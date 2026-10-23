@@ -156,13 +156,15 @@ export const updates = defineHandler({
       status: UpdaterStatus.nullable(),
       history: z.array(UpdaterStatus),
       commands: z.boolean(),
+      // ADMIN-B69: the updater is older than this release of Enan needs.
+      outdated: z.boolean(),
     }),
   }),
   transaction: false,
   handler: async () => ({ data: await readUpdates() }),
 });
 // ADMIN-B58, ADMIN-B67, ADMIN-B68: Check now, Pause, Resume, Retry, Install now and the automatic
-// setting are left for the updater, which acts within its poll. Refused while there is no updater
+// setting are left for the updater, which acts on them as they arrive. Refused while there is no updater
 // to read them, and written to the audit log.
 export const updateCommand = defineHandler({
   guard: 'admin',

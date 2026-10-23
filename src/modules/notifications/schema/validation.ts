@@ -15,6 +15,7 @@ export const NotificationKind = z.enum([
   'update.rollback_failed',
   'update.blocked',
   'update.stalled',
+  'update.updater_outdated',
 ]);
 export type NotificationKind = z.infer<typeof NotificationKind>;
 export const Notification = z.object({

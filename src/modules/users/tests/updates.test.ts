@@ -12,10 +12,12 @@ import {
   commandsLeft,
   folders,
   removeAll,
+  replaceStatus,
   reset,
   type Folders,
 } from '@/core/updates/tests/fixtures';
 import { notifyUpdates, resolve, subjectId, updatesJob } from '../notifications';
+import { watchUpdates } from '../jobs';
 
 // The updater's two volumes, as folders this file creates; the rest of the configuration is real.
 const dirs = vi.hoisted(() => ({ current: null as Folders | null }));
@@ -47,6 +49,8 @@ const entry = (fields: object) => ({
   channel: 'latest',
   state: 'checked',
   intervalSeconds: 900,
+  // ADMIN-B69: an updater that understands what this release asks of it.
+  protocol: 1,
   lastCheckAt: minutes(-1),
   paused: false,
   ...fields,
@@ -73,12 +77,12 @@ const lastRun = (finishedAt: Date) =>
     .insert(jobs)
     .values({ id: id(), kind: updatesJob, payload: {}, status: 'succeeded', finishedAt });
 // As the runner calls it: the run is already marked succeeded when its publish effect runs.
-async function run(at: Date) {
+async function run(at: Date, started?: Date) {
   const job = id();
   await db()
     .insert(jobs)
     .values({ id: job, kind: updatesJob, payload: {}, status: 'succeeded', finishedAt: at });
-  await notifyUpdates(db(), job, at);
+  await notifyUpdates(db(), job, at, started);
 }
 const rows = () =>
   db()
@@ -126,16 +130,18 @@ it('ADMIN-B57 without the updater the page is told it is not running, and comman
 
 it('ADMIN-B58 a command is left for the updater and written to the audit log', async () => {
   await updater({ state: 'checked', running: { version: '1.0.0' } });
-  const sent = await admin.updateCommand(request('POST', { command: 'pause' }));
+  const sent = await admin.updateCommand(request('POST', { command: 'resume' }));
   expect(sent.status).toBe(202);
-  expect(await sent.json()).toEqual({ data: { command: 'pause' } });
-  expect((await commandsLeft(current())).commands).toEqual(['pause']);
+  expect(await sent.json()).toEqual({ data: { command: 'resume' } });
+  expect((await commandsLeft(current())).commands).toEqual(['resume']);
   const audit = await db()
     .select()
     .from(auditLog)
-    .where(and(eq(auditLog.entityType, 'updater'), eq(auditLog.action, 'update_pause')));
+    .where(and(eq(auditLog.entityType, 'updater'), eq(auditLog.action, 'update_resume')));
   expect(audit).toHaveLength(1);
   expect((await admin.updateCommand(request('POST', { command: 'rollback' }))).status).toBe(400);
+  // Pausing is the server's: with installs on demand, Enan has nothing to stop.
+  expect((await admin.updateCommand(request('POST', { command: 'pause' }))).status).toBe(400);
   expect((await admin.updateCommand(request('POST', { command: 'check', x: 1 }))).status).toBe(400);
 });
 
@@ -298,4 +304,39 @@ it('ADMIN-B67 ADMIN-B59 an announced release is one update.available for every a
     title: '2026.11.0',
     href: '/admin/updates',
   });
+});
+
+it('ADMIN-B59 a status the updater writes queues the notification run at once, one for a burst', async () => {
+  const unwatch = watchUpdates();
+  try {
+    await replaceStatus(current(), JSON.stringify(entry({ state: 'checking' })));
+    await replaceStatus(current(), JSON.stringify(entry({ state: 'checked' })));
+    const queued = () =>
+      db()
+        .select()
+        .from(jobs)
+        .where(and(eq(jobs.kind, updatesJob), eq(jobs.status, 'queued')));
+    await vi.waitFor(async () => expect(await queued()).toHaveLength(1), {
+      timeout: 5000,
+      interval: 100,
+    });
+  } finally {
+    unwatch();
+  }
+});
+
+it('ADMIN-B69 an updater too old for this release is reported to the page, and to administrators once per start of Enan', async () => {
+  // An updater from before the protocol writes none.
+  await updater({ state: 'checked', protocol: undefined, running: { version: '1.1.0' } });
+  const read = await admin.updates(request('GET'));
+  expect((await read.json()).data.outdated).toBe(true);
+  const started = new Date(minutes(-1));
+  await lastRun(new Date(minutes(-5)));
+  await run(now, started);
+  expect((await rows()).map((row) => row.kind)).toEqual(['update.updater_outdated']);
+  await run(new Date(minutes(5)), started);
+  expect(await rows()).toHaveLength(1);
+  // A current updater is not reported.
+  await updater({ state: 'checked', running: { version: '1.1.0' } });
+  expect((await (await admin.updates(request('GET'))).json()).data.outdated).toBe(false);
 });

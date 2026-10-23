@@ -1,6 +1,6 @@
 // Filesystem helpers for the updater suites. Tests may not import node:fs themselves (audit:tests),
 // so the two folders the updater shares with Enan are made and read here.
-import { chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -18,6 +18,11 @@ export async function reset(dirs: Folders, status?: string | null, history?: str
   await mkdir(dirs.commands, { recursive: true });
   if (status != null) await writeFile(join(dirs.status, 'status.json'), status);
   if (history !== undefined) await writeFile(join(dirs.status, 'history.jsonl'), history);
+}
+// As the updater writes it: a new file renamed over the old one.
+export async function replaceStatus(dirs: Folders, status: string) {
+  await writeFile(join(dirs.status, '.status.json.tmp'), status);
+  await rename(join(dirs.status, '.status.json.tmp'), join(dirs.status, 'status.json'));
 }
 export async function commandsLeft(dirs: Folders) {
   const files = (await readdir(dirs.commands)).sort();

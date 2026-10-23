@@ -1,21 +1,31 @@
 'use client';
+import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import {
-  CircleCheck,
-  CirclePause,
-  ExternalLink,
-  RefreshCw,
-  RotateCcw,
-  ShieldAlert,
-} from 'lucide-react';
+import { CircleCheck, ExternalLink, RefreshCw, RotateCcw, ShieldAlert } from 'lucide-react';
 import { type z } from 'zod';
 import { useDateTime, useRelativeTime } from '@/ui/format';
 import { Button } from '@/ui/primitives/button';
 import { ErrorPanel } from '@/ui/layout/ErrorPanel';
 import Loading from '@/ui/layout/Loading';
-import { type Health, latestIssue, type Status, useCommand, useUpdates } from './update-queries';
-import { Code, commands, Panel, releases, StateChip, Version } from './update-parts';
-import { History, Outcome, UpdaterUpdate } from './UpdateDetails';
+import {
+  type Answer,
+  type Health,
+  latestIssue,
+  type Status,
+  useCommand,
+  useUpdates,
+} from './update-queries';
+import {
+  type Asked,
+  Code,
+  commands,
+  Followup,
+  Panel,
+  releases,
+  StateChip,
+  Version,
+} from './update-parts';
+import { History, Outcome, UpdaterOutdated, UpdaterUpdate } from './UpdateDetails';
 import { Automatic, Install } from './UpdateInstall';
 
 export function UpdatesPage() {
@@ -23,31 +33,40 @@ export function UpdatesPage() {
   const command = useCommand();
   if (query.isPending) return <Loading />;
   if (query.error) return <ErrorPanel error={query.error} retry={() => void query.refetch()} />;
-  const { health, status, history, commands } = query.data.data;
+  return <Updates answer={query.data.data} command={command} />;
+}
+
+// What the updater said, and what can be asked of it.
+function Updates({
+  answer,
+  command,
+}: {
+  answer: Answer['data'];
+  command: ReturnType<typeof useCommand>;
+}) {
+  const { health, status, history, commands, outdated } = answer;
   const issue = latestIssue(status, history);
   const live = health === 'not_running' ? null : status;
+  // ADMIN-B69: an older updater neither announces nor installs on request, so neither is offered.
+  const askable = outdated ? null : live;
   return (
     <div className="space-y-5">
       <UpdaterPanel health={health} status={status} />
-      {live && (
-        <>
-          <Install status={live} command={command} enabled={commands} />
-          <Controls status={live} command={command} enabled={commands} />
-        </>
-      )}
+      {outdated ? <UpdaterOutdated /> : status?.updaterUpdate && <UpdaterUpdate />}
+      {askable && <Install status={askable} command={command} enabled={commands} />}
+      {live && <Controls status={live} command={command} enabled={commands} />}
       {command.error && <ErrorPanel error={command.error} />}
       {issue && <Outcome status={issue} />}
-      {status?.updaterUpdate && <UpdaterUpdate />}
-      {live && (
+      {askable && (
         // Keyed by the saved setting, so the form shows what the updater recorded once it has.
         <Automatic
-          key={`${live.automatic}:${live.window ?? ''}`}
-          status={live}
+          key={`${askable.automatic}:${askable.window ?? ''}`}
+          status={askable}
           command={command}
           enabled={commands}
         />
       )}
-      {history.length > 0 && <History history={history} />}
+      <History history={history} />
     </div>
   );
 }
@@ -147,7 +166,8 @@ function Facts({ status }: { status: Status }) {
 // back as a contract migration (step `guard`), which waits for the operator.
 const retryable = (status: Status) =>
   status.state === 'rolled_back' || (status.state === 'blocked' && status.step === 'check');
-// ADMIN-B58: what an administrator can ask of the updater from here.
+// ADMIN-B58: what an administrator can ask of the updater from here. Pausing is left to the server:
+// with installs on demand nothing needs stopping, and a paused updater is offered Resume.
 function Controls({
   status,
   command,
@@ -159,9 +179,14 @@ function Controls({
 }) {
   const t = useTranslations('admin');
   const busy = command.isPending || !enabled;
+  const [asked, setAsked] = useState<Asked | null>(null);
   const sent = command.isSuccess && command.data.data.command;
-  const send = (name: 'check' | 'pause' | 'resume' | 'retry') => () =>
+  // Install now and the setting answer in their own panels; these four answer here.
+  const send = (name: Asked['name']) => () => {
+    const { lastCheckAt, startedAt, finishedAt } = status;
+    setAsked({ id: Date.now(), name, from: { lastCheckAt, startedAt, finishedAt } });
     command.mutate({ command: name });
+  };
   return (
     <div className="grid gap-2">
       <div className="flex flex-wrap items-center gap-2">
@@ -169,15 +194,10 @@ function Controls({
           <RefreshCw className="size-4" aria-hidden />
           {t('updateCheckNow')}
         </Button>
-        {status.paused ? (
+        {status.paused && (
           <Button variant="secondary" disabled={busy} onClick={send('resume')}>
             <CircleCheck className="size-4" aria-hidden />
             {t('updateResume')}
-          </Button>
-        ) : (
-          <Button variant="secondary" disabled={busy} onClick={send('pause')}>
-            <CirclePause className="size-4" aria-hidden />
-            {t('updatePause')}
           </Button>
         )}
         {retryable(status) && (
@@ -187,11 +207,16 @@ function Controls({
           </Button>
         )}
       </div>
+      {status.paused && <p className="text-sm text-text-muted">{t('updatePausedWhy')}</p>}
       {!enabled && <p className="text-sm text-danger">{t('updateCommandsUnavailable')}</p>}
-      {sent && (
-        <p role="status" className="text-sm text-text-muted">
-          {t('updateCommandSent', { command: t(`updateCommand_${sent}`) })}
-        </p>
+      {asked && sent === asked.name ? (
+        <Followup key={asked.id} asked={asked} status={status} />
+      ) : (
+        sent && (
+          <p role="status" className="text-sm text-text-muted">
+            {t('updateCommandSent', { command: t(`updateCommand_${sent}`) })}
+          </p>
+        )
       )}
     </div>
   );

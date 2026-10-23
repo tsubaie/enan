@@ -30,6 +30,7 @@ type fake struct {
 	backupCode int
 	next       int
 	calls      []string
+	onInspect  func() // runs at every container inspection, to read the status mid-update
 }
 
 func newFake() *fake {
@@ -112,6 +113,9 @@ func (f *fake) find(id string) (*docker.Container, error) {
 }
 
 func (f *fake) InspectContainer(_ context.Context, id string) (docker.Container, error) {
+	if f.onInspect != nil {
+		f.onInspect()
+	}
 	c, err := f.find(id)
 	if err != nil {
 		return docker.Container{}, err
@@ -315,6 +319,8 @@ func TestScenarios(t *testing.T) {
 		{"ADMIN-B56 a shutdown during verification records nothing and the next start finishes the update", aShutdownDuringVerificationIsLeftForRecovery},
 		{"ADMIN-B56 a second updater is refused", aSecondUpdaterIsRefused},
 		{"ADMIN-B56 commands are read once", commandsAreReadOnce},
+		{"ADMIN-B69 every status says what this updater understands", everyStatusSaysItsProtocol},
+		{"ADMIN-B58 a command is acted on when it arrives, not at the next poll", aCommandIsActedOnWhenItArrives},
 		{"ADMIN-B56 the history keeps the last outcomes", historyKeepsTheLastOutcomes},
 		{"ADMIN-B56 an update held back is one history entry, not one per check", aHeldUpdateIsOneHistoryEntry},
 	} {
@@ -609,7 +615,17 @@ func aFailedRollbackPausesTheUpdater(t *testing.T) {
 	// Once the old image answers again, resuming finishes the rollback; it backs up nothing new.
 	f.broken["img-1"] = false
 	u.Apply(context.Background(), Command{Command: "resume"})
+	// ADMIN-B58: while the rollback is retried the status says so, and the page keeps following it.
+	var during string
+	f.onInspect = func() {
+		data, _ := os.ReadFile(filepath.Join(u.Config.StatusDir, "status.json"))
+		during = string(data)
+	}
 	u.Check(context.Background())
+	f.onInspect = nil
+	if !strings.Contains(during, `"state": "updating"`) || !strings.Contains(during, `"step": "rollback"`) {
+		t.Fatalf("status during the retried rollback: %s", during)
+	}
 	if u.status.State != RolledBack || u.state.Phase != Idle || app(t, f).Image != "img-1" || strings.Contains(strings.Join(f.calls, ","), "backup") {
 		t.Fatalf("resumed: state %s, phase %s, running %s, calls %v", u.status.State, u.state.Phase, app(t, f).Image, f.calls)
 	}
@@ -642,6 +658,52 @@ func commandsAreReadOnce(t *testing.T) {
 	}
 	if again := u.Commands(); len(again) != 0 {
 		t.Fatalf("commands read twice: %v", again)
+	}
+}
+
+func everyStatusSaysItsProtocol(t *testing.T) {
+	u, _, _ := setup(t)
+	u.Check(context.Background())
+	status, _ := os.ReadFile(filepath.Join(u.Config.StatusDir, "status.json"))
+	if Protocol < 1 || !strings.Contains(string(status), fmt.Sprintf(`"protocol": %d`, Protocol)) {
+		t.Fatalf("status.json %s", status)
+	}
+}
+
+func aCommandIsActedOnWhenItArrives(t *testing.T) {
+	u, _, _ := setup(t)
+	u.Config.Poll, u.Config.Interval = time.Hour, time.Hour
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- u.Run(ctx) }()
+	defer func() {
+		cancel()
+		if err := <-done; err != nil {
+			t.Fatal(err)
+		}
+	}()
+	status := filepath.Join(u.Config.StatusDir, "status.json")
+	// Wait for the start check, so the command below arrives while Run waits.
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+		if data, _ := os.ReadFile(status); strings.Contains(string(data), `"lastCheckAt"`) {
+			break
+		} else if time.Now().After(deadline) {
+			t.Fatalf("no start check: %s", data)
+		}
+	}
+	temporary := filepath.Join(u.Config.CommandsDir, ".pause.tmp")
+	if err := os.WriteFile(temporary, []byte(`{"command":"pause"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(temporary, filepath.Join(u.Config.CommandsDir, "pause.json")); err != nil {
+		t.Fatal(err)
+	}
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+		if data, _ := os.ReadFile(status); strings.Contains(string(data), `"paused": true`) {
+			return
+		} else if time.Now().After(deadline) {
+			t.Fatalf("the command waited for the poll: %s", data)
+		}
 	}
 }
 

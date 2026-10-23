@@ -28,6 +28,7 @@ export const Status = z.object({
   confirm: z.boolean(),
   updaterUpdate: z.string().optional(),
   intervalSeconds: z.number(),
+  startedAt: z.string().optional(),
 });
 export type Status = z.infer<typeof Status>;
 export const Health = z.enum(['running', 'stalled', 'not_running', 'unreadable']);
@@ -37,13 +38,15 @@ const Updates = z.object({
     status: Status.nullable(),
     history: z.array(Status),
     commands: z.boolean(),
+    // ADMIN-B69: the updater is older than this release of Enan needs.
+    outdated: z.boolean(),
   }),
 });
 export type Command =
-  | { command: 'check' | 'pause' | 'resume' | 'retry' }
+  | { command: 'check' | 'resume' | 'retry' }
   | { command: 'install'; digest: string; confirm: boolean }
   | { command: 'settings'; automatic: boolean; window: string };
-export const Sent = z.enum(['check', 'pause', 'resume', 'retry', 'install', 'settings']);
+export const Sent = z.enum(['check', 'resume', 'retry', 'install', 'settings']);
 export const State = z.enum([
   'checking',
   'checked',
@@ -72,23 +75,53 @@ export const outcomeTitle: Record<
   rollback_failed: 'updateOutcomeRollbackFailed',
   blocked: 'updateOutcomeBlocked',
 };
+const key = ['admin', 'updates'];
+export type Answer = z.infer<typeof Updates>;
+
+// ADMIN-B58: the page refreshes only while something is happening: the updater is checking or
+// installing, or a command sent in the last minute has not yet changed what the updater says.
+// React Query keeps the same object when a refresh returns the same answer, so an unchanged
+// answer is the very object the command was sent from.
+export function refreshEvery(
+  answer: Answer | undefined,
+  sent: { status: string; submittedAt: number; before: Answer | undefined } | undefined,
+  now: number,
+): number | false {
+  const state = answer?.data.status?.state;
+  if (state === 'checking' || state === 'updating') return 3000;
+  if (!sent || now - sent.submittedAt > 60_000) return false;
+  if (sent.status === 'pending') return 3000;
+  return sent.status === 'success' && sent.before === answer ? 3000 : false;
+}
+// What useCommand's onMutate kept: z.custom passes the answer through as is, so it compares by identity.
+const SentFrom = z.object({ before: z.custom<Answer>().optional() });
 export function useUpdates() {
+  const client = useQueryClient();
   return useQuery({
-    queryKey: ['admin', 'updates'],
+    queryKey: key,
     queryFn: () => request('/admin/updates', Updates),
-    // The updater acts on a command within half a minute; the page follows it closely.
-    refetchInterval: 5000,
+    refetchInterval: (query) => {
+      const sent = client.getMutationCache().findAll({ mutationKey: key }).at(-1)?.state;
+      const from = SentFrom.safeParse(sent?.context);
+      return refreshEvery(
+        query.state.data,
+        sent && { status: sent.status, submittedAt: sent.submittedAt, before: from.data?.before },
+        Date.now(),
+      );
+    },
   });
 }
 export function useCommand() {
   const client = useQueryClient();
   return useMutation({
+    mutationKey: key,
+    onMutate: () => ({ before: client.getQueryData<Answer>(key) }),
     mutationFn: (command: Command) =>
       request('/admin/updates', z.object({ data: z.object({ command: Sent }) }), {
         method: 'POST',
         body: command,
       }),
-    onSuccess: () => client.invalidateQueries({ queryKey: ['admin', 'updates'] }),
+    onSuccess: () => client.invalidateQueries({ queryKey: key }),
   });
 }
 

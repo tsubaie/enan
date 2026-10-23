@@ -17,6 +17,8 @@ const status = (fields: object) => ({
   confirm: false,
   timeZone: 'UTC',
   intervalSeconds: 900,
+  // ADMIN-B69: an updater that understands what this release asks of it.
+  protocol: 1,
   ...fields,
 });
 const restore = 'docker compose exec app pnpm backup:restore /var/lib/enan/backups/b-9 --confirm';

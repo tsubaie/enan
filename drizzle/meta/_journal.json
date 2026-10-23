@@ -106,6 +106,20 @@
       "when": 1792755421169,
       "tag": "0014_notifications_update_available",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1792763190171,
+      "tag": "0015_schedule_update_notifications_daily",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1792765895916,
+      "tag": "0016_notifications_updater_outdated",
+      "breakpoints": true
     }
   ]
 }

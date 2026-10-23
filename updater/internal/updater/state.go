@@ -11,6 +11,12 @@ import (
 	"time"
 )
 
+// Protocol is what this updater understands of Enan's requests and status, raised whenever Enan
+// starts relying on something new: 1 is announce mode, Install now and the automatic setting
+// (ADR 0057) and acting on events (ADR 0059). Enan warns when the updater's is older than it needs
+// (ADR 0060); an updater from before this field writes none, which reads as 0.
+const Protocol = 1
+
 // Image identifies an app image by what its labels and the registry say about it.
 type Image struct {
 	Digest   string `json:"digest,omitempty"`
@@ -93,6 +99,7 @@ type Status struct {
 	// The candidate has a migration the running release cannot read: Install now must be confirmed.
 	Confirm       bool   `json:"confirm,omitempty"`
 	UpdaterUpdate string `json:"updaterUpdate,omitempty"`
+	Protocol      int    `json:"protocol"`
 	// How often the updater checks, so a reader can tell when it has stopped (ADMIN-B57).
 	IntervalSeconds int `json:"intervalSeconds"`
 }

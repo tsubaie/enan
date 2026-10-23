@@ -21,6 +21,8 @@ const status = (fields: object = {}) =>
     channel: 'latest',
     state: 'checked',
     intervalSeconds: 900,
+    // ADMIN-B69: an updater that understands what this release asks of it.
+    protocol: 1,
     lastCheckAt: '2026-10-22T11:55:00Z',
     paused: false,
     ...fields,
@@ -41,6 +43,8 @@ describe('the updater as Enan reads it', () => {
       status: null,
       history: [],
       commands: true,
+      // No updater is not an old one.
+      outdated: false,
     });
   });
   it('ADMIN-B57 a status file that does not parse is reported as unreadable, not as running', async () => {
@@ -82,12 +86,12 @@ describe('the updater as Enan reads it', () => {
 
 describe('commands for the updater', () => {
   it('ADMIN-B58 a command is one complete JSON file under a name the updater reads', async () => {
-    await queueCommand({ command: 'pause' });
+    await queueCommand({ command: 'resume' });
     await queueCommand({ command: 'check' });
     const { files, commands } = await commandsLeft(dirs);
     expect(files).toHaveLength(2);
     expect(files.every((file) => file.endsWith('.json') && !file.startsWith('.'))).toBe(true);
-    expect(commands.sort()).toEqual(['check', 'pause']);
+    expect(commands.sort()).toEqual(['check', 'resume']);
   });
   it('ADMIN-B58 a commands folder Enan cannot write to is reported', async () => {
     await readOnly(dirs);

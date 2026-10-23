@@ -1,5 +1,5 @@
 'use client';
-import { useId, type ReactNode } from 'react';
+import { useEffect, useId, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { cn } from '@/ui/cn';
 import { defaults } from '@/core/config/defaults';
@@ -82,5 +82,48 @@ export function Version({ image }: { image: Status['running'] }) {
         <span className="ms-1.5 text-text-muted">({image.revision.slice(0, 7)})</span>
       )}
     </bdi>
+  );
+}
+
+// ADMIN-B58: what the page is waiting for after Check now, Resume or Try again, and the
+// status it was asked from, so it can tell when the updater has answered.
+export type Asked = {
+  id: number;
+  name: 'check' | 'resume' | 'retry';
+  // The updater answers by starting something: a check, an install, or a resumed rollback.
+  from: Pick<Status, 'lastCheckAt' | 'startedAt' | 'finishedAt'>;
+};
+const results: Partial<
+  Record<string, 'updateResult_checked' | 'updateResult_available' | 'updateResult_updating'>
+> = {
+  checked: 'updateResult_checked',
+  available: 'updateResult_available',
+  updating: 'updateResult_updating',
+};
+
+// The answer to a request, once the updater's status shows it: it started something since, and it
+// is no longer only checking.
+export function Followup({ asked, status }: { asked: Asked; status: Status }) {
+  const t = useTranslations('admin');
+  const [slow, setSlow] = useState(false);
+  // sync: a request the updater has not answered in a minute says so instead of waiting silently.
+  useEffect(() => {
+    const timer = setTimeout(() => setSlow(true), 60_000);
+    return () => clearTimeout(timer);
+  }, []);
+  const done =
+    (status.lastCheckAt !== asked.from.lastCheckAt ||
+      status.startedAt !== asked.from.startedAt ||
+      status.finishedAt !== asked.from.finishedAt) &&
+    status.state !== 'checking';
+  let text: string;
+  if (!done) text = slow ? t('updateNoAnswer') : t(`updateWaiting_${asked.name}`);
+  else if (status.state === 'updating' && status.step === 'rollback')
+    text = t('updateResult_rollback');
+  else text = t(results[status.state] ?? 'updateResult_problem');
+  return (
+    <p role="status" aria-busy={!done} className="text-sm text-text-muted">
+      {text}
+    </p>
   );
 }

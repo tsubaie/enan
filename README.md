@@ -225,7 +225,7 @@ An install built from source with `--build` moves to the published image with `d
 
 ### Automatic updates
 
-The `updater` service starts with the app on every install ([ADR 0057](docs/adr/0057-updates-are-announced-and-installed-when-an-administrator-chooses.md)). Every 15 minutes it checks the registry. When a new release is out, it announces it in **Administration → Updates** without downloading it, where every administrator also gets a notification. **Nothing is installed until an administrator chooses Install now.** Installing then:
+The `updater` service starts with the app on every install ([ADR 0057](docs/adr/0057-updates-are-announced-and-installed-when-an-administrator-chooses.md)). It checks the registry when it starts and once a day, and Check now asks it at once. When a new release is out, it announces it in **Administration → Updates** without downloading it, where every administrator also gets a notification. **Nothing is installed until an administrator chooses Install now.** Installing then:
 
 1. takes a backup;
 2. replaces the app container with one on the new image;
@@ -240,9 +240,10 @@ Set these in `.env`:
 | Variable                | Default              | Purpose                                                                                                         |
 | ----------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------- |
 | `ENAN_CHANNEL`          | the app's `ENAN_TAG` | `latest` (releases), `edge` (every checked commit), or a year or month such as `2026` or `2026.10`              |
-| `ENAN_UPDATE_INTERVAL`  | `15m`                | How often to check                                                                                              |
+| `ENAN_UPDATE_INTERVAL`  | `24h`                | How often to look for a new release; it also looks at start and on Check now                                    |
 | `ENAN_UPDATE_TZ`        | `UTC`                | The time zone of the install window set on the page                                                             |
 | `ENAN_ALERT_WEBHOOK`    | empty                | A URL that receives a JSON POST for every announcement, install, failure and rollback; Slack accepts its `text` |
+| `ENAN_UPDATER_TAG`      | the app's channel    | The updater image's tag; by default the same channel as the app (`ENAN_CHANNEL`, else `ENAN_TAG`)               |
 | `ENAN_UPDATER_REPLICAS` | `1`                  | `0` runs no updater: Enan then neither announces nor installs releases                                          |
 
 ```bash
@@ -254,9 +255,9 @@ docker compose exec updater enan-updater retry     # try an image that failed be
 docker compose exec updater enan-updater rollback  # go back to the image the last update replaced
 ```
 
-The page also shows the running version, the last check, any failed or held update with its backup and restore command, and Check now, Pause and Try again. A paused updater neither checks nor installs.
+The page also shows the running version, the last check, any failed or held update with its backup and restore command, and Check now and Try again. A paused updater neither checks nor installs; it pauses itself when putting the previous version back fails, or when you run `enan-updater pause`, and the page then offers Resume.
 
-The updater is given the Docker socket, which is equivalent to root on the host. It listens on no port and talks only to the image registry and your webhook; the app itself never gets the socket. To go without it, set `ENAN_UPDATER_REPLICAS=0` and run `docker compose up -d`. The updater does not replace itself: when a newer updater is out, it says so once, and you run `docker compose pull updater && docker compose up -d updater`.
+The updater is given the Docker socket, which is equivalent to root on the host. It listens on no port and talks only to the image registry and your webhook; the app itself never gets the socket. To go without it, set `ENAN_UPDATER_REPLICAS=0` and run `docker compose up -d`. The updater does not replace itself: when a newer updater is out, it says so once, and you run `docker compose pull updater && docker compose up -d updater`. It comes from the same channel as the app, and when it is older than the app needs, the Updates page and a notification say so and give the same command ([ADR 0060](docs/adr/0060-the-updater-follows-the-app-and-says-what-it-understands.md)).
 
 The app listens on `127.0.0.1:3000` only. To use it beyond localhost, put it behind a reverse proxy that terminates TLS and set an `https://` `APP_URL`. Production refuses to start without one.
 

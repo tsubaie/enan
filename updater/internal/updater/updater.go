@@ -165,6 +165,7 @@ func (u *Updater) publish() {
 		u.status.TimeZone = u.Config.Zone.String()
 	}
 	u.status.IntervalSeconds = int(u.Config.Interval.Seconds())
+	u.status.Protocol = Protocol
 	if err := u.store.write("status.json", u.status); err != nil {
 		u.Log.Error("writing status", "error", err)
 	}
@@ -274,6 +275,9 @@ func (u *Updater) Check(ctx context.Context) {
 	}
 	if u.state.Phase != Idle {
 		// A rollback that failed left an update unfinished; finish reversing it before anything new.
+		// Said first, so the page follows the rollback instead of reading the resume as its answer.
+		u.status.State, u.status.Step, u.status.StartedAt = Updating, "rollback", u.now()
+		u.publish()
 		u.Recover(ctx)
 		return
 	}
@@ -858,8 +862,11 @@ func (u *Updater) Apply(ctx context.Context, command Command) bool {
 	case "pause", "resume":
 		u.state.Paused = command.Command == "pause"
 		_ = u.save()
-		u.publish()
-		// Resumed: check now, so the status stops saying paused an interval early.
+		// Resumed: the check that follows publishes, in one write, so the page never reads a resume
+		// without the check or rollback it starts.
+		if u.state.Paused {
+			u.publish()
+		}
 		return !u.state.Paused
 	case "retry":
 		u.state.Rejected = map[string]string{}
@@ -894,9 +901,16 @@ func (u *Updater) Apply(ctx context.Context, command Command) bool {
 	return false
 }
 
-// Run checks every interval, and acts on commands as they arrive.
+// Run checks at start and then every interval (a day by default), and acts on a command the
+// moment it arrives: the commands folder is watched, and polled every ENAN_COMMAND_POLL only
+// where it cannot be (ADR 0059).
 func (u *Updater) Run(ctx context.Context) error {
 	u.Recover(ctx)
+	// Watching starts before the first read of the folder, so a command left in between still wakes.
+	wake := watch(ctx, u.Config.CommandsDir)
+	if wake == nil {
+		u.Log.Warn("the commands folder cannot be watched; polling it", "every", u.Config.Poll.String())
+	}
 	next := u.now()
 	for {
 		due := false
@@ -907,11 +921,19 @@ func (u *Updater) Run(ctx context.Context) error {
 			u.Check(ctx)
 			next = u.now().Add(u.Config.Interval)
 		}
+		wait := next.Sub(u.now())
+		if wake == nil {
+			wait = min(wait, u.Config.Poll)
+		}
+		timer := time.NewTimer(max(wait, 0))
 		select {
 		case <-ctx.Done():
+			timer.Stop()
 			return nil
-		case <-time.After(u.Config.Poll):
+		case <-wake:
+		case <-timer.C:
 		}
+		timer.Stop()
 	}
 }
 

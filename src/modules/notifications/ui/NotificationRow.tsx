@@ -55,6 +55,7 @@ const aboutKey: Record<
   | 'updateRollbackFailed'
   | 'updateBlocked'
   | 'updateStalled'
+  | 'updateUpdaterOutdated'
 > = {
   'task.due_today': 'taskDueToday',
   'task.overdue': 'taskOverdue',
@@ -67,6 +68,7 @@ const aboutKey: Record<
   'update.rollback_failed': 'updateRollbackFailed',
   'update.blocked': 'updateBlocked',
   'update.stalled': 'updateStalled',
+  'update.updater_outdated': 'updateUpdaterOutdated',
 };
 function Sentence({ item }: { item: Notification }) {
   const t = useTranslations('notifications');
