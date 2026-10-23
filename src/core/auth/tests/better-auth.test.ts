@@ -35,13 +35,15 @@ vi.mock('nodemailer', () => ({
     }),
   },
 }));
-const verified = vi.hoisted(() => ({ hashes: [] as string[] }));
+const verified = vi.hoisted(() => ({ hashes: [] as string[], gate: null as Promise<void> | null }));
 vi.mock('../password', async (original) => {
   const actual = await original<typeof import('../password')>();
   return {
     ...actual,
-    verifyPassword: (hash: string, value: string) => {
+    verifyPassword: async (hash: string, value: string) => {
       verified.hashes.push(hash);
+      // A test can hold the password check open, the way a slow argon2 run would.
+      await verified.gate;
       return actual.verifyPassword(hash, value);
     },
     // Better Auth answers an unknown address by hashing the password, at the same argon2 cost.
@@ -127,6 +129,7 @@ beforeEach(async () => {
   await clearDatabase();
   member = (await addUser('member@example.test')).id;
   verified.hashes = [];
+  verified.gate = null;
 });
 afterAll(() => closeDatabase());
 
@@ -305,4 +308,28 @@ it('ADR 0029 a sign-in waits its turn behind an open write transaction instead o
   await writing;
   expect((await signing).status).toBe(200);
   expect(finished).toEqual(['transaction', 'sign-in']);
+});
+
+it('ADR 0029 the password check of a sign-in never holds the write queue', async () => {
+  const { POST } = await import('../../../app/api/auth/[...all]/route');
+  let release: () => void = () => {};
+  verified.gate = new Promise<void>((resolve) => (release = resolve));
+  const signing = POST(
+    new Request(new URL('/api/auth/sign-in/email', env().APP_URL), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: env().APP_URL,
+        'X-Requested-With': 'Enan',
+      },
+      body: JSON.stringify({ email: 'member@example.test', password }),
+    }),
+  );
+  await vi.waitFor(() => expect(verified.hashes.length).toBe(1));
+  // The sign-in is inside its password check; another member's save goes ahead meanwhile.
+  await withTransaction(db(), (database) =>
+    database.run(sql`update users set name = 'Saved meanwhile' where id = ${member}`),
+  );
+  release();
+  expect((await signing).status).toBe(200);
 });
