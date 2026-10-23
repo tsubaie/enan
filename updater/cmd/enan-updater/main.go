@@ -91,7 +91,8 @@ func run(config updater.Config) {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
-	log.Info("started", "interval", config.Interval.String(), "channel", config.Channel)
+	// The protocol in the first line, so an operator reading the log knows what this updater can do.
+	log.Info("started", "interval", config.Interval.String(), "channel", config.Channel, "protocol", updater.Protocol)
 	if err := u.Run(ctx); err != nil {
 		fail(err)
 	}
