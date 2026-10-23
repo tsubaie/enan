@@ -64,5 +64,6 @@ One decision per file. Format: **Status**, **Context**, **Decision**, **Conseque
 | 0058 | Releases add linux/arm64 images, built at release time | accepted |
 | 0059 | The updater and Enan act on events, not polls | accepted |
 | 0060 | The updater follows the app's channel and says what it understands | accepted |
+| 0061 | Lists show more on request, and the audit log reads as a diff | accepted |
 
 Open decisions awaiting an ADR: license (see roadmap); chart library confirmation (`recharts`).

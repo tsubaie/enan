@@ -7,10 +7,10 @@ import { useAdminResource, useAdminAction } from './queries';
 import { Button } from '@/ui/primitives/button';
 import { ErrorPanel } from '@/ui/layout/ErrorPanel';
 import Loading from '@/ui/layout/Loading';
+import { ShowMore, useShowMore } from '@/ui/layout/ShowMore';
 import { AiControls } from './AiControls';
 import { AiModels } from './AiModels';
 import { AiConnection, Connection } from './AiCredentials';
-import { AuditList, AuditRow } from './AuditList';
 import { AdminRow } from './AdminRows';
 const Rows = z.array(
   z.object({
@@ -36,14 +36,13 @@ const BackupJob = z.object({
 const BackupsMeta = z.object({ runner: z.boolean(), job: BackupJob.nullable() });
 type BackupsMeta = z.infer<typeof BackupsMeta>;
 const Started = z.object({ id: z.string() });
-type Resource = 'ai' | 'backups' | 'jobs' | 'audit';
+type Resource = 'ai' | 'backups' | 'jobs';
 type ListResource = Exclude<Resource, 'ai'>;
 type Row = z.infer<typeof Rows>[number];
 type Action = ReturnType<typeof useAdminAction>;
-const emptyKey: Record<ListResource, 'noBackups' | 'noJobs' | 'noAudit'> = {
+const emptyKey: Record<ListResource, 'noBackups' | 'noJobs'> = {
   backups: 'noBackups',
   jobs: 'noJobs',
-  audit: 'noAudit',
 };
 export function AdminDataPage({ resource }: { resource: Resource }) {
   const query = useAdminResource(resource);
@@ -52,16 +51,6 @@ export function AdminDataPage({ resource }: { resource: Resource }) {
   if (query.error) return <ErrorPanel error={query.error} retry={() => void query.refetch()} />;
   if (resource === 'ai')
     return <AiPanel connection={Connection.parse(query.data.data)} action={action} />;
-  if (resource === 'audit') {
-    const rows = z.array(AuditRow).parse(query.data.data);
-    return rows.length ? (
-      <AuditList rows={rows} />
-    ) : (
-      <p className="rounded-xl border bg-bg/50 p-8 text-sm font-light text-text-muted">
-        <EmptyAudit />
-      </p>
-    );
-  }
   const meta = resource === 'backups' ? BackupsMeta.safeParse(query.data.meta) : null;
   return (
     <ResourceList
@@ -72,6 +61,9 @@ export function AdminDataPage({ resource }: { resource: Resource }) {
     />
   );
 }
+// ADMIN-B70: how many rows each list shows at first and per Show more: backups are large rows
+// and only the newest few are wanted; jobs are short lines.
+const step = { backups: 5, jobs: 25 };
 // ADMIN-B45: the AI page in three short parts, connection, features and this month's usage, with
 // the choice of models and what is sent to the provider folded under Advanced for the rare visit.
 function AiPanel({
@@ -110,7 +102,7 @@ function ResourceList({
   action,
   meta,
 }: {
-  resource: ListResource;
+  resource: 'backups' | 'jobs';
   rows: Row[];
   action: Action;
   meta: BackupsMeta | null;
@@ -118,23 +110,37 @@ function ResourceList({
   const t = useTranslations('admin');
   const backups = resource === 'backups';
   const active = isActive(meta?.job?.status);
+  const { visible, peek, props } = useShowMore(rows, step[resource]);
   return (
     <div className="space-y-5">
       {backups && <BackupsHeader action={action} active={active} />}
+      {/* ADMIN-B70: above the list, so it stays in one place however many backups there are. */}
+      {backups && <RestoreHelp />}
       {action.error && <ErrorPanel error={action.error} />}
       {backups && <BackupProgress action={action} meta={meta} rows={rows} />}
       {rows.length ? (
-        <ul className="divide-y divide-border/70 overflow-hidden rounded-xl border bg-bg/50">
-          {rows.map((row) => (
-            <AdminRow key={row.id} resource={resource} row={row} />
-          ))}
-        </ul>
+        <div className="overflow-hidden rounded-xl border bg-bg/50">
+          <ul className="divide-y divide-border/70">
+            {visible.map((row) => (
+              <AdminRow key={row.id} resource={resource} row={row} />
+            ))}
+          </ul>
+          <ShowMore
+            {...props}
+            peek={
+              peek && (
+                <ul className="border-t border-border/70">
+                  <AdminRow resource={resource} row={peek} />
+                </ul>
+              )
+            }
+          />
+        </div>
       ) : (
         <p className="rounded-xl border bg-bg/50 p-8 text-sm text-text-muted">
           {t(emptyKey[resource])}
         </p>
       )}
-      {backups && <RestoreHelp />}
     </div>
   );
 }
@@ -222,8 +228,4 @@ function RestoreHelp() {
       </p>
     </section>
   );
-}
-function EmptyAudit() {
-  const t = useTranslations('admin');
-  return <>{t('noAudit')}</>;
 }

@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl';
 import { Button } from '@/ui/primitives/button';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/ui/primitives/dialog';
 import { ErrorPanel } from '@/ui/layout/ErrorPanel';
+import { ShowMore } from '@/ui/layout/ShowMore';
 import Loading from '@/ui/layout/Loading';
 import { ChoiceSelect } from '@/ui/layout/ChoiceSelect';
 import { EntityPanel } from './EntityPanel';
@@ -49,7 +50,7 @@ export function RelatedEntities<T extends Entity, P extends object, C>({ config,
       </Button>
       <div className="ms-auto text-xs">{config.renderers.rowTrail?.(item)}</div>
     </li></Fragment>)}</ul>
-    {list.more && <Button variant="ghost" onClick={() => void list.fetchMore()}>{c('more')}</Button>}
+    <ShowMore shown={list.items.length} more={list.more} onMore={list.fetchMore} />
     <Dialog open={creating || selected !== null} onOpenChange={(open) => { if (!open) close(); }}>
       <DialogContent showCloseButton={false} className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
         <DialogTitle className="sr-only">{config.title}</DialogTitle><DialogDescription className="sr-only">{config.description}</DialogDescription>

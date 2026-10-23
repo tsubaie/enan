@@ -1,4 +1,5 @@
 'use client';
+import type { ReactNode } from 'react';
 import { useTranslations, useTimeZone } from 'next-intl';
 import {
   Activity,
@@ -6,9 +7,11 @@ import {
   ArrowUpDown,
   CircleCheck,
   Download,
+  LogIn,
   Pencil,
   Plus,
   RotateCcw,
+  ShieldX,
   Sparkles,
   Trash2,
   type LucideIcon,
@@ -18,7 +21,9 @@ import { cn } from '@/ui/cn';
 import { addDays, dayAt } from '@/core/time/tasks';
 import { defaults } from '@/core/config/defaults';
 import { useDateTime, usePlainDate, useRelativeTime, useToday } from '@/ui/format';
-import { useAuditChanges } from './audit-changes';
+import { ShowMore, useShowMore } from '@/ui/layout/ShowMore';
+import { AuditChanges, edge, markOf } from './AuditDiff';
+import { useSignIn } from './audit-changes';
 import { ActionKey, EntityKey } from './audit-keys';
 export const AuditRow = z.object({
   id: z.string(),
@@ -49,6 +54,25 @@ export function AuditList({ rows }: { rows: Entry[] }) {
           </ul>
         </section>
       ))}
+    </div>
+  );
+}
+// ADMIN-B70: the newest changes first, a page at a time (EP-B47).
+export function AuditPages({ rows }: { rows: Entry[] }) {
+  const { visible, peek, props } = useShowMore(rows, 25);
+  return (
+    <div>
+      <AuditList rows={visible} />
+      <ShowMore
+        {...props}
+        peek={
+          peek && (
+            <ul className="mt-2 overflow-hidden rounded-xl border bg-bg/50">
+              <AuditItem row={{ ...peek, count: 1 }} />
+            </ul>
+          )
+        }
+      />
     </div>
   );
 }
@@ -86,6 +110,8 @@ function useDays(rows: Entry[]) {
   return days;
 }
 const icons: [RegExp, LucideIcon, 'danger' | 'success' | 'neutral'][] = [
+  [/^sign_in_failed$/u, ShieldX, 'danger'],
+  [/^sign_in$/u, LogIn, 'neutral'],
   [/^ai\./u, Sparkles, 'neutral'],
   [/download/u, Download, 'neutral'],
   [/delete|remove|purge/u, Trash2, 'danger'],
@@ -108,10 +134,14 @@ function subjectOf(diff: Entry['diff']) {
       name: z.string().optional(),
       fullName: z.string().optional(),
       key: z.string().optional(),
+      // ADMIN-B71: the record's own name, kept by an edit that did not rename it, or the KPI a
+      // reading or target belongs to.
+      _name: z.string().optional(),
     })
     .safeParse(diff);
   if (!parsed.success) return null;
-  return parsed.data.title ?? parsed.data.name ?? parsed.data.fullName ?? parsed.data.key ?? null;
+  const { title, name, fullName, _name, key } = parsed.data;
+  return title ?? name ?? fullName ?? _name ?? key ?? null;
 }
 const clip = (text: string) => (text.length > 80 ? `${text.slice(0, 80)}…` : text);
 // A setting is named the way the settings page names it, not by its key.
@@ -142,18 +172,47 @@ const settingNames: Record<
   'tasks.default_view': 'settingsDefaultView',
 };
 const humanize = (raw: string) => raw.replace(/[._]+/gu, ' ').trim();
-function AuditItem({ row }: { row: Shown }) {
+// What an entry says, and who it names. ADMIN-B72: a sign-in reads as one, by its method, and a
+// failed attempt names the email that was tried, since nobody is known to have made it.
+function useEventText(row: Shown): { sentence: ReactNode; who: string | null } {
   const t = useTranslations('admin');
-  const relative = useRelativeTime();
-  const dateTime = useDateTime();
-  const { Icon, tone } = iconOf(row.action);
+  const signIn = useSignIn();
+  if (row.entityType === 'session') return signIn(row);
   const actionKey = ActionKey.safeParse(row.action.replaceAll('.', '_'));
   const entityKey = EntityKey.safeParse(row.entityType);
   const action = actionKey.success ? t(`auditAction_${actionKey.data}`) : humanize(row.action);
   const entity = entityKey.success ? t(`auditEntity_${entityKey.data}`) : humanize(row.entityType);
   const subject = row.entityType === 'setting' ? null : subjectOf(row.diff);
+  const event =
+    row.count > 1
+      ? t('auditEventMany', { action, entity, count: row.count })
+      : t('auditEvent', { action, entity });
+  return {
+    sentence: (
+      <>
+        {event}
+        {subject && (
+          <>
+            {' '}
+            <bdi dir="auto" className="text-text-muted">
+              {settingNames[subject] ? t(settingNames[subject]) : clip(subject)}
+            </bdi>
+          </>
+        )}
+      </>
+    ),
+    who: row.actorName ?? null,
+  };
+}
+export function AuditItem({ row }: { row: Shown }) {
+  const t = useTranslations('admin');
+  const relative = useRelativeTime();
+  const dateTime = useDateTime();
+  const { Icon, tone } = iconOf(row.action);
+  const { sentence, who } = useEventText(row);
+  const mark = markOf(row.action);
   return (
-    <li className="flex items-start gap-3 px-4 py-3">
+    <li className={cn('flex items-start gap-3 border-s-2 px-4 py-3', edge[mark ?? 'none'])}>
       <span
         className={cn(
           'mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full',
@@ -165,43 +224,16 @@ function AuditItem({ row }: { row: Shown }) {
         <Icon className="size-4" aria-hidden />
       </span>
       <span className="grid min-w-0 flex-1 gap-1">
-        <span className="text-sm">
-          {row.count > 1
-            ? t('auditEventMany', { action, entity, count: row.count })
-            : t('auditEvent', { action, entity })}
-          {subject && (
-            <>
-              {' '}
-              <bdi dir="auto" className="text-text-muted">
-                {settingNames[subject] ? t(settingNames[subject]) : clip(subject)}
-              </bdi>
-            </>
-          )}
-        </span>
+        <span className="text-sm">{sentence}</span>
         <span className="text-xs font-light text-text-muted">
-          <bdi>{row.actorName ?? t('auditSystem')}</bdi>
+          <bdi>{who ?? t('auditSystem')}</bdi>
           {' · '}
           <time dateTime={row.createdAt} title={dateTime(row.createdAt)}>
             {relative(row.createdAt)}
           </time>
         </span>
-        <AuditChanges row={row} />
+        <AuditChanges row={row} removed={mark === 'removed'} />
       </span>
     </li>
-  );
-}
-// The change itself, as a short list of what now reads differently, under the sentence.
-function AuditChanges({ row }: { row: Entry }) {
-  const describe = useAuditChanges();
-  const changes = describe(row.entityType, row.diff);
-  if (!changes.length) return null;
-  return (
-    <ul className="grid gap-0.5 text-xs font-light text-text-muted">
-      {changes.map((change) => (
-        <li key={change.label}>
-          <span className="text-text">{change.label}:</span> <bdi dir="auto">{change.value}</bdi>
-        </li>
-      ))}
-    </ul>
   );
 }

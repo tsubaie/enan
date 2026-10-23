@@ -258,6 +258,15 @@ Twelve top-level props is the ceiling (`07-coding-guidelines.md`); related optio
   button that would leave it is disabled. Rows glide to their new places, the new order holds on
   screen until the write and refetch land, and a toast says it was saved or that it was not and the
   rows went back. Not offered in the table layout or while selecting.
+- EP-B47 **Show more.** Every list that has more rows than it shows ends in one control, centred
+  under the list: a "Show more" button with a down chevron, and beneath it a small status line
+  saying how many are shown ("Showing 20", or "Showing 5 of 24" when the total is known). More rows
+  never arrive by themselves while scrolling, so whatever sits below a list stays within reach.
+  Where the next row is already loaded, it is drawn beneath the list cut short and fading out, so
+  the list reads as going on; it is inert and hidden from screen readers until Show more. Tasks
+  show twenty at a time from the pages they have loaded (fifty each) and fetch a page only when
+  the loaded rows run out; changing the view, a filter or the search starts over at twenty. The
+  table layout and the other lists keep their page of fifty, without the faded row.
 - EP-B45 Every text field — single-line, multi-line, and the search field inside a picker — runs in the direction of what is typed in it, not of the interface: Arabic right to left, English left to right. A multi-line field takes its direction from its first letter and keeps every line on that side, so the empty line after Enter, a list marker or a row of figures stays where the writer is. An empty field follows the interface, so the caret starts on the Arabic side in Arabic. The primitives own this (`Input`, `Textarea`, `ComboboxSearch`); a field whose script is fixed (a password, an address, a label kept in one language) pins `dir` and keeps it.
 
 ## Auto-save

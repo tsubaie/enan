@@ -118,7 +118,7 @@ Singleton system table: `id integer primary key default 1 CHECK (id = 1)`, `prov
 `id, job_id fk null, capability, capability_version int, requested_model, effective_model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, latency_ms, status (ok|error|refused|invalid_output), error text null, estimated_cost_micros bigint, pricing_version text, created_by, created_at`.
 
 ### audit_log
-`id, actor_id, action, entity_type, entity_id, op_id uuid null, diff jsonb, created_at`. Private tables are never audited. Diffs exclude fields the registry marks sensitive.
+`id, actor_id, action, entity_type, entity_id, op_id uuid null, diff jsonb, created_at`. Private tables are never audited. Diffs exclude fields the registry marks sensitive. An edit's diff also holds `_before`, what the changed fields read before it (long text excepted), and an edit, deletion or restore names its record under `_name` (ADMIN-B71). Sign-ins and failed attempts are entries of `entity_type` `session`, pruned after thirty days (ADMIN-B72); nothing else is ever pruned.
 
 ### comments
 `id, entity_type (kpi|initiative|meeting), entity_id, body, created_by, created_at, updated_at, revision, deleted_at, deleted_op_id`. Existence of the target checked by the service.

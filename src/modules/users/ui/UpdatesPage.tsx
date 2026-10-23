@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { CircleCheck, ExternalLink, RefreshCw, RotateCcw, ShieldAlert } from 'lucide-react';
 import { type z } from 'zod';
@@ -51,10 +51,11 @@ function Updates({
   const askable = outdated ? null : live;
   return (
     <div className="space-y-5">
-      <UpdaterPanel health={health} status={status} />
+      <UpdaterPanel health={health} status={status}>
+        {live && <Controls status={live} command={command} enabled={commands} />}
+      </UpdaterPanel>
       {outdated ? <UpdaterOutdated /> : status?.updaterUpdate && <UpdaterUpdate />}
       {askable && <Install status={askable} command={command} enabled={commands} />}
-      {live && <Controls status={live} command={command} enabled={commands} />}
       {command.error && <ErrorPanel error={command.error} />}
       {issue && <Outcome status={issue} />}
       {askable && (
@@ -71,13 +72,16 @@ function Updates({
   );
 }
 
-// ADMIN-B57: whether updates happen at all, and if the updater is alive.
+// ADMIN-B57: whether updates happen at all, and if the updater is alive. ADMIN-B58: what can be
+// asked of it sits in the same card, under the facts it changes.
 function UpdaterPanel({
   health,
   status,
+  children,
 }: {
   health: z.infer<typeof Health>;
   status: Status | null;
+  children: ReactNode;
 }) {
   const t = useTranslations('admin');
   if (health === 'not_running')
@@ -99,6 +103,7 @@ function UpdaterPanel({
     <Panel title={t('updatesTitle')} tone={health === 'stalled' ? 'border-danger/40' : undefined}>
       {health === 'stalled' && <Stalled />}
       <Facts status={status} />
+      <div className="mt-5 border-t border-border/70 pt-4">{children}</div>
     </Panel>
   );
 }
@@ -121,7 +126,7 @@ function Facts({ status }: { status: Status }) {
   const t = useTranslations('admin');
   const relative = useRelativeTime();
   const dateTime = useDateTime();
-  const minutes = Math.max(1, Math.round(status.intervalSeconds / 60));
+  const every = intervalOf(status.intervalSeconds);
   return (
     <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-[auto_1fr]">
       <dt className="text-text-muted">{t('updateRunning')}</dt>
@@ -152,7 +157,7 @@ function Facts({ status }: { status: Status }) {
         ) : (
           t('updateNever')
         )}
-        <span className="text-text-muted"> · {t('updateEvery', { minutes })}</span>
+        <span className="text-text-muted"> · {t('updateEvery', every)}</span>
       </dd>
       <dt className="text-text-muted">{t('updateLastResult')}</dt>
       <dd className="flex items-center gap-2">
@@ -162,6 +167,12 @@ function Facts({ status }: { status: Status }) {
   );
 }
 
+// How often the updater checks, in the largest whole unit: a day reads "daily", not 1440 minutes.
+function intervalOf(seconds: number) {
+  if (seconds >= 86400 && seconds % 86400 === 0) return { unit: 'day', count: seconds / 86400 };
+  if (seconds >= 3600 && seconds % 3600 === 0) return { unit: 'hour', count: seconds / 3600 };
+  return { unit: 'minute', count: Math.max(1, Math.round(seconds / 60)) };
+}
 // Try again clears the updater's list of images that failed; it does nothing for an update held
 // back as a contract migration (step `guard`), which waits for the operator.
 const retryable = (status: Status) =>
@@ -206,18 +217,19 @@ function Controls({
             {t('updateRetry')}
           </Button>
         )}
+        {/* The answer sits beside the button that asked; it wraps under it on a narrow screen. */}
+        {asked && sent === asked.name ? (
+          <Followup key={asked.id} asked={asked} status={status} />
+        ) : (
+          sent && (
+            <p role="status" className="text-sm text-text-muted">
+              {t('updateCommandSent', { command: t(`updateCommand_${sent}`) })}
+            </p>
+          )
+        )}
       </div>
       {status.paused && <p className="text-sm text-text-muted">{t('updatePausedWhy')}</p>}
       {!enabled && <p className="text-sm text-danger">{t('updateCommandsUnavailable')}</p>}
-      {asked && sent === asked.name ? (
-        <Followup key={asked.id} asked={asked} status={status} />
-      ) : (
-        sent && (
-          <p role="status" className="text-sm text-text-muted">
-            {t('updateCommandSent', { command: t(`updateCommand_${sent}`) })}
-          </p>
-        )
-      )}
     </div>
   );
 }

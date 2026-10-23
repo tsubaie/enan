@@ -62,6 +62,8 @@ export type ListResult<T> = {
   pending: boolean;
   error: Error | null;
   more: boolean;
+  // EP-B47: the next row, when it is loaded but not yet shown; drawn faded under the list.
+  peek?: T | undefined;
   fetchMore: () => Promise<void>;
   refetch: () => void;
 };

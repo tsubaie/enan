@@ -18,7 +18,7 @@ import {
 } from '../schema/validation';
 import { PersonList } from '@/modules/people/schema/validation';
 import type { Filters } from '@/ui/entity/types';
-import { listResult } from '@/ui/entity/queries';
+import { listResult, useListWindow } from '@/ui/entity/queries';
 const response = z.object({ data: TaskDetail });
 export function useTasks(filters: Filters) {
   const client = useQueryClient();
@@ -52,7 +52,12 @@ export function useTasks(filters: Filters) {
   // transition (ADR 0019) before effects, and a fetch begun in an effect waits for it.
   usePrefetchInfiniteQuery(options);
   const query = useInfiniteQuery(options);
-  return { ...listResult(query), defaultView: query.data?.pages[0]?.meta.defaultView };
+  // EP-B47: twenty tasks at a time; the server's pages stay larger, so most presses fetch nothing.
+  return useListWindow(
+    { ...listResult(query), defaultView: query.data?.pages[0]?.meta.defaultView },
+    20,
+    JSON.stringify(filters),
+  );
 }
 // TASKS-B17: the shell badge needs the view counts, not the rows, so it asks for one row and
 // reads `meta.counts`. It shares the documented counts key, so any task mutation refreshes it.

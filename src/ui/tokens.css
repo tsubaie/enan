@@ -15,6 +15,7 @@
   --color-warning-soft: var(--warning-soft);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
+  --color-success-soft: var(--success-soft);
   --color-info: var(--accent);
   --color-status-good: var(--status-good);
   --color-status-warn: var(--status-warn);
@@ -84,6 +85,7 @@
   --primary-active: #000000;
   --on-primary: #fdfdfe;
   --success: #2a6e4f;
+  --success-soft: #dcefe3;
   --warning: #8a5e0b;
   --warning-soft: #f4e9cb;
   --danger: #b03a3a;
@@ -159,6 +161,7 @@
   --primary-active: #0064c8;
   --on-primary: #ffffff;
   --success: #7aeba2;
+  --success-soft: rgb(48 209 88 / 0.18);
   --warning: #ffc670;
   --warning-soft: rgb(255 159 10 / 0.2);
   --danger: #ffa8a1;
@@ -1254,6 +1257,14 @@ main:has(.home-page)::-webkit-scrollbar {
     position: absolute;
     inset: -4px;
   }
+}
+/* EP-B47: the next row of a list that has more, cut short and fading out, so the list reads as
+   going on below; it joins the list only on Show more. */
+.show-more-peek {
+  max-height: 3.25rem;
+  overflow: hidden;
+  mask-image: linear-gradient(to bottom, #000, transparent);
+  pointer-events: none;
 }
 /* Narrow, the strip scrolls sideways; its ends fade so a reading cut by the edge reads as "more
    this way" rather than as clipped. The fade is shorter than the strip's padding plus a gap, so a
