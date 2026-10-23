@@ -31,6 +31,7 @@ type fake struct {
 	next       int
 	calls      []string
 	onInspect  func() // runs at every container inspection, to read the status mid-update
+	onStart    func(id string)
 }
 
 func newFake() *fake {
@@ -219,6 +220,9 @@ func (f *fake) Start(_ context.Context, id string) error {
 		return err
 	}
 	c.State.Running = true
+	if f.onStart != nil {
+		f.onStart(c.ID)
+	}
 	return nil
 }
 

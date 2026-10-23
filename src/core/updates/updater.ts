@@ -45,6 +45,8 @@ export type UpdaterStatus = z.infer<typeof UpdaterStatus>;
 // ADR 0060: the protocol this release of Enan needs from the updater. Raise it, and updater.Protocol
 // in Go, when the app starts relying on something an older updater does not do.
 export const updaterProtocol = 1;
+// ADMIN-B74, ADR 0062: the protocol from which the updater can replace itself on request.
+export const selfUpdateProtocol = 2;
 export const outdated = (status: UpdaterStatus | null) =>
   status !== null && status.protocol < updaterProtocol;
 
@@ -143,7 +145,8 @@ export async function readUpdates(now = new Date()) {
 // ADMIN-B58, ADMIN-B67, ADMIN-B68: what Enan may ask of the updater (updater.Command in Go).
 // Pausing is the server's (`enan-updater pause`); Enan only resumes an updater that is paused.
 export const UpdaterCommand = z.discriminatedUnion('command', [
-  z.strictObject({ command: z.enum(['check', 'resume', 'retry']) }),
+  // ADMIN-B74: `update_updater` replaces the updater with the newer image of its channel.
+  z.strictObject({ command: z.enum(['check', 'resume', 'retry', 'update_updater']) }),
   // Exactly the release the page showed; a contract migration only once confirmed.
   z.strictObject({
     command: z.literal('install'),

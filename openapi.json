@@ -6794,7 +6794,8 @@
                 "enum": [
                   "check",
                   "resume",
-                  "retry"
+                  "retry",
+                  "update_updater"
                 ],
                 "type": "string"
               }

@@ -447,3 +447,45 @@ it('ADMIN-B57 ADMIN-B58 Check now is in the Updates card, its answer beside it, 
     'كل ساعتين',
   );
 });
+
+it('ADMIN-B74 a newer updater is installed with one press, and the card says how it went', () => {
+  show('running', status({ protocol: 2, updaterUpdate: 'sha256:two' }));
+  mount(<UpdatesPage />);
+  const card = () => screen.getByRole('region', { name: en.admin.updaterUpdateAvailable });
+  fireEvent.click(within(card()).getByRole('button', { name: en.admin.updaterUpdateNow }));
+  expect(state.command.mutate).toHaveBeenLastCalledWith({ command: 'update_updater' });
+  expect(within(card()).getByRole('status').textContent).toBe(en.admin.updaterUpdating);
+  show(
+    'running',
+    status({ protocol: 2, updaterUpdate: 'sha256:two', state: 'updating', step: 'updater' }),
+  );
+  expect(
+    within(card())
+      .getByRole('button', { name: en.admin.updaterUpdateNow })
+      .hasAttribute('disabled'),
+  ).toBe(true);
+  // The new updater checked and knows of nothing newer: the card stays to say so.
+  show('running', status({ protocol: 2 }));
+  expect(within(card()).getByRole('status').textContent).toBe(en.admin.updaterUpdated);
+  expect(within(card()).queryByRole('button')).toBeNull();
+});
+
+it('ADMIN-B74 a replacement that did not come up says the current updater was kept, in Arabic', () => {
+  show('running', status({ protocol: 2, updaterUpdate: 'sha256:two' }));
+  mount(<UpdatesPage />, 'ar');
+  const card = () => screen.getByRole('region', { name: ar.admin.updaterUpdateAvailable });
+  fireEvent.click(within(card()).getByRole('button', { name: ar.admin.updaterUpdateNow }));
+  show(
+    'running',
+    status({ protocol: 2, updaterUpdate: 'sha256:two', state: 'failed', step: 'updater' }),
+  );
+  expect(within(card()).getByRole('status').textContent).toBe(ar.admin.updaterUpdateFailed);
+});
+
+it('ADMIN-B74 an updater too old to replace itself gets the server commands instead of the button', () => {
+  show('running', status({ protocol: 1, updaterUpdate: 'sha256:two' }));
+  mount(<UpdatesPage />);
+  const card = screen.getByRole('region', { name: en.admin.updaterUpdateAvailable });
+  expect(within(card).getByText(/docker compose pull updater/u)).toBeTruthy();
+  expect(within(card).queryByRole('button', { name: en.admin.updaterUpdateNow })).toBeNull();
+});
