@@ -243,9 +243,16 @@ function queuedTransaction(client: Client, mode?: TransactionMode) {
     withWriteLock(async () => {
       const tx = await client.transaction(mode);
       await new Promise<void>((ended) => {
+        // A commit that fails leaves the transaction open and the file locked: the turn is kept
+        // until the rollback that always follows it (drizzle), never handed to the next writer.
         const end = (name: 'commit' | 'rollback') => async () => {
+          if (name === 'commit') {
+            await tx.commit();
+            ended();
+            return;
+          }
           try {
-            return await tx[name]();
+            await tx.rollback();
           } finally {
             ended();
           }
