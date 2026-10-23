@@ -62,5 +62,6 @@ One decision per file. Format: **Status**, **Context**, **Decision**, **Conseque
 | 0056 | Calendar versions, published by a workflow | accepted |
 | 0057 | Updates are announced by default and installed when an administrator chooses | accepted |
 | 0058 | Releases add linux/arm64 images, built at release time | accepted |
+| 0059 | The updater and Enan act on events, not polls | accepted |
 
 Open decisions awaiting an ADR: license (see roadmap); chart library confirmation (`recharts`).

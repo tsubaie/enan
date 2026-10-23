@@ -315,6 +315,7 @@ func TestScenarios(t *testing.T) {
 		{"ADMIN-B56 a shutdown during verification records nothing and the next start finishes the update", aShutdownDuringVerificationIsLeftForRecovery},
 		{"ADMIN-B56 a second updater is refused", aSecondUpdaterIsRefused},
 		{"ADMIN-B56 commands are read once", commandsAreReadOnce},
+		{"ADMIN-B58 a command is acted on when it arrives, not at the next poll", aCommandIsActedOnWhenItArrives},
 		{"ADMIN-B56 the history keeps the last outcomes", historyKeepsTheLastOutcomes},
 		{"ADMIN-B56 an update held back is one history entry, not one per check", aHeldUpdateIsOneHistoryEntry},
 	} {
@@ -642,6 +643,43 @@ func commandsAreReadOnce(t *testing.T) {
 	}
 	if again := u.Commands(); len(again) != 0 {
 		t.Fatalf("commands read twice: %v", again)
+	}
+}
+
+func aCommandIsActedOnWhenItArrives(t *testing.T) {
+	u, _, _ := setup(t)
+	u.Config.Poll, u.Config.Interval = time.Hour, time.Hour
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- u.Run(ctx) }()
+	defer func() {
+		cancel()
+		if err := <-done; err != nil {
+			t.Fatal(err)
+		}
+	}()
+	status := filepath.Join(u.Config.StatusDir, "status.json")
+	// Wait for the start check, so the command below arrives while Run waits.
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+		if data, _ := os.ReadFile(status); strings.Contains(string(data), `"lastCheckAt"`) {
+			break
+		} else if time.Now().After(deadline) {
+			t.Fatalf("no start check: %s", data)
+		}
+	}
+	temporary := filepath.Join(u.Config.CommandsDir, ".pause.tmp")
+	if err := os.WriteFile(temporary, []byte(`{"command":"pause"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(temporary, filepath.Join(u.Config.CommandsDir, "pause.json")); err != nil {
+		t.Fatal(err)
+	}
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+		if data, _ := os.ReadFile(status); strings.Contains(string(data), `"paused": true`) {
+			return
+		} else if time.Now().After(deadline) {
+			t.Fatalf("the command waited for the poll: %s", data)
+		}
 	}
 }
 

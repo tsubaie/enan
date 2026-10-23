@@ -21,7 +21,13 @@ export async function register() {
   let stop = async () => {};
   if (env().JOBS_ENABLED) {
     const { startRunner } = await import('./core/jobs/runner');
-    stop = startRunner();
+    const { watchUpdates } = await import('./modules/users/jobs');
+    const stopRunner = startRunner();
+    const unwatch = watchUpdates();
+    stop = async () => {
+      unwatch();
+      await stopRunner();
+    };
   }
   const { installShutdown } = await import('./core/jobs/shutdown');
   installShutdown(stop, env().NEXT_MANUAL_SIG_HANDLE === 'true');

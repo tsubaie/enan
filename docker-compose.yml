@@ -51,7 +51,7 @@ services:
       - updater-commands:/var/lib/enan-updater/commands
     environment:
       ENAN_CHANNEL: ${ENAN_CHANNEL:-}
-      ENAN_UPDATE_INTERVAL: ${ENAN_UPDATE_INTERVAL:-15m}
+      ENAN_UPDATE_INTERVAL: ${ENAN_UPDATE_INTERVAL:-24h}
       # Read once, by an install from before ADR 0057; the window is set on Admin → Updates now.
       ENAN_UPDATE_WINDOW: ${ENAN_UPDATE_WINDOW:-}
       ENAN_UPDATE_TZ: ${ENAN_UPDATE_TZ:-UTC}

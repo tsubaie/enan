@@ -1,4 +1,5 @@
 'use client';
+import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   CircleCheck,
@@ -14,7 +15,16 @@ import { Button } from '@/ui/primitives/button';
 import { ErrorPanel } from '@/ui/layout/ErrorPanel';
 import Loading from '@/ui/layout/Loading';
 import { type Health, latestIssue, type Status, useCommand, useUpdates } from './update-queries';
-import { Code, commands, Panel, releases, StateChip, Version } from './update-parts';
+import {
+  type Asked,
+  Code,
+  commands,
+  Followup,
+  Panel,
+  releases,
+  StateChip,
+  Version,
+} from './update-parts';
 import { History, Outcome, UpdaterUpdate } from './UpdateDetails';
 import { Automatic, Install } from './UpdateInstall';
 
@@ -159,9 +169,13 @@ function Controls({
 }) {
   const t = useTranslations('admin');
   const busy = command.isPending || !enabled;
+  const [asked, setAsked] = useState<Asked | null>(null);
   const sent = command.isSuccess && command.data.data.command;
-  const send = (name: 'check' | 'pause' | 'resume' | 'retry') => () =>
+  // Install now and the setting answer in their own panels; these four answer here.
+  const send = (name: Asked['name']) => () => {
+    setAsked({ id: Date.now(), name, lastCheckAt: status.lastCheckAt });
     command.mutate({ command: name });
+  };
   return (
     <div className="grid gap-2">
       <div className="flex flex-wrap items-center gap-2">
@@ -188,10 +202,14 @@ function Controls({
         )}
       </div>
       {!enabled && <p className="text-sm text-danger">{t('updateCommandsUnavailable')}</p>}
-      {sent && (
-        <p role="status" className="text-sm text-text-muted">
-          {t('updateCommandSent', { command: t(`updateCommand_${sent}`) })}
-        </p>
+      {asked && sent === asked.name ? (
+        <Followup key={asked.id} asked={asked} status={status} />
+      ) : (
+        sent && (
+          <p role="status" className="text-sm text-text-muted">
+            {t('updateCommandSent', { command: t(`updateCommand_${sent}`) })}
+          </p>
+        )
       )}
     </div>
   );

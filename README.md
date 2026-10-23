@@ -225,7 +225,7 @@ An install built from source with `--build` moves to the published image with `d
 
 ### Automatic updates
 
-The `updater` service starts with the app on every install ([ADR 0057](docs/adr/0057-updates-are-announced-and-installed-when-an-administrator-chooses.md)). Every 15 minutes it checks the registry. When a new release is out, it announces it in **Administration → Updates** without downloading it, where every administrator also gets a notification. **Nothing is installed until an administrator chooses Install now.** Installing then:
+The `updater` service starts with the app on every install ([ADR 0057](docs/adr/0057-updates-are-announced-and-installed-when-an-administrator-chooses.md)). It checks the registry when it starts and once a day, and Check now asks it at once. When a new release is out, it announces it in **Administration → Updates** without downloading it, where every administrator also gets a notification. **Nothing is installed until an administrator chooses Install now.** Installing then:
 
 1. takes a backup;
 2. replaces the app container with one on the new image;
@@ -240,7 +240,7 @@ Set these in `.env`:
 | Variable                | Default              | Purpose                                                                                                         |
 | ----------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------- |
 | `ENAN_CHANNEL`          | the app's `ENAN_TAG` | `latest` (releases), `edge` (every checked commit), or a year or month such as `2026` or `2026.10`              |
-| `ENAN_UPDATE_INTERVAL`  | `15m`                | How often to check                                                                                              |
+| `ENAN_UPDATE_INTERVAL`  | `24h`                | How often to look for a new release; it also looks at start and on Check now                                    |
 | `ENAN_UPDATE_TZ`        | `UTC`                | The time zone of the install window set on the page                                                             |
 | `ENAN_ALERT_WEBHOOK`    | empty                | A URL that receives a JSON POST for every announcement, install, failure and rollback; Slack accepts its `text` |
 | `ENAN_UPDATER_REPLICAS` | `1`                  | `0` runs no updater: Enan then neither announces nor installs releases                                          |

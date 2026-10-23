@@ -97,7 +97,7 @@ func show(path string) {
 	os.Stdout.Write(data)
 }
 
-// queue leaves a command for the running updater, which picks it up within ENAN_COMMAND_POLL.
+// queue leaves a command for the running updater, which acts on it as it arrives (ADR 0059).
 func queue(config updater.Config, command updater.Command) {
 	data, _ := json.Marshal(command)
 	name := filepath.Join(config.CommandsDir, strconv.FormatInt(time.Now().UnixNano(), 10)+".json")
@@ -107,7 +107,7 @@ func queue(config updater.Config, command updater.Command) {
 	if err := os.Rename(name+".tmp", name); err != nil {
 		fail(err)
 	}
-	fmt.Printf("queued %s; the updater acts on it within %s (see `enan-updater status`)\n", command.Command, config.Poll)
+	fmt.Printf("queued %s; the updater acts on it now (see `enan-updater status`)\n", command.Command)
 }
 
 // healthcheck fails when the last check is older than three intervals, which also covers an

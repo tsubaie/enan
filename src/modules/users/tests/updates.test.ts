@@ -12,10 +12,12 @@ import {
   commandsLeft,
   folders,
   removeAll,
+  replaceStatus,
   reset,
   type Folders,
 } from '@/core/updates/tests/fixtures';
 import { notifyUpdates, resolve, subjectId, updatesJob } from '../notifications';
+import { watchUpdates } from '../jobs';
 
 // The updater's two volumes, as folders this file creates; the rest of the configuration is real.
 const dirs = vi.hoisted(() => ({ current: null as Folders | null }));
@@ -298,4 +300,23 @@ it('ADMIN-B67 ADMIN-B59 an announced release is one update.available for every a
     title: '2026.11.0',
     href: '/admin/updates',
   });
+});
+
+it('ADMIN-B59 a status the updater writes queues the notification run at once, one for a burst', async () => {
+  const unwatch = watchUpdates();
+  try {
+    await replaceStatus(current(), JSON.stringify(entry({ state: 'checking' })));
+    await replaceStatus(current(), JSON.stringify(entry({ state: 'checked' })));
+    const queued = () =>
+      db()
+        .select()
+        .from(jobs)
+        .where(and(eq(jobs.kind, updatesJob), eq(jobs.status, 'queued')));
+    await vi.waitFor(async () => expect(await queued()).toHaveLength(1), {
+      timeout: 5000,
+      interval: 100,
+    });
+  } finally {
+    unwatch();
+  }
 });

@@ -59,10 +59,12 @@ func Load(env func(string) string) (Config, error) {
 		key, fallback string
 		into          *time.Duration
 	}{
-		{"ENAN_UPDATE_INTERVAL", "15m", &config.Interval},
+		// ADR 0059: releases come monthly at most; Check now and the start check cover the rest.
+		{"ENAN_UPDATE_INTERVAL", "24h", &config.Interval},
 		{"ENAN_HEALTH_TIMEOUT", "3m", &config.HealthTimeout},
 		{"ENAN_STOP_TIMEOUT", "35s", &config.StopTimeout},
-		{"ENAN_COMMAND_POLL", "30s", &config.Poll},
+		// Only where the commands folder cannot be watched (not Linux, or no inotify).
+		{"ENAN_COMMAND_POLL", "5m", &config.Poll},
 	}
 	for _, d := range durations {
 		if *d.into, err = time.ParseDuration(get(d.key, d.fallback)); err != nil || *d.into <= 0 {

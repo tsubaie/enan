@@ -1,15 +1,19 @@
 // @vitest-environment jsdom
+import { useSyncExternalStore } from 'react';
 import { beforeEach, expect, it, vi } from 'vitest';
-import { fireEvent, screen } from '@testing-library/react';
+import { act, fireEvent, screen } from '@testing-library/react';
 import en from '@/core/i18n/messages/en.json';
 import ar from '@/core/i18n/messages/ar.json';
 import { defaults } from '@/core/config/defaults';
 import { UpdatesPage } from '../../ui/UpdatesPage';
+import { refreshEvery } from '../../ui/update-queries';
 import { mount } from './harness';
 import { extremeZones } from '../../../../../tests/fixtures/timezones';
 
 const state = vi.hoisted(() => ({
   updates: {} as object,
+  // The page re-reads the updater's status as a refresh would, when a scenario changes it.
+  listeners: new Set<() => void>(),
   command: {
     mutate: vi.fn(),
     isPending: false,
@@ -20,7 +24,16 @@ const state = vi.hoisted(() => ({
 }));
 vi.mock('../../ui/update-queries', async (original) => ({
   ...(await original<typeof import('../../ui/update-queries')>()),
-  useUpdates: () => ({ isPending: false, error: null, data: { data: state.updates } }),
+  useUpdates: () => {
+    const data = useSyncExternalStore(
+      (listener) => {
+        state.listeners.add(listener);
+        return () => state.listeners.delete(listener);
+      },
+      () => state.updates,
+    );
+    return { isPending: false, error: null, data: { data } };
+  },
   useCommand: () => state.command,
 }));
 // The harness's clock is 2026-09-10T09:00:00Z.
@@ -39,10 +52,15 @@ const status = (fields: object = {}) => ({
 const digest = `sha256:${'a'.repeat(64)}`;
 function show(health: string, current: object | null, history: object[] = [], commands = true) {
   state.updates = { health, status: current, history, commands };
+  act(() => state.listeners.forEach((listener) => listener()));
 }
 beforeEach(() => {
   state.command = {
-    mutate: vi.fn(),
+    // Accepted at once (202), as the API answers when the updater is there.
+    mutate: vi.fn((body: { command: string }) => {
+      state.command.isSuccess = true;
+      state.command.data = { data: { command: body.command } };
+    }),
     isPending: false,
     isSuccess: false,
     error: null,
@@ -271,4 +289,72 @@ it('ADMIN-B68 the page shows the setting the updater recorded, and reads in Arab
     automatic: false,
     window: '23:00-04:00',
   });
+});
+
+it('ADMIN-B58 Check now says it is checking, then what the check found', () => {
+  show('running', status({ lastCheckAt: '2026-09-10T08:55:00Z' }));
+  mount(<UpdatesPage />);
+  fireEvent.click(screen.getByRole('button', { name: en.admin.updateCheckNow }));
+  const line = () => screen.getByText(/./u, { selector: '[role="status"][aria-busy]' });
+  expect(line().textContent).toBe(en.admin.updateWaiting_check);
+  expect(line().getAttribute('aria-busy')).toBe('true');
+  // The updater has started the check: still waiting.
+  show('running', status({ state: 'checking', lastCheckAt: '2026-09-10T09:00:01Z' }));
+  expect(line().textContent).toBe(en.admin.updateWaiting_check);
+  show(
+    'running',
+    status({
+      state: 'available',
+      lastCheckAt: '2026-09-10T09:00:01Z',
+      candidate: { version: '2026.11.0', digest },
+    }),
+  );
+  expect(line().textContent).toBe(en.admin.updateResult_available);
+  expect(line().getAttribute('aria-busy')).toBe('false');
+});
+
+it('ADMIN-B58 Pause is answered when the updater says paused, in Arabic', () => {
+  show('running', status());
+  mount(<UpdatesPage />, 'ar');
+  fireEvent.click(screen.getByRole('button', { name: ar.admin.updatePause }));
+  expect(screen.getByText(ar.admin.updateWaiting_pause)).toBeTruthy();
+  show('running', status({ paused: true }));
+  expect(screen.getByText(ar.admin.updatePausedNow)).toBeTruthy();
+});
+
+it('ADMIN-B58 a request the updater does not answer in a minute says so', () => {
+  vi.useFakeTimers();
+  try {
+    show('running', status());
+    mount(<UpdatesPage />);
+    fireEvent.click(screen.getByRole('button', { name: en.admin.updateCheckNow }));
+    act(() => vi.advanceTimersByTime(60_000));
+    expect(screen.getByText(en.admin.updateNoAnswer)).toBeTruthy();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('ADMIN-B58 the page refreshes only while the updater works or a command waits for its answer', () => {
+  const answer = (fields: object = {}) => ({
+    data: { health: 'running' as const, status: status(fields), history: [], commands: true },
+  });
+  const quiet = answer();
+  const sent = (status: 'pending' | 'success' | 'error', submittedAt: number, before = quiet) => ({
+    status,
+    submittedAt,
+    before,
+  });
+  const now = 1_000_000;
+  expect(refreshEvery(quiet, undefined, now)).toBe(false);
+  expect(refreshEvery(answer({ state: 'checking' }), undefined, now)).toBe(3000);
+  expect(refreshEvery(answer({ state: 'updating' }), undefined, now)).toBe(3000);
+  expect(refreshEvery(quiet, sent('pending', now - 1000), now)).toBe(3000);
+  // Unanswered: the refresh returned the very answer the command was sent from.
+  expect(refreshEvery(quiet, sent('success', now - 1000), now)).toBe(3000);
+  // Answered: anything the updater wrote since is a new answer.
+  expect(refreshEvery(answer({ paused: true }), sent('success', now - 1000), now)).toBe(false);
+  expect(refreshEvery(quiet, sent('error', now - 1000), now)).toBe(false);
+  // After a minute the page says the updater may be stopped and stops asking.
+  expect(refreshEvery(quiet, sent('success', now - 61_000), now)).toBe(false);
 });

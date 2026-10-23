@@ -894,9 +894,16 @@ func (u *Updater) Apply(ctx context.Context, command Command) bool {
 	return false
 }
 
-// Run checks every interval, and acts on commands as they arrive.
+// Run checks at start and then every interval (a day by default), and acts on a command the
+// moment it arrives: the commands folder is watched, and polled every ENAN_COMMAND_POLL only
+// where it cannot be (ADR 0059).
 func (u *Updater) Run(ctx context.Context) error {
 	u.Recover(ctx)
+	// Watching starts before the first read of the folder, so a command left in between still wakes.
+	wake := watch(ctx, u.Config.CommandsDir)
+	if wake == nil {
+		u.Log.Warn("the commands folder cannot be watched; polling it", "every", u.Config.Poll.String())
+	}
 	next := u.now()
 	for {
 		due := false
@@ -907,11 +914,19 @@ func (u *Updater) Run(ctx context.Context) error {
 			u.Check(ctx)
 			next = u.now().Add(u.Config.Interval)
 		}
+		wait := next.Sub(u.now())
+		if wake == nil {
+			wait = min(wait, u.Config.Poll)
+		}
+		timer := time.NewTimer(max(wait, 0))
 		select {
 		case <-ctx.Done():
+			timer.Stop()
 			return nil
-		case <-time.After(u.Config.Poll):
+		case <-wake:
+		case <-timer.C:
 		}
+		timer.Stop()
 	}
 }
 

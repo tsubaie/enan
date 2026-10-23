@@ -1,5 +1,6 @@
 import 'server-only';
 import { randomUUID } from 'node:crypto';
+import { watch } from 'node:fs';
 import { access, readFile, rename, writeFile, constants } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
@@ -88,6 +89,28 @@ async function writable(dir: string) {
   }
 }
 
+// ADR 0059: calls changed shortly after the updater replaces status.json (it renames a new file
+// over it), so its outcomes are read as they happen. A folder that cannot be watched (no updater
+// volume) leaves the daily schedule. Returns the function that stops watching.
+export function watchStatus(changed: () => void) {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    const watcher = watch(env().UPDATER_STATUS_DIR, (_event, name) => {
+      if (name !== 'status.json') return;
+      // One call for the burst of writes a check or an install step makes.
+      clearTimeout(timer);
+      timer = setTimeout(changed, 2000);
+    });
+    watcher.on('error', () => watcher.close());
+    return () => {
+      clearTimeout(timer);
+      watcher.close();
+    };
+  } catch {
+    return () => {};
+  }
+}
+
 export async function readUpdates(now = new Date()) {
   const dir = env().UPDATER_STATUS_DIR;
   const [text, history, commands] = await Promise.all([
@@ -130,7 +153,7 @@ export const UpdaterCommand = z.discriminatedUnion('command', [
 ]);
 export type UpdaterCommand = z.infer<typeof UpdaterCommand>;
 
-// ADMIN-B58: a command is a file the updater picks up within its poll and then deletes. Written
+// ADMIN-B58: a command is a file the updater acts on as it arrives and then deletes. Written
 // under a temporary name and renamed, so the updater never reads half of one.
 export async function queueCommand(command: UpdaterCommand) {
   const dir = env().UPDATER_COMMANDS_DIR;
