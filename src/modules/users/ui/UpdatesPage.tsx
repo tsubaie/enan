@@ -16,6 +16,7 @@ import Loading from '@/ui/layout/Loading';
 import { type Health, latestIssue, type Status, useCommand, useUpdates } from './update-queries';
 import { Code, commands, Panel, releases, StateChip, Version } from './update-parts';
 import { History, Outcome, UpdaterUpdate } from './UpdateDetails';
+import { Automatic, Install } from './UpdateInstall';
 
 export function UpdatesPage() {
   const query = useUpdates();
@@ -24,15 +25,28 @@ export function UpdatesPage() {
   if (query.error) return <ErrorPanel error={query.error} retry={() => void query.refetch()} />;
   const { health, status, history, commands } = query.data.data;
   const issue = latestIssue(status, history);
+  const live = health === 'not_running' ? null : status;
   return (
     <div className="space-y-5">
       <UpdaterPanel health={health} status={status} />
-      {status && health !== 'not_running' && (
-        <Controls status={status} command={command} enabled={commands} />
+      {live && (
+        <>
+          <Install status={live} command={command} enabled={commands} />
+          <Controls status={live} command={command} enabled={commands} />
+        </>
       )}
       {command.error && <ErrorPanel error={command.error} />}
       {issue && <Outcome status={issue} />}
       {status?.updaterUpdate && <UpdaterUpdate />}
+      {live && (
+        // Keyed by the saved setting, so the form shows what the updater recorded once it has.
+        <Automatic
+          key={`${live.automatic}:${live.window ?? ''}`}
+          status={live}
+          command={command}
+          enabled={commands}
+        />
+      )}
       {history.length > 0 && <History history={history} />}
     </div>
   );
@@ -146,26 +160,28 @@ function Controls({
   const t = useTranslations('admin');
   const busy = command.isPending || !enabled;
   const sent = command.isSuccess && command.data.data.command;
+  const send = (name: 'check' | 'pause' | 'resume' | 'retry') => () =>
+    command.mutate({ command: name });
   return (
     <div className="grid gap-2">
       <div className="flex flex-wrap items-center gap-2">
-        <Button disabled={busy || status.paused} onClick={() => command.mutate('check')}>
+        <Button disabled={busy || status.paused} onClick={send('check')}>
           <RefreshCw className="size-4" aria-hidden />
           {t('updateCheckNow')}
         </Button>
         {status.paused ? (
-          <Button variant="secondary" disabled={busy} onClick={() => command.mutate('resume')}>
+          <Button variant="secondary" disabled={busy} onClick={send('resume')}>
             <CircleCheck className="size-4" aria-hidden />
             {t('updateResume')}
           </Button>
         ) : (
-          <Button variant="secondary" disabled={busy} onClick={() => command.mutate('pause')}>
+          <Button variant="secondary" disabled={busy} onClick={send('pause')}>
             <CirclePause className="size-4" aria-hidden />
             {t('updatePause')}
           </Button>
         )}
         {retryable(status) && (
-          <Button variant="secondary" disabled={busy} onClick={() => command.mutate('retry')}>
+          <Button variant="secondary" disabled={busy} onClick={send('retry')}>
             <RotateCcw className="size-4" aria-hidden />
             {t('updateRetry')}
           </Button>

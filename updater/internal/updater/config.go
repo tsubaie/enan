@@ -10,16 +10,17 @@ import (
 
 // Config is read from the environment once, at start (README § Automatic updates).
 type Config struct {
-	Socket        string
-	StatusDir     string
-	CommandsDir   string
-	Channel       string // a tag of the app's repository; empty follows the tag the app was created with
-	Interval      time.Duration
-	Window        *Window
+	Socket      string
+	StatusDir   string
+	CommandsDir string
+	Channel     string // a tag of the app's repository; empty follows the tag the app was created with
+	Interval    time.Duration
+	Zone        *time.Location // of the install window set on Admin → Updates
+	// ENAN_UPDATE_WINDOW, read once: an install that used it keeps it as its window (ADR 0057).
+	LegacyWindow  string
 	HealthTimeout time.Duration
 	StopTimeout   time.Duration
 	Webhook       string
-	AllowContract bool
 	Project       string // compose project of the app; empty means this container's own project
 	Service       string // compose service of the app
 	Container     string // or the app's container name, outside compose
@@ -74,17 +75,11 @@ func Load(env func(string) string) (Config, error) {
 	if config.AppPort, err = strconv.Atoi(get("ENAN_APP_PORT", "3000")); err != nil {
 		return config, fmt.Errorf("ENAN_APP_PORT: %w", err)
 	}
-	for key, into := range map[string]*bool{"ENAN_ALLOW_CONTRACT": &config.AllowContract} {
-		if *into, err = strconv.ParseBool(get(key, "false")); err != nil {
-			return config, fmt.Errorf("%s: %q is not true or false", key, env(key))
-		}
+	if config.Zone, err = time.LoadLocation(get("ENAN_UPDATE_TZ", "UTC")); err != nil {
+		return config, fmt.Errorf("ENAN_UPDATE_TZ: %w", err)
 	}
-	if window := get("ENAN_UPDATE_WINDOW", ""); window != "" {
-		zone, err := time.LoadLocation(get("ENAN_UPDATE_TZ", "UTC"))
-		if err != nil {
-			return config, fmt.Errorf("ENAN_UPDATE_TZ: %w", err)
-		}
-		if config.Window, err = ParseWindow(window, zone); err != nil {
+	if config.LegacyWindow = get("ENAN_UPDATE_WINDOW", ""); config.LegacyWindow != "" {
+		if _, err := ParseWindow(config.LegacyWindow, config.Zone); err != nil {
 			return config, err
 		}
 	}
@@ -105,7 +100,7 @@ func ParseWindow(text string, zone *time.Location) (*Window, error) {
 	start, err1 := clock(from)
 	end, err2 := clock(to)
 	if !ok || err1 != nil || err2 != nil || start == end {
-		return nil, fmt.Errorf("ENAN_UPDATE_WINDOW: %q is not a span such as 02:00-05:00", text)
+		return nil, fmt.Errorf("the window %q is not a span such as 02:00-05:00", text)
 	}
 	return &Window{From: start, To: end, Zone: zone}, nil
 }

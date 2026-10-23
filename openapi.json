@@ -1113,6 +1113,10 @@
           "__schema0": {
             "additionalProperties": false,
             "properties": {
+              "automatic": {
+                "default": false,
+                "type": "boolean"
+              },
               "backup": {
                 "type": "string"
               },
@@ -1122,6 +1126,10 @@
               "channel": {
                 "default": "",
                 "type": "string"
+              },
+              "confirm": {
+                "default": false,
+                "type": "boolean"
               },
               "error": {
                 "type": "string"
@@ -1160,7 +1168,13 @@
               "step": {
                 "type": "string"
               },
+              "timeZone": {
+                "type": "string"
+              },
               "updaterUpdate": {
+                "type": "string"
+              },
+              "window": {
                 "type": "string"
               }
             },
@@ -1168,6 +1182,8 @@
               "channel",
               "state",
               "paused",
+              "automatic",
+              "confirm",
               "intervalSeconds"
             ],
             "type": "object"
@@ -3184,6 +3200,7 @@
                         "note.mentioned",
                         "kpi.off_target",
                         "job.finished",
+                        "update.available",
                         "update.installed",
                         "update.failed",
                         "update.rollback_failed",
@@ -6757,28 +6774,8 @@
       },
       "postAdminUpdatesBody": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "additionalProperties": false,
-        "properties": {
-          "command": {
-            "enum": [
-              "check",
-              "pause",
-              "resume",
-              "retry"
-            ],
-            "type": "string"
-          }
-        },
-        "required": [
-          "command"
-        ],
-        "type": "object"
-      },
-      "postAdminUpdatesResponse": {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "additionalProperties": false,
-        "properties": {
-          "data": {
+        "oneOf": [
+          {
             "additionalProperties": false,
             "properties": {
               "command": {
@@ -6788,6 +6785,68 @@
                   "resume",
                   "retry"
                 ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "command"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "command": {
+                "const": "install",
+                "type": "string"
+              },
+              "confirm": {
+                "default": false,
+                "type": "boolean"
+              },
+              "digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "command",
+              "digest"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "automatic": {
+                "type": "boolean"
+              },
+              "command": {
+                "const": "settings",
+                "type": "string"
+              },
+              "window": {
+                "pattern": "^$|^([01]\\d|2[0-3]):[0-5]\\d-([01]\\d|2[0-3]):[0-5]\\d$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "command",
+              "automatic",
+              "window"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "postAdminUpdatesResponse": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "additionalProperties": false,
+            "properties": {
+              "command": {
                 "type": "string"
               }
             },

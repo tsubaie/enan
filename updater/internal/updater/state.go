@@ -19,6 +19,8 @@ type Image struct {
 	Revision string `json:"revision,omitempty"`
 	Schema   int    `json:"schema"`
 	Contract int    `json:"contract"`
+	// os/arch the image is for; a candidate is read and pulled for the running image's platform.
+	Platform string `json:"platform,omitempty"`
 }
 
 // Phase is where an update stands. Anything but idle at start means the process stopped during
@@ -33,10 +35,14 @@ const (
 
 // State is the updater's own memory, written after every transition.
 type State struct {
-	Phase    Phase  `json:"phase"`
-	Paused   bool   `json:"paused"`
-	Target   *Image `json:"target,omitempty"`
-	Previous *Image `json:"previous,omitempty"`
+	Phase  Phase `json:"phase"`
+	Paused bool  `json:"paused"`
+	// Install new releases without waiting for Install now, inside Window when it is set
+	// (ADMIN-B68). Nil only in a state written before announce mode; Open settles it.
+	Automatic *bool  `json:"automatic,omitempty"`
+	Window    string `json:"window,omitempty"`
+	Target    *Image `json:"target,omitempty"`
+	Previous  *Image `json:"previous,omitempty"`
 	// The container the update replaces, renamed to Name + previousSuffix until the new one is verified.
 	PreviousContainer string `json:"previousContainer,omitempty"`
 	Name              string `json:"name,omitempty"`
@@ -63,6 +69,7 @@ const (
 	RollbackFailed = "rollback_failed"
 	Blocked        = "blocked"
 	Paused         = "paused"
+	Available      = "available" // announced, waiting for Install now (ADMIN-B67)
 )
 
 // Status is what operators and Enan read (status.json). It holds no secrets.
@@ -80,7 +87,12 @@ type Status struct {
 	FinishedAt     time.Time `json:"finishedAt,omitzero"`
 	LastCheckAt    time.Time `json:"lastCheckAt,omitzero"`
 	Paused         bool      `json:"paused"`
-	UpdaterUpdate  string    `json:"updaterUpdate,omitempty"`
+	Automatic      bool      `json:"automatic"`
+	Window         string    `json:"window,omitempty"`
+	TimeZone       string    `json:"timeZone,omitempty"`
+	// The candidate has a migration the running release cannot read: Install now must be confirmed.
+	Confirm       bool   `json:"confirm,omitempty"`
+	UpdaterUpdate string `json:"updaterUpdate,omitempty"`
 	// How often the updater checks, so a reader can tell when it has stopped (ADMIN-B57).
 	IntervalSeconds int `json:"intervalSeconds"`
 }

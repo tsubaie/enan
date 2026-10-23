@@ -159,7 +159,7 @@ func (f *fake) InspectImage(_ context.Context, ref string) (docker.Image, error)
 // PlatformManifest: the fake is a classic image store, where compose records image ids.
 func (f *fake) PlatformManifest(context.Context, string) (string, error) { return "", nil }
 
-func (f *fake) Pull(_ context.Context, repository, digest string) error {
+func (f *fake) Pull(_ context.Context, repository, digest, _ string) error {
 	f.calls = append(f.calls, "pull")
 	id, ok := f.digests[digest]
 	if !ok || repository != repo {
@@ -255,6 +255,15 @@ func (f *fake) Exec(context.Context, string, []string) (int, string, error) {
 
 func (f *fake) Logs(context.Context, string, int) (string, error) { return "boom", nil }
 
+// Labels reads a published image's labels without pulling it, as the registry's config does.
+func (f *fake) Labels(_ context.Context, _ registry.Reference, digest, _ string) (map[string]string, error) {
+	id, ok := f.digests[digest]
+	if !ok {
+		return nil, errors.New("manifest unknown")
+	}
+	return f.images[id].Labels(), nil
+}
+
 func (f *fake) Digest(_ context.Context, ref registry.Reference) (string, error) {
 	digest, ok := f.published[ref.Tag]
 	if !ok {
@@ -289,7 +298,15 @@ func TestScenarios(t *testing.T) {
 		{"ADMIN-B56 a new image is backed up, installed and verified", aNewImageIsBackedUpInstalledAndVerified},
 		{"ADMIN-B56 a failing image is rolled back, the database untouched, and not retried", aFailingImageIsRolledBackAndNotRetried},
 		{"ADMIN-B56 a failed backup switches nothing", aFailedBackupSwitchesNothing},
-		{"ADMIN-B56 a contract migration waits for the operator; a new year does not", guards},
+		{"ADMIN-B56 a contract migration waits for Install now, even when automatic; a new year does not", guards},
+		{"ADMIN-B67 announce mode announces a release once, and neither downloads nor installs it", announceModeNeverInstalls},
+		{"ADMIN-B67 Install now installs exactly the announced digest, not a newer one", installNowInstallsTheAnnouncedDigest},
+		{"ADMIN-B67 the running build under another digest is a quiet check, read without a download", theRunningBuildRetaggedIsAQuietCheck},
+		{"ADMIN-B67 Install now of a contract migration needs confirmation", installNowOfAContractMigrationNeedsConfirmation},
+		{"ADMIN-B67 a paused updater installs nothing on Install now", aPausedUpdaterInstallsNothing},
+		{"ADMIN-B68 automatic installing turned on installs the waiting release, and off stops", automaticOnAndOff},
+		{"ADMIN-B68 automatic installs wait for the window; checks do not", automaticInstallsWaitForTheWindow},
+		{"ADMIN-B68 an install from before announce mode stays automatic, once; a new one announces", anExistingInstallStaysAutomatic},
 		{"ADMIN-B56 an update interrupted after the switch is finished", anUpdateInterruptedAfterTheSwitchIsFinished},
 		{"ADMIN-B56 an update interrupted during the switch is reversed", anUpdateInterruptedDuringTheSwitchIsReversed},
 		{"ADMIN-B56 pause and resume", pauseAndResume},
@@ -328,8 +345,13 @@ func setup(t *testing.T) (*Updater, *fake, *alerts) {
 		t.Fatal(err)
 	}
 	t.Cleanup(closeLock)
+	// The scenarios below are the install cycle, so automatic installing is on; announcing alone
+	// is covered by the ADMIN-B67 scenarios.
+	u.Apply(context.Background(), Command{Command: "settings", Automatic: ptr(true)})
 	return u, f, sent
 }
+
+func ptr[T any](value T) *T { return &value }
 
 func app(t *testing.T, f *fake) *docker.Container {
 	t.Helper()
@@ -456,15 +478,14 @@ func guards(t *testing.T) {
 		version          string
 		schema, contract int
 		allow            func(*Config)
-		blocked          bool
+		state            string
 	}{
-		{"a new year", "2027.1.0", 8, 0, nil, false},
-		{"a new year with a migration the running release cannot read", "2027.1.0", 9, 8, nil, true},
-		{"a migration the running release cannot read", "1.1.0", 9, 8, nil, true},
-		{"a contract migration the running release already has", "1.1.0", 9, 7, nil, false},
-		{"a contract migration, allowed", "1.1.0", 9, 8, func(c *Config) { c.AllowContract = true }, false},
-		{"an older image that cannot read the running database", "0.9.0", 5, 0, func(c *Config) { c.AllowContract = true }, true},
-		{"an older image that can read the running database", "0.9.0", 6, 0, nil, false},
+		{"a new year", "2027.1.0", 8, 0, nil, Updated},
+		{"a new year with a migration the running release cannot read", "2027.1.0", 9, 8, nil, Available},
+		{"a migration the running release cannot read", "1.1.0", 9, 8, nil, Available},
+		{"a contract migration the running release already has", "1.1.0", 9, 7, nil, Updated},
+		{"an older image that cannot read the running database", "0.9.0", 5, 0, nil, Blocked},
+		{"an older image that can read the running database", "0.9.0", 6, 0, nil, Updated},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -477,8 +498,8 @@ func guards(t *testing.T) {
 			f.image("img-2", "sha256:two", tc.version, tc.schema, tc.contract)
 			f.publish("latest", "sha256:two")
 			u.Check(context.Background())
-			if blocked := u.status.State == Blocked; blocked != tc.blocked {
-				t.Fatalf("state %s: %s", u.status.State, u.status.Error)
+			if u.status.State != tc.state || u.status.Confirm != (tc.state == Available) {
+				t.Fatalf("state %s, confirm %v: %s", u.status.State, u.status.Confirm, u.status.Error)
 			}
 		})
 	}
@@ -527,7 +548,9 @@ func pauseAndResume(t *testing.T) {
 	if u.status.State != Paused || len(f.calls) != 0 {
 		t.Fatalf("paused: state %s, calls %v", u.status.State, f.calls)
 	}
-	u.Apply(context.Background(), Command{Command: "resume"})
+	if due := u.Apply(context.Background(), Command{Command: "resume"}); !due {
+		t.Fatal("resuming did not ask for a check")
+	}
 	u.Check(context.Background())
 	if u.status.State != Updated {
 		t.Fatalf("resumed: state %s", u.status.State)
@@ -641,10 +664,169 @@ func aHeldUpdateIsOneHistoryEntry(t *testing.T) {
 		u.Check(context.Background())
 	}
 	data, _ := os.ReadFile(filepath.Join(u.Config.StatusDir, "history.jsonl"))
-	if lines := strings.Count(string(data), "\n"); lines != 1 || u.status.State != Blocked {
+	if lines := strings.Count(string(data), "\n"); lines != 1 || u.status.State != Available {
 		t.Fatalf("%d history lines, state %s", lines, u.status.State)
 	}
 	if len(*sent) != 1 {
 		t.Fatalf("alerts %v", *sent)
+	}
+}
+
+func announceModeNeverInstalls(t *testing.T) {
+	u, f, sent := setup(t)
+	u.Apply(context.Background(), Command{Command: "settings", Automatic: ptr(false)})
+	f.image("img-2", "sha256:two", "2026.11.0", 8, 0)
+	f.publish("latest", "sha256:two")
+	for range 3 {
+		u.Check(context.Background())
+	}
+	if u.status.State != Available || u.status.Candidate.Version != "2026.11.0" || u.status.Automatic {
+		t.Fatalf("state %s, candidate %+v", u.status.State, u.status.Candidate)
+	}
+	if app(t, f).Image != "img-1" || u.status.Backup != "" || len(f.pulled) != 0 {
+		t.Fatalf("installed %s or pulled %v in announce mode", app(t, f).Image, f.pulled)
+	}
+	if len(*sent) != 1 || (*sent)[0] != Available {
+		t.Fatalf("alerts %v", *sent)
+	}
+}
+
+func installNowInstallsTheAnnouncedDigest(t *testing.T) {
+	u, f, _ := setup(t)
+	u.Apply(context.Background(), Command{Command: "settings", Automatic: ptr(false)})
+	f.image("img-2", "sha256:two", "2026.11.0", 8, 0)
+	f.publish("latest", "sha256:two")
+	u.Check(context.Background())
+	// A newer release is published after the page showed sha256:two.
+	f.image("img-3", "sha256:three", "2026.11.1", 8, 0)
+	f.publish("latest", "sha256:three")
+	u.Apply(context.Background(), Command{Command: "install", Digest: "sha256:two"})
+	if u.status.State != Updated || app(t, f).Image != "img-2" || u.status.Backup == "" {
+		t.Fatalf("state %s: %s, running %s", u.status.State, u.status.Error, app(t, f).Image)
+	}
+	u.Check(context.Background())
+	if u.status.State != Available || u.status.Candidate.Digest != "sha256:three" || app(t, f).Image != "img-2" {
+		t.Fatalf("after: state %s, running %s", u.status.State, app(t, f).Image)
+	}
+}
+
+func installNowOfAContractMigrationNeedsConfirmation(t *testing.T) {
+	u, f, _ := setup(t)
+	f.image("img-2", "sha256:two", "2026.11.0", 9, 8)
+	f.publish("latest", "sha256:two")
+	u.Check(context.Background())
+	if u.status.State != Available || !u.status.Confirm {
+		t.Fatalf("automatic installed a contract migration: state %s", u.status.State)
+	}
+	u.Apply(context.Background(), Command{Command: "install", Digest: "sha256:two"})
+	if u.status.State != Failed || u.status.Step != "guard" || app(t, f).Image != "img-1" || f.pulled["sha256:two"] {
+		t.Fatalf("unconfirmed: state %s at %s, running %s", u.status.State, u.status.Step, app(t, f).Image)
+	}
+	u.Apply(context.Background(), Command{Command: "install", Digest: "sha256:two", Confirm: true})
+	if u.status.State != Updated || app(t, f).Image != "img-2" || u.status.Backup == "" {
+		t.Fatalf("confirmed: state %s: %s", u.status.State, u.status.Error)
+	}
+}
+
+func aPausedUpdaterInstallsNothing(t *testing.T) {
+	u, f, _ := setup(t)
+	u.Apply(context.Background(), Command{Command: "settings", Automatic: ptr(false)})
+	f.image("img-2", "sha256:two", "2026.11.0", 8, 0)
+	f.publish("latest", "sha256:two")
+	u.Check(context.Background())
+	u.Apply(context.Background(), Command{Command: "pause"})
+	u.Apply(context.Background(), Command{Command: "install", Digest: "sha256:two"})
+	if app(t, f).Image != "img-1" || u.status.State != Available {
+		t.Fatalf("paused: state %s, running %s", u.status.State, app(t, f).Image)
+	}
+}
+
+func automaticOnAndOff(t *testing.T) {
+	u, f, _ := setup(t)
+	u.Apply(context.Background(), Command{Command: "settings", Automatic: ptr(false)})
+	f.image("img-2", "sha256:two", "2026.11.0", 8, 0)
+	f.publish("latest", "sha256:two")
+	u.Check(context.Background())
+	if due := u.Apply(context.Background(), Command{Command: "settings", Automatic: ptr(true)}); !due {
+		t.Fatal("turning automatic on did not ask for a check")
+	}
+	u.Check(context.Background())
+	if u.status.State != Updated || app(t, f).Image != "img-2" || !u.status.Automatic {
+		t.Fatalf("on: state %s: %s", u.status.State, u.status.Error)
+	}
+	u.Apply(context.Background(), Command{Command: "settings", Automatic: ptr(false)})
+	f.image("img-3", "sha256:three", "2026.11.1", 8, 0)
+	f.publish("latest", "sha256:three")
+	u.Check(context.Background())
+	if u.status.State != Available || app(t, f).Image != "img-2" {
+		t.Fatalf("off: state %s, running %s", u.status.State, app(t, f).Image)
+	}
+	var saved State
+	if err := u.store.read("state.json", &saved); err != nil || saved.Automatic == nil || *saved.Automatic {
+		t.Fatalf("not saved: %+v", saved)
+	}
+}
+
+func automaticInstallsWaitForTheWindow(t *testing.T) {
+	u, f, _ := setup(t)
+	u.Config.Zone = time.UTC
+	u.Now = func() time.Time { return time.Date(2026, 10, 23, 12, 0, 0, 0, time.UTC) }
+	u.Apply(context.Background(), Command{Command: "settings", Window: ptr("not a window")})
+	if u.state.Window != "" {
+		t.Fatalf("an invalid window was kept: %q", u.state.Window)
+	}
+	u.Apply(context.Background(), Command{Command: "settings", Window: ptr("02:00-05:00")})
+	f.image("img-2", "sha256:two", "2026.11.0", 8, 0)
+	f.publish("latest", "sha256:two")
+	u.Check(context.Background())
+	if u.status.State != Available || u.status.Window != "02:00-05:00" || u.status.LastCheckAt.IsZero() {
+		t.Fatalf("outside: state %s", u.status.State)
+	}
+	u.Now = func() time.Time { return time.Date(2026, 10, 24, 3, 0, 0, 0, time.UTC) }
+	u.Check(context.Background())
+	if u.status.State != Updated {
+		t.Fatalf("inside: state %s: %s", u.status.State, u.status.Error)
+	}
+}
+
+func anExistingInstallStaysAutomatic(t *testing.T) {
+	open := func(dir string) (*Updater, func()) {
+		u := &Updater{Config: Config{StatusDir: filepath.Join(dir, "status"), CommandsDir: filepath.Join(dir, "commands"), LegacyWindow: "02:00-05:00", Zone: time.UTC}, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+		closeLock, err := u.Open()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return u, closeLock
+	}
+	u, closeLock := open(t.TempDir())
+	closeLock()
+	if u.automatic() || u.state.Window != "" {
+		t.Fatalf("a new install installs automatically: %+v", u.state)
+	}
+	existing := t.TempDir()
+	os.MkdirAll(filepath.Join(existing, "status"), 0o755)
+	os.WriteFile(filepath.Join(existing, "status", "state.json"), []byte(`{"phase":"idle","paused":false}`), 0o644)
+	u, closeLock = open(existing)
+	if !u.automatic() || u.state.Window != "02:00-05:00" {
+		t.Fatalf("an existing install was not kept automatic: %+v", u.state)
+	}
+	// Recorded once: turned off from the page, it stays off after a restart.
+	u.Apply(context.Background(), Command{Command: "settings", Automatic: ptr(false)})
+	closeLock()
+	u, closeLock = open(existing)
+	defer closeLock()
+	if u.automatic() {
+		t.Fatal("automatic came back on after a restart")
+	}
+}
+
+func theRunningBuildRetaggedIsAQuietCheck(t *testing.T) {
+	u, f, sent := setup(t)
+	// The same image (same version and revision) published again under a new digest.
+	f.digests["sha256:again"] = "img-1"
+	f.publish("latest", "sha256:again")
+	u.Check(context.Background())
+	if u.status.State != Checked || u.status.Candidate != nil || len(f.pulled) != 0 || len(*sent) != 0 {
+		t.Fatalf("state %s, candidate %+v, pulled %v, alerts %v", u.status.State, u.status.Candidate, f.pulled, *sent)
 	}
 }

@@ -1,10 +1,12 @@
-// Command enan-updater keeps an Enan install on the newest image of its channel (ADR 0051).
+// Command enan-updater announces new images of an Enan install's channel and installs one when an
+// administrator asks, or allows it (ADR 0051, ADR 0057). Install now and the automatic setting are
+// sent from Administration → Updates.
 //
 //	enan-updater run          check every interval and act on commands (the container's command)
 //	enan-updater status       print status.json
 //	enan-updater history      print the last outcomes
 //	enan-updater check        check now
-//	enan-updater pause|resume stop or restart automatic updates
+//	enan-updater pause|resume stop or restart checking and installing
 //	enan-updater retry        allow images that failed before to be tried again
 //	enan-updater rollback [--force]
 //	                          go back to the image the last update replaced

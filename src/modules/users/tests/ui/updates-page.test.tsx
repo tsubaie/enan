@@ -6,6 +6,7 @@ import ar from '@/core/i18n/messages/ar.json';
 import { defaults } from '@/core/config/defaults';
 import { UpdatesPage } from '../../ui/UpdatesPage';
 import { mount } from './harness';
+import { extremeZones } from '../../../../../tests/fixtures/timezones';
 
 const state = vi.hoisted(() => ({
   updates: {} as object,
@@ -29,9 +30,13 @@ const status = (fields: object = {}) => ({
   running: { version: '1.1.0', revision: 'abcdef1234567' },
   lastCheckAt: '2026-09-10T08:55:00Z',
   paused: false,
+  automatic: false,
+  confirm: false,
+  timeZone: extremeZones.east,
   intervalSeconds: 900,
   ...fields,
 });
+const digest = `sha256:${'a'.repeat(64)}`;
 function show(health: string, current: object | null, history: object[] = [], commands = true) {
   state.updates = { health, status: current, history, commands };
 }
@@ -45,11 +50,12 @@ beforeEach(() => {
   };
 });
 
-it('ADMIN-B57 without the updater the page says updates are by hand and how to turn them on', () => {
+it('ADMIN-B57 without the updater the page says nothing is announced and how to start it', () => {
   show('not_running', null);
   mount(<UpdatesPage />);
   expect(screen.getByRole('heading', { name: en.admin.updaterNotRunning })).toBeTruthy();
-  expect(screen.getByText('docker compose --profile autoupdate up -d')).toBeTruthy();
+  expect(screen.getByText('docker compose up -d updater')).toBeTruthy();
+  expect(screen.queryByRole('checkbox')).toBeNull();
   expect(screen.queryByRole('button', { name: en.admin.updateCheckNow })).toBeNull();
 });
 
@@ -96,7 +102,7 @@ it('ADMIN-B57 a rolled back update names the step, the error, the backup and how
   expect(screen.getByText('Error: boom')).toBeTruthy();
   expect(screen.getByRole('heading', { name: en.admin.updateHistory })).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: en.admin.updateRetry }));
-  expect(state.command.mutate).toHaveBeenCalledWith('retry');
+  expect(state.command.mutate).toHaveBeenCalledWith({ command: 'retry' });
 });
 
 it('ADMIN-B58 Check now and Pause send their commands; a paused updater offers Resume', () => {
@@ -104,7 +110,7 @@ it('ADMIN-B58 Check now and Pause send their commands; a paused updater offers R
   mount(<UpdatesPage />);
   fireEvent.click(screen.getByRole('button', { name: en.admin.updateCheckNow }));
   fireEvent.click(screen.getByRole('button', { name: en.admin.updatePause }));
-  expect(state.command.mutate.mock.calls).toEqual([['check'], ['pause']]);
+  expect(state.command.mutate.mock.calls).toEqual([[{ command: 'check' }], [{ command: 'pause' }]]);
   show('running', status({ paused: true }));
   mount(<UpdatesPage />);
   expect(screen.getByText(en.admin.updateState_paused)).toBeTruthy();
@@ -112,7 +118,7 @@ it('ADMIN-B58 Check now and Pause send their commands; a paused updater offers R
     screen.getByRole('button', { name: en.admin.updateCheckNow }).hasAttribute('disabled'),
   ).toBe(true);
   fireEvent.click(screen.getByRole('button', { name: en.admin.updateResume }));
-  expect(state.command.mutate).toHaveBeenLastCalledWith('resume');
+  expect(state.command.mutate).toHaveBeenLastCalledWith({ command: 'resume' });
 });
 
 it('ADMIN-B58 without a writable commands folder the controls are off and say why', () => {
@@ -129,7 +135,7 @@ it('ADMIN-B57 the page reads in Arabic, with versions and commands kept left to 
     state: 'blocked',
     step: 'guard',
     error:
-      'migration 9 of 2027.1.0 cannot be undone by going back to 2026.12.0 (ADR 0050); back up, then set ENAN_ALLOW_CONTRACT=true to install it',
+      '2027.1.0 cannot read migration 9 of the running 2026.12.0 (ADR 0050); restore a backup taken before it instead',
     candidate: { version: '2027.1.0' },
   });
   show('running', blocked, [blocked]);
@@ -173,4 +179,96 @@ it('ADMIN-B57 the backup and restore command stay on the page after the next che
   show('running', installed, [installed, rolledBack]);
   mount(<UpdatesPage />);
   expect(screen.queryByRole('heading', { name: en.admin.updateOutcomeRolledBack })).toBeNull();
+});
+
+it('ADMIN-B67 a release the updater announced waits for Install now, which sends exactly its digest', () => {
+  show('running', status({ state: 'available', candidate: { version: '2026.11.0', digest } }));
+  mount(<UpdatesPage />);
+  expect(screen.getByRole('heading', { name: en.admin.updateAvailableTitle })).toBeTruthy();
+  expect(screen.getByText(en.admin.updateState_available)).toBeTruthy();
+  const notes = screen.getAllByRole('link', { name: new RegExp(en.admin.updateReleaseNotes) });
+  expect(notes.map((link) => link.getAttribute('href'))).toContain(
+    `${defaults.releaseNotes}2026.11.0`,
+  );
+  fireEvent.click(screen.getByRole('button', { name: en.admin.updateInstallNow }));
+  expect(state.command.mutate).toHaveBeenCalledWith(
+    { command: 'install', digest, confirm: false },
+    expect.anything(),
+  );
+  expect(screen.queryByRole('dialog')).toBeNull();
+  // A paused updater installs nothing, so the page does not offer it.
+  show('running', status({ state: 'available', paused: true, candidate: { digest } }));
+  mount(<UpdatesPage />);
+  const buttons = screen.getAllByRole('button', { name: en.admin.updateInstallNow });
+  expect(buttons.at(-1)?.hasAttribute('disabled')).toBe(true);
+});
+
+it('ADMIN-B67 a release the running one cannot go back from is installed only after a confirmation that says so (ar)', () => {
+  show(
+    'running',
+    status({ state: 'available', confirm: true, candidate: { version: '2027.1.0', digest } }),
+  );
+  mount(<UpdatesPage />, 'ar');
+  expect(screen.getByText(ar.admin.updateAvailableContract)).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: ar.admin.updateInstallNow }));
+  expect(state.command.mutate).not.toHaveBeenCalled();
+  const dialog = screen.getByRole('dialog');
+  expect(dialog.textContent).toContain(ar.admin.updateConfirmTitle);
+  expect(dialog.textContent).toContain(ar.admin.updateConfirmBody);
+  fireEvent.click(screen.getByRole('button', { name: ar.admin.updateConfirmInstall }));
+  expect(state.command.mutate).toHaveBeenCalledWith(
+    { command: 'install', digest, confirm: true },
+    expect.anything(),
+  );
+});
+
+it('ADMIN-B67 an install under way shows the step it is at', () => {
+  show(
+    'running',
+    status({ state: 'updating', step: 'switch', candidate: { version: '2026.11.0' } }),
+  );
+  mount(<UpdatesPage />);
+  expect(screen.getByRole('heading', { name: en.admin.updateInstalling })).toBeTruthy();
+  expect(screen.getByText(en.admin.updateProgress_switch).getAttribute('aria-current')).toBe(
+    'step',
+  );
+  expect(screen.getByText(en.admin.updateProgress_backup).getAttribute('aria-current')).toBeNull();
+});
+
+it('ADMIN-B68 automatic installing is off by default and saved with its window', () => {
+  show('running', status());
+  mount(<UpdatesPage />);
+  const toggle = screen.getByRole('checkbox', { name: new RegExp(en.admin.updateAutomatic) });
+  expect(toggle.getAttribute('aria-checked')).toBe('false');
+  expect(screen.getByText(en.admin.updateWindow.replace('{zone}', extremeZones.east))).toBeTruthy();
+  fireEvent.click(toggle);
+  const save = screen.getByRole('button', { name: en.admin.updateAutomaticSave });
+  fireEvent.change(screen.getByLabelText(en.admin.updateWindowFrom), {
+    target: { value: '02:00' },
+  });
+  // Half a window is no window.
+  expect(save.hasAttribute('disabled')).toBe(true);
+  fireEvent.change(screen.getByLabelText(en.admin.updateWindowTo), { target: { value: '05:00' } });
+  fireEvent.click(save);
+  expect(state.command.mutate).toHaveBeenCalledWith({
+    command: 'settings',
+    automatic: true,
+    window: '02:00-05:00',
+  });
+});
+
+it('ADMIN-B68 the page shows the setting the updater recorded, and reads in Arabic', () => {
+  show('running', status({ automatic: true, window: '23:00-04:00' }));
+  mount(<UpdatesPage />, 'ar');
+  const toggle = screen.getByRole('checkbox', { name: new RegExp(ar.admin.updateAutomatic) });
+  expect(toggle.getAttribute('aria-checked')).toBe('true');
+  expect(screen.getByLabelText(ar.admin.updateWindowFrom)).toHaveProperty('value', '23:00');
+  expect(screen.getByLabelText(ar.admin.updateWindowTo)).toHaveProperty('value', '04:00');
+  fireEvent.click(toggle);
+  fireEvent.click(screen.getByRole('button', { name: ar.admin.updateAutomaticSave }));
+  expect(state.command.mutate).toHaveBeenCalledWith({
+    command: 'settings',
+    automatic: false,
+    window: '23:00-04:00',
+  });
 });

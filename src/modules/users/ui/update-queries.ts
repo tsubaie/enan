@@ -1,4 +1,4 @@
-// ADMIN-B57, ADMIN-B58: what Admin → Updates reads and sends.
+// ADMIN-B57, ADMIN-B58, ADMIN-B67, ADMIN-B68: what Admin → Updates reads and sends.
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import { request } from '@/core/http/client';
@@ -22,6 +22,10 @@ export const Status = z.object({
   finishedAt: z.string().optional(),
   lastCheckAt: z.string().optional(),
   paused: z.boolean(),
+  automatic: z.boolean(),
+  window: z.string().optional(),
+  timeZone: z.string().optional(),
+  confirm: z.boolean(),
   updaterUpdate: z.string().optional(),
   intervalSeconds: z.number(),
 });
@@ -35,8 +39,11 @@ const Updates = z.object({
     commands: z.boolean(),
   }),
 });
-export const Command = z.enum(['check', 'pause', 'resume', 'retry']);
-export type Command = z.infer<typeof Command>;
+export type Command =
+  | { command: 'check' | 'pause' | 'resume' | 'retry' }
+  | { command: 'install'; digest: string; confirm: boolean }
+  | { command: 'settings'; automatic: boolean; window: string };
+export const Sent = z.enum(['check', 'pause', 'resume', 'retry', 'install', 'settings']);
 export const State = z.enum([
   'checking',
   'checked',
@@ -47,6 +54,7 @@ export const State = z.enum([
   'rollback_failed',
   'blocked',
   'paused',
+  'available',
 ]);
 export type State = z.infer<typeof State>;
 export const Step = z.enum(['check', 'pull', 'guard', 'backup', 'switch', 'verify', 'rollback']);
@@ -76,9 +84,9 @@ export function useCommand() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (command: Command) =>
-      request('/admin/updates', z.object({ data: z.object({ command: Command }) }), {
+      request('/admin/updates', z.object({ data: z.object({ command: Sent }) }), {
         method: 'POST',
-        body: { command },
+        body: command,
       }),
     onSuccess: () => client.invalidateQueries({ queryKey: ['admin', 'updates'] }),
   });

@@ -223,27 +223,25 @@ An install built from source with `--build` moves to the published image with `d
 
 ### Automatic updates
 
-The optional `updater` service keeps the app on the newest image of its channel ([ADR 0051](docs/adr/0051-installs-update-themselves.md)). Turn it on with:
-
-```bash
-docker compose --profile autoupdate up -d
-```
-
-Every 15 minutes it checks the registry. When a new image is out, it:
+The `updater` service starts with the app on every install ([ADR 0057](docs/adr/0057-updates-are-announced-and-installed-when-an-administrator-chooses.md)). Every 15 minutes it checks the registry. When a new release is out, it announces it in **Administration → Updates** without downloading it, where every administrator also gets a notification. **Nothing is installed until an administrator chooses Install now.** Installing then:
 
 1. takes a backup;
 2. replaces the app container with one on the new image;
 3. waits for the new version to report itself healthy.
 
-If the new version fails, it puts the previous container back. It never restores the database by itself: the status names the backup it took and the command to restore it. It holds back a release whose database changes the previous release cannot read, until you allow it. Set these in `.env`:
+If the new version fails, the updater puts the previous container back. It never restores the database by itself: the page names the backup it took and the command to restore it. A release whose database changes the version running now cannot read asks for a confirmation first, because going back from it means restoring that backup.
 
-| Variable                               | Default              | Purpose                                                                                                         |
-| -------------------------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `ENAN_CHANNEL`                         | the app's `ENAN_TAG` | `latest` (releases), `edge` (every checked commit), or a year or month such as `2026` or `2026.10`              |
-| `ENAN_UPDATE_INTERVAL`                 | `15m`                | How often to check                                                                                              |
-| `ENAN_UPDATE_WINDOW`, `ENAN_UPDATE_TZ` | empty, `UTC`         | Only update inside a daily window, for example `02:00-05:00`                                                    |
-| `ENAN_ALERT_WEBHOOK`                   | empty                | A URL that receives a JSON POST for every update, failure and rollback; its `text` field works with Slack as is |
-| `ENAN_ALLOW_CONTRACT`                  | `false`              | Let through the release described above                                                                         |
+On the same page, **Install updates automatically** (off by default) lets releases install as they come out, optionally only inside a daily window. A release that needs the confirmation above still waits for it. An install that ran the updater with `--profile autoupdate` before this change keeps installing automatically until an administrator turns it off.
+
+Set these in `.env`:
+
+| Variable                | Default              | Purpose                                                                                                         |
+| ----------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `ENAN_CHANNEL`          | the app's `ENAN_TAG` | `latest` (releases), `edge` (every checked commit), or a year or month such as `2026` or `2026.10`              |
+| `ENAN_UPDATE_INTERVAL`  | `15m`                | How often to check                                                                                              |
+| `ENAN_UPDATE_TZ`        | `UTC`                | The time zone of the install window set on the page                                                             |
+| `ENAN_ALERT_WEBHOOK`    | empty                | A URL that receives a JSON POST for every announcement, install, failure and rollback; Slack accepts its `text` |
+| `ENAN_UPDATER_REPLICAS` | `1`                  | `0` runs no updater: Enan then neither announces nor installs releases                                          |
 
 ```bash
 docker compose exec updater enan-updater status    # the last check, the running version, any error
@@ -254,9 +252,9 @@ docker compose exec updater enan-updater retry     # try an image that failed be
 docker compose exec updater enan-updater rollback  # go back to the image the last update replaced
 ```
 
-Administrators see the same in **Administration → Updates**: the running version, the last check, any failed or held update with its backup and restore command, and Check now, Pause and Try again. Failures and installs also arrive as notifications in Enan, besides the webhook.
+The page also shows the running version, the last check, any failed or held update with its backup and restore command, and Check now, Pause and Try again. A paused updater neither checks nor installs.
 
-The updater is given the Docker socket, which is equivalent to root on the host. It listens on no port and talks only to the image registry and your webhook; the app itself never gets the socket. The updater does not replace itself: when a newer updater is out, it says so once, and you run `docker compose --profile autoupdate pull updater && docker compose --profile autoupdate up -d updater`.
+The updater is given the Docker socket, which is equivalent to root on the host. It listens on no port and talks only to the image registry and your webhook; the app itself never gets the socket. To go without it, set `ENAN_UPDATER_REPLICAS=0` and run `docker compose up -d`. The updater does not replace itself: when a newer updater is out, it says so once, and you run `docker compose pull updater && docker compose up -d updater`.
 
 The app listens on `127.0.0.1:3000` only. To use it beyond localhost, put it behind a reverse proxy that terminates TLS and set an `https://` `APP_URL`. Production refuses to start without one.
 

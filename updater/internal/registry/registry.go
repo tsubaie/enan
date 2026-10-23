@@ -1,13 +1,15 @@
-// Package registry resolves an image tag to the digest a registry serves for it, anonymously, with
-// the OCI distribution API. Only public images are supported.
+// Package registry resolves an image tag to the digest a registry serves for it, and reads an
+// image's labels, anonymously, with the OCI distribution API. Only public images are supported.
 package registry
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -65,16 +67,89 @@ var accept = strings.Join([]string{
 
 // Digest returns the digest the registry serves for ref's tag.
 func (c *Client) Digest(ctx context.Context, ref Reference) (string, error) {
+	response, err := c.fetch(ctx, http.MethodHead, ref, "manifests/"+url.PathEscape(ref.Tag), accept)
+	if err != nil {
+		return "", err
+	}
+	response.Body.Close()
+	digest := response.Header.Get("Docker-Content-Digest")
+	if !strings.HasPrefix(digest, "sha256:") {
+		return "", fmt.Errorf("%s:%s: registry sent no digest", ref.Repository, ref.Tag)
+	}
+	return digest, nil
+}
+
+// Labels reads the labels of the image digest names, from its manifest and config only: the
+// layers are not downloaded (ADMIN-B67: nothing is pulled before Install now). An index is
+// resolved to the entry for platform (os/arch), or for the updater's own when it is "".
+func (c *Client) Labels(ctx context.Context, ref Reference, digest, platform string) (map[string]string, error) {
+	if platform == "" {
+		platform = runtime.GOOS + "/" + runtime.GOARCH
+	}
+	var manifest struct {
+		Manifests []struct {
+			Digest   string `json:"digest"`
+			Platform struct {
+				OS           string `json:"os"`
+				Architecture string `json:"architecture"`
+			} `json:"platform"`
+		} `json:"manifests"`
+		Config struct {
+			Digest string `json:"digest"`
+		} `json:"config"`
+	}
+	if err := c.json(ctx, ref, "manifests/"+digest, accept, &manifest); err != nil {
+		return nil, err
+	}
+	if len(manifest.Manifests) > 0 {
+		for _, entry := range manifest.Manifests {
+			if entry.Platform.OS+"/"+entry.Platform.Architecture == platform {
+				return c.Labels(ctx, ref, entry.Digest, platform)
+			}
+		}
+		return nil, fmt.Errorf("%s@%s has no image for %s", ref.Repository, digest, platform)
+	}
+	if !strings.HasPrefix(manifest.Config.Digest, "sha256:") {
+		return nil, fmt.Errorf("%s@%s: the manifest names no config", ref.Repository, digest)
+	}
+	var config struct {
+		Config struct {
+			Labels map[string]string `json:"Labels"`
+		} `json:"config"`
+	}
+	if err := c.json(ctx, ref, "blobs/"+manifest.Config.Digest, "*/*", &config); err != nil {
+		return nil, err
+	}
+	return config.Config.Labels, nil
+}
+
+// shortcut: a manifest or config larger than this is refused; both are a few KB in practice.
+const maxDocument = 4 << 20
+
+func (c *Client) json(ctx context.Context, ref Reference, path, accept string, into any) error {
+	response, err := c.fetch(ctx, http.MethodGet, ref, path, accept)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	if err := json.NewDecoder(io.LimitReader(response.Body, maxDocument)).Decode(into); err != nil {
+		return fmt.Errorf("%s %s: %w", ref.Repository, path, err)
+	}
+	return nil
+}
+
+// fetch requests /v2/<path>/<rest>, answering one anonymous token challenge, and returns a 200.
+func (c *Client) fetch(ctx context.Context, method string, ref Reference, rest, accept string) (*http.Response, error) {
 	scheme := "https"
 	if c.Insecure[ref.Host] {
 		scheme = "http"
 	}
-	target := fmt.Sprintf("%s://%s/v2/%s/manifests/%s", scheme, ref.Host, ref.Path, url.PathEscape(ref.Tag))
+	target := fmt.Sprintf("%s://%s/v2/%s/%s", scheme, ref.Host, ref.Path, rest)
 	token := ""
 	for attempt := 0; attempt < 2; attempt++ {
-		request, err := http.NewRequestWithContext(ctx, http.MethodHead, target, nil)
+		request, err := http.NewRequestWithContext(ctx, method, target, nil)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		request.Header.Set("Accept", accept)
 		if token != "" {
@@ -82,26 +157,22 @@ func (c *Client) Digest(ctx context.Context, ref Reference) (string, error) {
 		}
 		response, err := c.HTTP.Do(request)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
-		response.Body.Close()
 		switch {
 		case response.StatusCode == http.StatusUnauthorized && token == "":
-			token, err = c.token(ctx, response.Header.Get("WWW-Authenticate"))
-			if err != nil {
-				return "", err
+			response.Body.Close()
+			if token, err = c.token(ctx, response.Header.Get("WWW-Authenticate")); err != nil {
+				return nil, err
 			}
 			continue
 		case response.StatusCode != http.StatusOK:
-			return "", fmt.Errorf("%s:%s: registry answered %s", ref.Repository, ref.Tag, response.Status)
+			response.Body.Close()
+			return nil, fmt.Errorf("%s %s: registry answered %s", ref.Repository, rest, response.Status)
 		}
-		digest := response.Header.Get("Docker-Content-Digest")
-		if !strings.HasPrefix(digest, "sha256:") {
-			return "", fmt.Errorf("%s:%s: registry sent no digest", ref.Repository, ref.Tag)
-		}
-		return digest, nil
+		return response, nil
 	}
-	return "", fmt.Errorf("%s:%s: registry refused an anonymous token", ref.Repository, ref.Tag)
+	return nil, fmt.Errorf("%s %s: registry refused an anonymous token", ref.Repository, rest)
 }
 
 // token answers a Bearer challenge anonymously, which a public repository accepts.

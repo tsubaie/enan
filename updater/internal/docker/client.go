@@ -193,6 +193,16 @@ type Image struct {
 	RepoTags    []string       `json:"RepoTags"`
 	RepoDigests []string       `json:"RepoDigests"`
 	Config      map[string]any `json:"Config"`
+	OS          string         `json:"Os"`
+	Arch        string         `json:"Architecture"`
+}
+
+// Platform is os/architecture, such as linux/amd64, or "" when the daemon did not say.
+func (i Image) Platform() string {
+	if i.OS == "" || i.Arch == "" {
+		return ""
+	}
+	return i.OS + "/" + i.Arch
 }
 
 func (i Image) Labels() map[string]string {
@@ -262,10 +272,16 @@ func (c *Client) InspectImage(ctx context.Context, ref string) (Image, error) {
 
 // Pull fetches repository@digest. The daemon streams progress; an error can arrive in that stream
 // after a 200, so the whole stream is read.
-func (c *Client) Pull(ctx context.Context, repository, digest string) error {
+// Pull downloads repository@digest for platform (os/arch; "" is the daemon's own). An install on
+// an emulated platform, such as linux/amd64 on an ARM Mac, must name it or the pull is refused.
+func (c *Client) Pull(ctx context.Context, repository, digest, platform string) error {
 	ctx, cancel := context.WithTimeout(ctx, longTimeout)
 	defer cancel()
-	response, err := c.do(ctx, http.MethodPost, "/images/create", url.Values{"fromImage": {repository}, "tag": {digest}}, nil)
+	query := url.Values{"fromImage": {repository}, "tag": {digest}}
+	if platform != "" {
+		query.Set("platform", platform)
+	}
+	response, err := c.do(ctx, http.MethodPost, "/images/create", query, nil)
 	if err != nil {
 		return err
 	}

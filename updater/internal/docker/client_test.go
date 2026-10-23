@@ -69,7 +69,7 @@ func TestADMINB56ADaemonThatNeverAnswersTimesOut(t *testing.T) {
 	}
 	for name, call := range map[string]func() error{
 		"inspect": func() error { _, err := client.InspectContainer(context.Background(), "stuck"); return err },
-		"pull":    func() error { return client.Pull(context.Background(), "ghcr.io/x/y", "sha256:z") },
+		"pull":    func() error { return client.Pull(context.Background(), "ghcr.io/x/y", "sha256:z", "linux/amd64") },
 		"exec":    func() error { _, _, err := client.Exec(context.Background(), "app", []string{"true"}); return err },
 	} {
 		started := time.Now()

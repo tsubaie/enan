@@ -12,6 +12,7 @@ import { selectAdminIds } from './repo';
 // ADMIN-B59, ADR 0022: the update kinds. The administration area owns the updater's page, so this
 // module owns its notifications; only administrators can resolve them.
 export const kinds = [
+  'update.available',
   'update.installed',
   'update.failed',
   'update.rollback_failed',
@@ -38,6 +39,17 @@ const named = (image: UpdaterStatus['running']) =>
 // The notification an outcome raises, if any. A check that could not reach the registry is shown
 // on the page but raises nothing: it repeats every interval until the network is back.
 export function eventOf(entry: UpdaterStatus): Event | null {
+  // ADMIN-B67: once per release; the updater records an announcement once, too.
+  if (entry.state === 'available')
+    return {
+      kind: 'update.available',
+      key: `available:${entry.candidate?.digest ?? ''}`,
+      title: named(entry.candidate),
+    };
+  return outcomeEvent(entry);
+}
+
+function outcomeEvent(entry: UpdaterStatus): Event | null {
   const candidate = entry.candidate?.digest ?? '';
   switch (entry.state) {
     case 'updated':

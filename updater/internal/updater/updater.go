@@ -1,5 +1,6 @@
-// Package updater keeps an Enan install on the newest image of its channel: check, pull, back up,
-// switch, verify, and roll the image back when the new one fails (ADR 0051).
+// Package updater keeps an Enan install on the newest image of its channel: check, pull, announce,
+// and, when an administrator asks or allows it, back up, switch, verify, and roll the image back
+// when the new one fails (ADR 0051, ADR 0057).
 package updater
 
 import (
@@ -25,7 +26,7 @@ type Engine interface {
 	ListContainers(ctx context.Context, labels map[string]string) ([]string, error)
 	InspectImage(ctx context.Context, ref string) (docker.Image, error)
 	PlatformManifest(ctx context.Context, ref string) (string, error)
-	Pull(ctx context.Context, repository, digest string) error
+	Pull(ctx context.Context, repository, digest, platform string) error
 	Tag(ctx context.Context, image, repository, tag string) error
 	ImagesOf(ctx context.Context, repository string) ([]string, error)
 	RemoveImage(ctx context.Context, id string) error
@@ -38,9 +39,10 @@ type Engine interface {
 	Logs(ctx context.Context, id string, lines int) (string, error)
 }
 
-// Registry resolves a tag to a digest (registry.Client in production).
+// Registry resolves a tag to a digest and reads an image's labels (registry.Client in production).
 type Registry interface {
 	Digest(ctx context.Context, ref registry.Reference) (string, error)
+	Labels(ctx context.Context, ref registry.Reference, digest, platform string) (map[string]string, error)
 }
 
 // Health is what the app's /api/v1/health says, read by a Prober.
@@ -103,6 +105,7 @@ func (u *Updater) Open() (func(), error) {
 		lock.Close()
 		return nil, fmt.Errorf("another updater holds %s", u.store.path("lock"))
 	}
+	_, missing := os.Stat(u.store.path("state.json"))
 	if err := u.store.read("state.json", &u.state); err != nil {
 		lock.Close()
 		return nil, fmt.Errorf("state.json: %w", err)
@@ -120,13 +123,47 @@ func (u *Updater) Open() (func(), error) {
 	if u.state.Alerted == nil {
 		u.state.Alerted = map[string]bool{}
 	}
+	if u.state.Automatic == nil {
+		// ADMIN-B68, ADR 0057: an updater from before announce mode ran only when started with
+		// `--profile autoupdate`, to install by itself; it keeps doing so, recorded once. A new
+		// install only announces until an administrator turns automatic installing on.
+		automatic := missing == nil
+		u.state.Automatic = &automatic
+		if automatic {
+			u.state.Window = u.Config.LegacyWindow
+		}
+		if err := u.save(); err != nil {
+			lock.Close()
+			return nil, err
+		}
+	}
 	return func() { lock.Close() }, nil
+}
+
+// idle is the state after an update ends: what it was about is dropped, the settings are kept.
+func (u *Updater) idle(lastPrevious *Image) State {
+	return State{Phase: Idle, Paused: u.state.Paused, Automatic: u.state.Automatic, Window: u.state.Window, LastPrevious: lastPrevious, Rejected: u.state.Rejected, Alerted: u.state.Alerted}
+}
+
+func (u *Updater) automatic() bool { return u.state.Automatic != nil && *u.state.Automatic }
+
+// window is the span automatic installs wait for, or nil for any time.
+func (u *Updater) window() *Window {
+	window, err := ParseWindow(u.state.Window, u.Config.Zone)
+	if err != nil {
+		return nil
+	}
+	return window
 }
 
 func (u *Updater) save() error { return u.store.write("state.json", u.state) }
 
 func (u *Updater) publish() {
 	u.status.Paused = u.state.Paused
+	u.status.Automatic, u.status.Window = u.automatic(), u.state.Window
+	if u.Config.Zone != nil {
+		u.status.TimeZone = u.Config.Zone.String()
+	}
 	u.status.IntervalSeconds = int(u.Config.Interval.Seconds())
 	if err := u.store.write("status.json", u.status); err != nil {
 		u.Log.Error("writing status", "error", err)
@@ -195,16 +232,21 @@ func (u *Updater) app(ctx context.Context) (docker.Container, error) {
 	return docker.Container{}, fmt.Errorf("no %q container in compose project %q", u.Config.Service, project)
 }
 
-// describe reads an image's identity from its labels.
+// describe reads a pulled image's identity from its labels.
 func describe(image docker.Image, digest string) *Image {
-	labels := image.Labels()
+	described := fromLabels(image.Labels(), digest)
+	described.ID, described.Platform = image.ID, image.Platform()
+	return described
+}
+
+// fromLabels is an image's identity as its labels give it, before it is pulled (no ID yet).
+func fromLabels(labels map[string]string, digest string) *Image {
 	number := func(key string) int {
 		n, _ := strconv.Atoi(labels[key])
 		return n
 	}
 	return &Image{
 		Digest:   digest,
-		ID:       image.ID,
 		Version:  labels["org.opencontainers.image.version"],
 		Revision: labels["org.opencontainers.image.revision"],
 		Schema:   number("org.enan.schema"),
@@ -238,12 +280,7 @@ func (u *Updater) Check(ctx context.Context) {
 	u.status = Status{Channel: u.status.Channel, Running: u.status.Running, UpdaterUpdate: u.status.UpdaterUpdate, LastCheckAt: u.now(), StartedAt: u.now(), State: Checking}
 	u.publish()
 	u.status.Step = "check"
-	app, err := u.app(ctx)
-	if err != nil {
-		u.fail(ctx, "check", err, "check:"+err.Error())
-		return
-	}
-	ref, err := registry.Parse(app.Ref())
+	app, ref, running, err := u.current(ctx)
 	if err != nil {
 		u.fail(ctx, "check", err, "check:"+err.Error())
 		return
@@ -253,13 +290,6 @@ func (u *Updater) Check(ctx context.Context) {
 		channel.Tag = u.Config.Channel
 	}
 	u.status.Channel = channel.Tag
-	runningImage, err := u.Engine.InspectImage(ctx, app.Image)
-	if err != nil {
-		u.fail(ctx, "check", err, "")
-		return
-	}
-	running := describe(runningImage, digestIn(runningImage, ref.Repository))
-	u.status.Running = running
 	digest, err := u.Registry.Digest(ctx, channel)
 	if err != nil {
 		u.fail(ctx, "check", err, "check:"+err.Error())
@@ -277,46 +307,140 @@ func (u *Updater) Check(ctx context.Context) {
 		u.finish(ctx, Blocked, "rejected:"+digest)
 		return
 	}
-	u.status.Step = "pull"
-	if err := u.Engine.Pull(ctx, ref.Repository, digest); err != nil {
-		u.fail(ctx, "pull", err, "pull:"+digest)
+	if _, ok := u.inspect(ctx, ref, running, digest); !ok {
 		return
+	}
+	// ADMIN-B67: announced, and pulled and installed only when an administrator asks, or allows
+	// it here. A migration the running release cannot read is never installed without Install now.
+	if !u.automatic() || u.status.Confirm || !u.window().Contains(u.now()) {
+		u.status.Step = ""
+		u.finish(ctx, Available, "available:"+digest)
+		return
+	}
+	if candidate, ok := u.pull(ctx, ref, running, digest); ok {
+		u.install(ctx, app, ref, running, candidate)
+	}
+}
+
+// current finds the app container, the reference it runs and the image it runs on.
+func (u *Updater) current(ctx context.Context) (docker.Container, registry.Reference, *Image, error) {
+	app, err := u.app(ctx)
+	if err != nil {
+		return app, registry.Reference{}, nil, err
+	}
+	ref, err := registry.Parse(app.Ref())
+	if err != nil {
+		return app, ref, nil, err
+	}
+	image, err := u.Engine.InspectImage(ctx, app.Image)
+	if err != nil {
+		return app, ref, nil, err
+	}
+	running := describe(image, digestIn(image, ref.Repository))
+	u.status.Running = running
+	return app, ref, running, nil
+}
+
+// inspect reads what digest is from the registry, without downloading it. It reports false when
+// there is nothing to install: it cannot be read, it is the running build, or it cannot read the
+// running database.
+func (u *Updater) inspect(ctx context.Context, ref registry.Reference, running *Image, digest string) (*Image, bool) {
+	labels, err := u.Registry.Labels(ctx, ref, digest, running.Platform)
+	if err != nil {
+		u.fail(ctx, "check", err, "check:"+err.Error())
+		return nil, false
+	}
+	candidate := fromLabels(labels, digest)
+	u.status.Candidate = candidate
+	if candidate.Revision != "" && candidate.Revision == running.Revision && candidate.Version == running.Version {
+		u.same(digest)
+		return nil, false
+	}
+	if !u.readable(ctx, running, candidate, digest) {
+		return nil, false
+	}
+	return candidate, true
+}
+
+// same records that digest is the running build under another digest (re-tagged).
+func (u *Updater) same(digest string) {
+	u.status.Running.Digest = digest
+	u.status.Candidate = nil
+	u.status.Step = ""
+	u.finish(context.Background(), Checked, "")
+}
+
+// pull downloads digest before an install and reads it as the daemon has it.
+func (u *Updater) pull(ctx context.Context, ref registry.Reference, running *Image, digest string) (*Image, bool) {
+	u.status.Step = "pull"
+	if err := u.Engine.Pull(ctx, ref.Repository, digest, running.Platform); err != nil {
+		u.fail(ctx, "pull", err, "pull:"+digest)
+		return nil, false
 	}
 	pulled, err := u.Engine.InspectImage(ctx, ref.Repository+"@"+digest)
 	if err != nil {
 		u.fail(ctx, "pull", err, "pull:"+digest)
-		return
+		return nil, false
 	}
 	candidate := describe(pulled, digest)
 	u.status.Candidate = candidate
 	if candidate.ID == running.ID {
-		// The same image under another digest (re-tagged); nothing to install.
-		u.status.Running.Digest = digest
-		u.status.Step = ""
-		u.finish(ctx, Checked, "")
-		return
+		u.same(digest)
+		return nil, false
 	}
-	if reason := u.guard(running, candidate); reason != "" {
-		u.status.Step = "guard"
-		u.status.Error = reason
-		u.finish(ctx, Blocked, "blocked:"+digest)
-		return
-	}
-	u.install(ctx, app, ref, running, candidate)
+	return candidate, u.readable(ctx, running, candidate, digest)
 }
 
-// guard returns why a candidate must not be installed automatically, or "". The version number
-// is not consulted: its first part is the year (ADR 0056), and only the migrations decide.
-func (u *Updater) guard(running, candidate *Image) string {
-	// An older candidate (a channel moved back, or switched): it must be able to read this database.
+// readable holds back a candidate that cannot read the running database, and marks one the
+// running release cannot go back from as needing confirmation.
+func (u *Updater) readable(ctx context.Context, running, candidate *Image, digest string) bool {
+	// An older candidate (a channel moved back, or switched) must be able to read this database.
 	// Not overridable here; going back across a contract is `enan-updater rollback --force`.
 	if running.Contract > candidate.Schema {
-		return fmt.Sprintf("%s cannot read migration %d of the running %s (ADR 0050); restore a backup taken before it instead", versionOf(candidate), running.Contract, versionOf(running))
+		u.status.Step = "guard"
+		u.status.Error = fmt.Sprintf("%s cannot read migration %d of the running %s (ADR 0050); restore a backup taken before it instead", versionOf(candidate), running.Contract, versionOf(running))
+		u.finish(ctx, Blocked, "blocked:"+digest)
+		return false
 	}
-	if !u.Config.AllowContract && candidate.Contract > running.Schema {
-		return fmt.Sprintf("migration %d of %s cannot be undone by going back to %s (ADR 0050); back up, then set ENAN_ALLOW_CONTRACT=true to install it", candidate.Contract, versionOf(candidate), versionOf(running))
+	// The version number is not consulted: its first part is the year (ADR 0056).
+	u.status.Confirm = candidate.Contract > running.Schema
+	return true
+}
+
+// Install installs exactly digest, the release Admin → Updates announced, not whatever the
+// channel names by now (ADMIN-B67). A release the running one cannot go back from needs confirm.
+func (u *Updater) Install(ctx context.Context, digest string, confirm bool) {
+	if u.state.Paused || u.state.Phase != Idle {
+		u.Log.Warn("install refused: the updater is paused or busy", "digest", digest)
+		return
 	}
-	return ""
+	u.status = Status{Channel: u.status.Channel, Running: u.status.Running, UpdaterUpdate: u.status.UpdaterUpdate, LastCheckAt: u.status.LastCheckAt, StartedAt: u.now(), State: Updating, Step: "check"}
+	u.publish()
+	if !strings.HasPrefix(digest, "sha256:") {
+		u.fail(ctx, "check", fmt.Errorf("%q is not an image digest", digest), "")
+		return
+	}
+	app, ref, running, err := u.current(ctx)
+	if err != nil {
+		u.fail(ctx, "check", err, "")
+		return
+	}
+	// Read before downloading: an unconfirmed contract release is refused without a pull.
+	announced, ok := u.inspect(ctx, ref, running, digest)
+	if !ok {
+		return
+	}
+	if u.status.Confirm && !confirm {
+		u.fail(ctx, "guard", fmt.Errorf("migration %d of %s cannot be undone by going back to %s (ADR 0050); confirm to install it", announced.Contract, versionOf(announced), versionOf(running)), "")
+		return
+	}
+	candidate, ok := u.pull(ctx, ref, running, digest)
+	if !ok {
+		return
+	}
+	// Asked for by name: an image that failed before is tried again.
+	delete(u.state.Rejected, digest)
+	u.install(ctx, app, ref, running, candidate)
 }
 
 func versionOf(image *Image) string {
@@ -492,7 +616,7 @@ func (u *Updater) complete(ctx context.Context) {
 		u.Log.Warn("removing the previous container", "error", err)
 	}
 	target, previous := u.state.Target, u.state.Previous
-	u.state = State{Phase: Idle, Paused: u.state.Paused, LastPrevious: previous, Rejected: u.state.Rejected, Alerted: u.state.Alerted}
+	u.state = u.idle(previous)
 	_ = u.save()
 	u.status.Running, u.status.Candidate = target, nil
 	u.status.Step, u.status.Error = "", ""
@@ -532,7 +656,7 @@ func (u *Updater) recoverFrom(ctx context.Context, cause error) {
 	}
 	u.status.Running = u.state.Previous
 	u.status.Step = step
-	u.state = State{Phase: Idle, Paused: u.state.Paused, LastPrevious: u.state.LastPrevious, Rejected: u.state.Rejected, Alerted: u.state.Alerted}
+	u.state = u.idle(u.state.LastPrevious)
 	_ = u.save()
 	u.finish(ctx, RolledBack, "")
 }
@@ -693,6 +817,12 @@ func (u *Updater) Rollback(ctx context.Context, force bool) {
 type Command struct {
 	Command string `json:"command"`
 	Force   bool   `json:"force,omitempty"`
+	// install: the announced release, and whether a contract migration was confirmed.
+	Digest  string `json:"digest,omitempty"`
+	Confirm bool   `json:"confirm,omitempty"`
+	// settings: automatic installing and its window ("" for any time).
+	Automatic *bool   `json:"automatic,omitempty"`
+	Window    *string `json:"window,omitempty"`
 }
 
 // Commands reads and removes pending commands, oldest first.
@@ -729,6 +859,8 @@ func (u *Updater) Apply(ctx context.Context, command Command) bool {
 		u.state.Paused = command.Command == "pause"
 		_ = u.save()
 		u.publish()
+		// Resumed: check now, so the status stops saying paused an interval early.
+		return !u.state.Paused
 	case "retry":
 		u.state.Rejected = map[string]string{}
 		u.state.Alerted = map[string]bool{}
@@ -736,13 +868,33 @@ func (u *Updater) Apply(ctx context.Context, command Command) bool {
 		return true
 	case "rollback":
 		u.Rollback(ctx, command.Force)
+	case "install":
+		u.Install(ctx, command.Digest, command.Confirm)
+	case "settings":
+		if command.Window != nil {
+			if *command.Window != "" {
+				if _, err := ParseWindow(*command.Window, u.Config.Zone); err != nil {
+					u.Log.Warn("ignoring settings", "error", err)
+					return false
+				}
+			}
+			u.state.Window = *command.Window
+		}
+		if command.Automatic != nil {
+			automatic := *command.Automatic
+			u.state.Automatic = &automatic
+		}
+		_ = u.save()
+		u.publish()
+		// Turned on with a release waiting: install it now rather than an interval later.
+		return u.automatic()
 	default:
 		u.Log.Warn("unknown command", "command", command.Command)
 	}
 	return false
 }
 
-// Run checks every interval inside the window, and acts on commands as they arrive.
+// Run checks every interval, and acts on commands as they arrive.
 func (u *Updater) Run(ctx context.Context) error {
 	u.Recover(ctx)
 	next := u.now()
@@ -751,13 +903,8 @@ func (u *Updater) Run(ctx context.Context) error {
 		for _, command := range u.Commands() {
 			due = u.Apply(ctx, command) || due
 		}
-		if due || !u.now().Before(next) && u.Config.Window.Contains(u.now()) {
+		if due || !u.now().Before(next) {
 			u.Check(ctx)
-			next = u.now().Add(u.Config.Interval)
-		} else if !u.now().Before(next) {
-			// Outside the window: still record that the updater is alive.
-			u.status.LastCheckAt = u.now()
-			u.publish()
 			next = u.now().Add(u.Config.Interval)
 		}
 		select {

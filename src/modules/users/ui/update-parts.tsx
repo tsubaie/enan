@@ -15,14 +15,14 @@ const tone: Record<State, string> = {
   rollback_failed: 'bg-danger-soft text-danger',
   blocked: 'bg-warning-soft text-warning',
   paused: 'bg-surface-raised text-text-muted',
+  available: 'bg-accent-soft text-accent',
 };
 export const releases = defaults.releaseNotes;
 // Commands an operator runs on the server; shown as they are, in every language.
 export const commands = {
-  enable: 'docker compose --profile autoupdate up -d',
+  enable: 'docker compose up -d updater',
   logs: 'docker compose logs updater',
-  replaceUpdater:
-    'docker compose --profile autoupdate pull updater\ndocker compose --profile autoupdate up -d updater',
+  replaceUpdater: 'docker compose pull updater\ndocker compose up -d updater',
 };
 
 export function Panel({
