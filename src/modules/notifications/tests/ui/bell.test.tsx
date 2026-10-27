@@ -29,9 +29,14 @@ const line = (overrides: Partial<Notification> = {}): Notification => ({
   readAt: null,
   ...overrides,
 });
-function serve(items: Notification[], unread = items.filter((item) => !item.readAt).length) {
+function serve(
+  items: Notification[],
+  unread = items.filter((item) => !item.readAt).length,
+  totalCount = items.length,
+) {
   mocks.request.mockImplementation(async (path: string) => {
-    if (path === '/notifications') return { data: { items, unread, nextCursor: null } };
+    if (path === '/notifications?limit=10')
+      return { data: { items, unread, totalCount, nextCursor: null } };
     if (path.endsWith('/read')) return { data: { id: path.split('/')[2] } };
     if (path === '/notifications/read-all') return { data: { marked: unread } };
     throw new Error(`unexpected request ${path}`);
@@ -172,7 +177,7 @@ it('NOTIF-B11 the feed refetches on window focus and every sixty seconds, with n
   serve([]);
   mount(<NotificationBell />);
   await waitFor(() =>
-    expect(mocks.request).toHaveBeenCalledWith('/notifications', expect.anything()),
+    expect(mocks.request).toHaveBeenCalledWith('/notifications?limit=10', expect.anything()),
   );
   type Options = {
     refetchOnWindowFocus?: boolean;
@@ -182,6 +187,49 @@ it('NOTIF-B11 the feed refetches on window focus and every sixty seconds, with n
   const options = vi
     .mocked(useQuery)
     .mock.calls.map(([query]) => query as Options)
-    .find((query) => JSON.stringify(query.queryKey) === JSON.stringify(['notifications', 'list']));
+    .find((query) => query.queryKey?.slice(0, 2).join() === 'notifications,list');
   expect(options).toMatchObject({ refetchOnWindowFocus: true, refetchInterval: 60_000 });
+});
+const tenOf = (count: number) =>
+  Array.from({ length: count }, (_, index) =>
+    line({
+      id: `01a08a9f-1991-760a-b73a-568f6f8665${String(10 + index)}`,
+      title: `Item ${index}`,
+      createdAt: new Date(Date.UTC(2026, 8, 10, 20 - index)).toISOString(),
+      readAt: index % 2 ? null : '2026-09-11T08:00:00.000Z',
+    }),
+  );
+it('NOTIF-B15 the bell previews ten, unread first, newest first within each, and links to the page with the total', async () => {
+  // The server answers the newest ten of eleven; the eleventh is only in the total.
+  serve(tenOf(10), 11, 11);
+  mount(<NotificationBell />);
+  fireEvent.click(await screen.findByRole('button', { name: /Notifications/u }));
+  // The house link-as-button (as in the avatar menu) is an anchor that announces as a button.
+  const link = (
+    await screen.findByText(en.notifications.seeAllCount.replace('{count, number, integer}', '11'))
+  ).closest('a');
+  if (!link) throw new Error('no link');
+  expect(link.getAttribute('href')).toBe('/notifications');
+  const content = popover() as HTMLElement;
+  const titles = [...content.querySelectorAll('[dir="auto"]')].map(
+    (row) => /Item (\d+)/u.exec(row.textContent ?? '')?.[1],
+  );
+  expect(titles).toEqual(['1', '3', '5', '7', '9', '0', '2', '4', '6', '8']);
+  // Fixed height: the preview does not scroll inside itself.
+  expect(content.querySelector('.overflow-y-auto')).toBeNull();
+  fireEvent.click(link);
+  await waitFor(() => expect(popover()).toBeNull());
+});
+it('NOTIF-B15 with ten or fewer the link names no count, and mark all is one write for every row', async () => {
+  serve(tenOf(3));
+  mount(<NotificationBell />, 'ar');
+  fireEvent.click(await screen.findByRole('button', { name: /الإشعارات/u }));
+  expect(
+    (await screen.findByText(ar.notifications.seeAll)).closest('a')?.getAttribute('href'),
+  ).toBe('/notifications');
+  fireEvent.click(screen.getByRole('button', { name: ar.notifications.markAllRead }));
+  await waitFor(() => expect(writes()).toEqual(['/notifications/read-all']));
+  const [, , options] =
+    mocks.request.mock.calls.find(([path]) => path === '/notifications/read-all') ?? [];
+  expect((options as { body?: object }).body).toEqual({});
 });

@@ -247,3 +247,78 @@ test('NOTIF-A05 NOTIF-A06 NOTIF-I04 nothing is written for a person without an a
   expect((await api(other, '/notifications')).body.data.unread).toBe(0);
   await context.close();
 });
+test('NOTIF-A07 NOTIF-B15 NOTIF-B07 eleven notifications show ten in the bell with the count in the link, and mark all clears all eleven', async ({
+  page,
+  browser,
+}) => {
+  await loginAs(page, 'en');
+  const { account, personId } = await provisionMember(page);
+  const batch = crypto.randomUUID();
+  for (let index = 0; index < 11; index++)
+    await assign(page, `Backlog ${index} ${batch}`, personId);
+  const context = await browser.newContext();
+  const other = await context.newPage();
+  await loginWith(other, 'en', account);
+  await unreadBell(other, en, 'other', 11).click();
+  await expect(centre(other).getByRole('button').filter({ hasText: batch })).toHaveCount(10);
+  const link = centre(other).getByText(fill(en.notifications.seeAllCount, { count: 11 }));
+  await expect(link).toBeVisible();
+  await centre(other).getByRole('button', { name: en.notifications.markAllRead }).click();
+  await expect(quietBell(other, en)).toBeVisible();
+  expect((await api(other, '/notifications')).body.data.unread).toBe(0);
+  // The link goes to the page, which holds all eleven, and the bell closes behind it.
+  await link.click();
+  await expect(other).toHaveURL(/\/notifications$/u);
+  await expect(centre(other)).toBeHidden();
+  await expect(other.getByRole('button').filter({ hasText: batch })).toHaveCount(11);
+  await context.close();
+});
+for (const locale of ['en', 'ar']) {
+  const m = locale === 'ar' ? ar : en;
+  test(`NOTIF-A08 NOTIF-B14 NOTIF-B16 NOTIF-B12 the page filters by unread and by kind, kept in the address ${locale}`, async ({
+    page,
+    browser,
+  }) => {
+    await loginAs(page, locale);
+    const { account, personId } = await provisionMember(page);
+    const read = `Already read ${crypto.randomUUID()}`;
+    const fresh = `Still unread ${crypto.randomUUID()}`;
+    await assign(page, read, personId);
+    await assign(page, fresh, personId);
+    const context = await browser.newContext();
+    const other = await context.newPage();
+    await loginWith(other, locale, account);
+    const mine = await api(other, '/notifications');
+    const opened = (mine.body.data.items as { id: string; title: string }[]).find(
+      (item) => item.title === read,
+    );
+    if (!opened) throw new Error('no notification to open');
+    expect((await api(other, `/notifications/${opened.id}/read`, 'POST', {})).status).toBe(200);
+    // Reached from the avatar menu, beside Account.
+    await other.getByRole('button', { name: m.common.account, exact: true }).click();
+    await other.locator('a[href="/notifications"]').click();
+    await expect(other).toHaveURL(/\/notifications$/u);
+    await expect(
+      other.getByRole('heading', { name: m.notifications.title, level: 1 }),
+    ).toBeVisible();
+    const rows = other.getByRole('button').filter({ hasText: /Already read|Still unread/u });
+    await expect(rows).toHaveCount(2);
+    await other.getByRole('button', { name: m.notifications.showUnread, exact: true }).click();
+    await expect(other).toHaveURL(/unread=1/u);
+    await expect(rows).toHaveCount(1);
+    await expect(rows.first()).toContainText(fresh);
+    await other.getByRole('combobox', { name: m.notifications.kindFilter }).click();
+    await other.getByRole('option', { name: m.notifications.kindNotes }).click();
+    await expect(other).toHaveURL(/kind=notes/u);
+    // NOTIF-B12: filtered to Unread and empty, the page says the reader is caught up.
+    await expect(other.getByText(m.notifications.caughtUp, { exact: true })).toBeVisible();
+    await other.reload();
+    await expect(other.getByText(m.notifications.caughtUp, { exact: true })).toBeVisible();
+    await other.getByRole('button', { name: m.notifications.showAll, exact: true }).click();
+    await expect(other.getByText(m.notifications.empty, { exact: true })).toBeVisible();
+    await other.getByRole('combobox', { name: m.notifications.kindFilter }).click();
+    await other.getByRole('option', { name: m.notifications.kindTasks }).click();
+    await expect(rows).toHaveCount(2);
+    await context.close();
+  });
+}

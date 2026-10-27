@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { defineHandler, authenticated } from '@/core/http/handler';
-import { NotificationFeed, FeedQuery } from './schema/validation';
+import { NotificationFeed, FeedQuery, ReadAllInput, kindsOf } from './schema/validation';
 import * as service from './service';
 // NOTIF-I04: the reader is `ctx.user`. No handler here takes a user id, so another reader's feed
 // is unreachable rather than merely forbidden.
@@ -9,7 +9,10 @@ export const feed = defineHandler({
   input: FeedQuery,
   response: NotificationFeed,
   handler: async (input, ctx) => ({
-    data: await service.feed(authenticated(ctx), input.limit ?? 20, input.cursor ?? null),
+    data: await service.feed(authenticated(ctx), input.limit ?? 20, input.cursor ?? null, {
+      unread: input.unread !== undefined,
+      kinds: kindsOf(input.kind),
+    }),
   }),
 });
 export const read = defineHandler({
@@ -23,8 +26,10 @@ export const read = defineHandler({
 });
 export const readAll = defineHandler({
   guard: 'session',
-  input: z.strictObject({}),
+  input: ReadAllInput,
   response: z.object({ data: z.object({ marked: z.number().int() }) }),
   idempotent: true,
-  handler: async (_input, ctx) => ({ data: await service.readAll(authenticated(ctx)) }),
+  handler: async (input, ctx) => ({
+    data: await service.readAll(authenticated(ctx), kindsOf(input.kind)),
+  }),
 });

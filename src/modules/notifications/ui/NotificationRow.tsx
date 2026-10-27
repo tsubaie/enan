@@ -19,7 +19,9 @@ import { useMarkRead } from './queries';
 import type { Notification } from '../schema/validation';
 // NOTIF-B09: opening marks it read and goes to the subject. The line says what happened in a
 // sentence the catalogue owns, so Arabic can order the actor and the record its own way.
-export function NotificationRow({ item, onOpen }: { item: Notification; onOpen: () => void }) {
+// The page passes `showDate` (NOTIF-B16), so a long list says when beside how long ago.
+type RowProps = { item: Notification; onOpen: () => void; showDate?: boolean };
+export function NotificationRow({ item, onOpen, showDate = false }: RowProps) {
   const relative = useRelativeTime();
   const when = useDateTime();
   const read = useMarkRead();
@@ -66,6 +68,7 @@ export function NotificationRow({ item, onOpen }: { item: Notification; onOpen: 
           className="text-xs font-light text-text-muted tabular-nums"
         >
           {relative(item.createdAt)}
+          {showDate && ` · ${when(item.createdAt)}`}
         </time>
       </span>
       {unread && <span aria-hidden className="mt-2 size-2 shrink-0 rounded-full bg-accent" />}

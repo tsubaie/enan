@@ -82,7 +82,9 @@ Indexes: `(user_id, read_at, created_at desc)` for the feed; a unique partial in
   and counted in neither total. It is not deleted: the subject may be restored.
 - NOTIF-B07 **Reading.** Opening the centre does not mark anything read. A notification is marked
   read when the reader opens it, or by "Mark all as read" which marks exactly the rows currently
-  resolvable in the feed. Read is not reversible in v1.
+  resolvable in the feed. In the bell that is every unread row the reader has, not only the ten
+  shown; on the page it is the rows of the kind the page is filtered to. Read is not reversible in
+  v1.
 - NOTIF-B08 **The unread count** is of resolvable unread rows, capped in display at 99+. It is the
   only number the bell shows.
 - NOTIF-B09 **Opening a notification** marks it read and navigates to its subject the way a search
@@ -92,15 +94,33 @@ Indexes: `(user_id, read_at, created_at desc)` for the feed; a unique partial in
 - NOTIF-B11 **Refresh cadence** matches lists (`05`): on window focus and every 60 seconds while
   visible. There is no socket and no push.
 - NOTIF-B12 **Empty state** names the purpose — nothing has arrived — and offers nothing, because
-  there is no action that creates a notification.
+  there is no action that creates a notification: the empty bell has no "See all" link either. On
+  the page, filtered to Unread, it says the reader is caught up instead.
 - NOTIF-B13 Deactivating or deleting a user cascades their rows. Unlinking a person from a user
   stops future notifications and leaves existing ones addressed to that user.
+- NOTIF-B14 **Filters.** The feed takes `unread=1` (or `true`), keeping unread rows only, and
+  `kind=`, either one kind or a group named for the module its kinds belong to: `tasks` (`task.*`),
+  `notes` (`note.*`), `kpis` (`kpi.*`), `ai` (`job.*`), `updates` (`update.*`), or `all`. Every kind
+  belongs to exactly one group. Mark all as read takes the same `kind`.
+- NOTIF-B15 **The bell is a preview.** It lists the newest ten resolvable rows, unread first among
+  those ten and newest first within each, at a fixed height with no inner scroll. Under them a link,
+  "See all notifications", goes to the page and closes the bell; when the feed's `totalCount` is
+  more than are shown it carries the count ("See all · 37"). The touch sheet is the same.
+- NOTIF-B16 **The page** `/notifications` holds the whole feed. It is a destination of the
+  reader's own, reached from the bell's link and from the avatar menu beside Account, not a sidebar
+  module (like `/account`, ACCT-B08). It shows a segmented All / Unread and a kind filter, both
+  kept in the address (`?unread=1&kind=tasks`), asks the server for the newest hundred that match,
+  and shows them twenty at a time with the next row fading beneath (EP-B47). It uses the bell's
+  row, with the absolute date beside the relative time. Its "Mark all as read" is disabled when
+  nothing shown is unread.
 
 ## API
 
-- `GET /api/v1/notifications?cursor=&limit=` → `{ data: { items, unread, nextCursor } }`
+- `GET /api/v1/notifications?cursor=&limit=&unread=&kind=` → `{ data: { items, unread,
+  totalCount, nextCursor } }`. `limit` is 1–100, default 20. `unread` counts every unread row
+  whatever the filter (the badge); `totalCount` counts the resolvable rows matching the filter.
 - `POST /api/v1/notifications/:id/read` → `{ data: { id, readAt } }`
-- `POST /api/v1/notifications/read-all` → `{ data: { marked: number } }`
+- `POST /api/v1/notifications/read-all` with `{ kind? }` → `{ data: { marked: number } }`
 
 Both writes take an `Idempotency-Key` (`04-api-conventions.md`). Invalidation map: either write
 invalidates `["notifications", "list"]` and `["notifications", "unread"]`.
@@ -108,11 +128,13 @@ invalidates `["notifications", "list"]` and `["notifications", "unread"]`.
 ## UI
 
 - A bell in the shell header with an unread badge. The badge is `tabular-nums` and absent at zero.
-- A popover on desktop, a sheet on touch, listing notifications newest first: the subject's title,
+- A popover on desktop, a sheet on touch, previewing the newest ten (NOTIF-B15): the subject's title,
   one line saying what happened, a relative time, and the module's icon. Unread rows carry the
   accent-soft ground the entity framework uses for a selected row; read rows are muted.
 - Header of the popover: the word, the unread count, and "Mark all as read" when there is one.
-- Infinite paging at 20 per page, the framework's own pattern.
+- Footer: "See all notifications", or "See all · N" when there are more than shown (NOTIF-B15).
+- The page `/notifications` (NOTIF-B16): title and "Mark all as read" in the header, All / Unread
+  and the kind filter beneath, then the rows twenty at a time with the framework's Show more.
 - The bell's count uses `count-tick` (EP-B24) so a new arrival replaces the old figure rather than
   redrawing quietly.
 
@@ -134,6 +156,10 @@ invalidates `["notifications", "list"]` and `["notifications", "unread"]`.
   count drops, without the row being deleted. (en)
 - NOTIF-A05 Assigning a task to a person with no user account writes nothing. (en)
 - NOTIF-A06 A member cannot read another member's notifications through the API. (en)
+- NOTIF-A07 With eleven notifications the bell shows ten and the link "See all · 11"; Mark all from
+  the bell clears all eleven. (en)
+- NOTIF-A08 On `/notifications` the Unread filter keeps unread rows only and the kind filter keeps
+  that module's rows; both survive a reload. (en, ar)
 
 ## Required scenarios
 
@@ -147,7 +173,10 @@ invalidates `["notifications", "list"]` and `["notifications", "unread"]`.
 - `tests/api.test.ts`: NOTIF-I04 / A06 cross-reader isolation; idempotent read-all.
 - `src/modules/tasks/tests/notifications.test.ts`: `task.assigned` emitted on assignment and not on
   self-assignment; the scheduled kinds keyed per day.
-- e2e `notifications.spec.ts`: A01, A03, A04 in both locales.
+- `tests/schema.test.ts`, `tests/repo.test.ts`, `tests/api.test.ts`: B14 the groups and filters,
+  B15 `totalCount`.
+- `tests/ui/bell.test.tsx`: B15 the preview and link; `tests/ui/page.test.tsx`: B12, B16.
+- e2e `notifications.spec.ts`: A01, A03, A04 in both locales; A07; A08 in both locales.
 - Mutation targets: `emitNotification`, `resolveRecipients`, `feedPage`.
 
 ## Audit items

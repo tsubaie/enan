@@ -36,6 +36,8 @@ export async function insertNotifications(database: Database, rows: readonly Emi
   return written.length;
 }
 export type FeedRow = Awaited<ReturnType<typeof selectFeed>>[number];
+// NOTIF-B14: the page's filters, both optional. The kinds are the module's; core only matches them.
+export type FeedFilter = { unread?: boolean; kinds?: readonly string[] | null };
 // NOTIF-I04: scoped by the user id from `ctx`, never from a parameter the caller chose.
 // Newest first, ties broken by id: one transaction can emit several rows in the same millisecond,
 // and a cursor on the time alone would skip whichever of them fell past a page boundary.
@@ -44,6 +46,7 @@ export async function selectFeed(
   userId: string,
   limit: number,
   before: { createdAt: Date; id: string } | null,
+  filter: FeedFilter = {},
 ) {
   return database
     .select()
@@ -51,6 +54,8 @@ export async function selectFeed(
     .where(
       and(
         eq(notifications.userId, userId),
+        filter.unread ? isNull(notifications.readAt) : undefined,
+        filter.kinds ? inArray(notifications.kind, [...filter.kinds]) : undefined,
         before
           ? or(
               lt(notifications.createdAt, before.createdAt),
@@ -62,13 +67,11 @@ export async function selectFeed(
     .orderBy(desc(notifications.createdAt), desc(notifications.id))
     .limit(limit);
 }
-// NOTIF-B08: every unread row, so the badge and "mark all as read" can resolve them all; the rows
-// whose subject has gone are left out by the service, which alone can tell.
-export async function selectUnread(database: Database, userId: string) {
-  return database
-    .select()
-    .from(notifications)
-    .where(and(eq(notifications.userId, userId), isNull(notifications.readAt)));
+// NOTIF-B08/B15: every row the reader has, so the badge, the totals and "mark all as read" can
+// resolve them all; the rows whose subject has gone are left out by the service, which alone can
+// tell. Retention (NOTIF-B10) bounds how many there are.
+export async function selectOwn(database: Database, userId: string) {
+  return database.select().from(notifications).where(eq(notifications.userId, userId));
 }
 export async function markRead(database: Database, userId: string, notificationId: string) {
   const [row] = await database

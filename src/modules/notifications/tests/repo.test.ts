@@ -10,7 +10,7 @@ import {
   markManyRead,
   markRead,
   selectFeed,
-  selectUnread,
+  selectOwn,
   type Emission,
 } from '@/core/db/notifications-repo';
 import { harness } from './fixtures';
@@ -32,6 +32,8 @@ const emission = (userId: string, fields: Partial<Emission> = {}): Emission => (
   actorId: null,
   ...fields,
 });
+const unreadOf = async (userId: string) =>
+  (await selectOwn(db(), userId)).filter((row) => !row.readAt).length;
 const rows = (userId: string) =>
   db().select().from(notifications).where(eq(notifications.userId, userId));
 // Moves a row back in time, so ordering and the upsert's refresh can be observed rather than
@@ -72,7 +74,7 @@ it('NOTIF-I02 NOTIF-B03 re-emitting an unread subject refreshes the one row and 
   await markRead(db(), member.id, first.id);
   await insertNotifications(db(), [emission(member.id, { subjectId })]);
   expect(await rows(member.id)).toHaveLength(2);
-  expect((await selectUnread(db(), member.id)).length).toBe(1);
+  expect(await unreadOf(member.id)).toBe(1);
 });
 it('NOTIF-I04 NOTIF-B08 the feed and the count are scoped to the one reader, newest first', async () => {
   const { actor, member } = users();
@@ -87,13 +89,30 @@ it('NOTIF-I04 NOTIF-B08 the feed and the count are scoped to the one reader, new
   expect(page.every((row) => row.userId === member.id)).toBe(true);
   const times = page.map((row) => row.createdAt.getTime());
   expect(times).toEqual([...times].sort((a, b) => b - a));
-  expect((await selectUnread(db(), member.id)).length).toBe(3);
-  expect((await selectUnread(db(), actor.id)).length).toBe(1);
+  expect(await unreadOf(member.id)).toBe(3);
+  expect(await unreadOf(actor.id)).toBe(1);
   // The limit is honoured and a cursor continues strictly before the page's last row.
   const first = await selectFeed(db(), member.id, 2, null);
   expect(first).toHaveLength(2);
   const rest = await selectFeed(db(), member.id, 2, first[1] ?? null);
   expect(rest.map((row) => row.id)).toEqual([page[2]?.id]);
+});
+it('NOTIF-B14 the feed narrows to unread rows and to a set of kinds', async () => {
+  const { member } = users();
+  await insertNotifications(db(), [
+    emission(member.id),
+    emission(member.id, { kind: 'note.mentioned', subjectType: 'notes' }),
+    emission(member.id, { kind: 'kpi.off_target', subjectType: 'kpis' }),
+  ]);
+  const [first] = await rows(member.id);
+  if (!first) throw new Error('no row');
+  await markRead(db(), member.id, first.id);
+  const unread = await selectFeed(db(), member.id, 10, null, { unread: true });
+  expect(unread.map((row) => row.id)).not.toContain(first.id);
+  expect(unread).toHaveLength(2);
+  const notes = await selectFeed(db(), member.id, 10, null, { kinds: ['note.mentioned'] });
+  expect(notes.map((row) => row.kind)).toEqual(['note.mentioned']);
+  expect(await selectOwn(db(), member.id)).toHaveLength(3);
 });
 it('NOTIF-B06 rows created in the same millisecond are never skipped at a page boundary', async () => {
   const { member } = users();
@@ -127,7 +146,7 @@ it('NOTIF-B07 NOTIF-I04 marking read answers only the reader own unread rows', a
   expect(await markManyRead(db(), actor.id, [two.id])).toBe(0);
   expect(await markManyRead(db(), member.id, [one.id, two.id, id()])).toBe(1);
   expect(await markManyRead(db(), member.id, [])).toBe(0);
-  expect((await selectUnread(db(), member.id)).length).toBe(0);
+  expect(await unreadOf(member.id)).toBe(0);
 });
 it('NOTIF-B10 expiry deletes read rows past one window and unread rows past a longer one', async () => {
   const { member } = users();
