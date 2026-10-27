@@ -650,3 +650,30 @@ it('ADMIN-B67 an install the page watched finish says so, with the version and b
     vi.unstubAllGlobals();
   }
 });
+
+it('ADMIN-B70 the update history shows the newest five, the next one faded, and five more a press', async () => {
+  const outcomes = Array.from({ length: 12 }, (_, index) =>
+    status({
+      state: 'failed',
+      candidate: { version: `1.2.${index}`, revision: '9999999aaaaaa' },
+      finishedAt: `2026-09-0${(index % 9) + 1}T08:00:00Z`,
+      error: `failure ${index}`,
+    }),
+  );
+  show('running', status(), outcomes);
+  const { container } = mount(<UpdatesPage />);
+  const listed = () =>
+    within(screen.getByRole('region', { name: en.admin.updateHistory }))
+      .queryAllByText(/^failure \d+$/u)
+      .filter((row) => !row.closest('.show-more-peek'));
+  expect(listed()).toHaveLength(5);
+  // The sixth is drawn faded beneath the list, out of reach (EP-B47).
+  expect(container.querySelector('.show-more-peek')?.textContent).toContain('failure 5');
+  expect(screen.getByText('Showing 5 of 12')).toBeTruthy();
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: en.common.more })));
+  expect(listed()).toHaveLength(10);
+  expect(screen.getByText('Showing 10 of 12')).toBeTruthy();
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: en.common.more })));
+  expect(listed()).toHaveLength(12);
+  expect(screen.queryByRole('button', { name: en.common.more })).toBeNull();
+});
