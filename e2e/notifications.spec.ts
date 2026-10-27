@@ -267,8 +267,7 @@ test('NOTIF-A07 NOTIF-B15 NOTIF-B07 eleven notifications show ten in the bell wi
   await expect(quietBell(other, en)).toBeVisible();
   expect((await api(other, '/notifications')).body.data.unread).toBe(0);
   // The link goes to the page, which holds all eleven, and the bell closes behind it.
-  await quietBell(other, en).click();
-  await centre(other).getByText(en.notifications.seeAll, { exact: true }).click();
+  await link.click();
   await expect(other).toHaveURL(/\/notifications$/u);
   await expect(centre(other)).toBeHidden();
   await expect(other.getByRole('button').filter({ hasText: batch })).toHaveCount(11);
