@@ -2,6 +2,7 @@
 import { useTranslations } from 'next-intl';
 import { CircleAlert } from 'lucide-react';
 import { useDateTime, useRelativeTime } from '@/ui/format';
+import { ShowMore, useShowMore } from '@/ui/layout/ShowMore';
 import { Attention, outcomeTitle, Step, type Status } from './update-queries';
 import { Code, commands, Panel, StateChip, Version } from './update-parts';
 
@@ -69,50 +70,63 @@ export function UpdaterOutdated() {
   );
 }
 
-// ADMIN-B57: the updater's last outcomes, newest first.
+// ADMIN-B57: the updater's last outcomes, newest first; ADMIN-B70: five at a time (EP-B47).
 export function History({ history }: { history: Status[] }) {
   const t = useTranslations('admin');
-  const relative = useRelativeTime();
-  const dateTime = useDateTime();
-  const rows = history
-    // Quiet checks, and an image held back because it failed before: that failure is listed.
-    .filter(
-      (entry) =>
-        entry.state !== 'checked' && !(entry.state === 'blocked' && entry.step === 'check'),
-    )
-    .slice(0, 20);
+  // Quiet checks, and an image held back because it failed before: that failure is listed.
+  const rows = history.filter(
+    (entry) => entry.state !== 'checked' && !(entry.state === 'blocked' && entry.step === 'check'),
+  );
+  const { visible, peek, props } = useShowMore(rows, 5);
   if (!rows.length) return null;
   return (
     <Panel title={t('updateHistory')}>
-      <ul className="-mx-5 -mb-5 divide-y divide-border/70 border-t">
-        {rows.map((entry, index) => (
-          <li
-            key={`${entry.finishedAt ?? ''}-${index}`}
-            className="flex items-start gap-3 px-5 py-3 text-sm"
-          >
-            <span className="grid min-w-0 flex-1 gap-1">
-              <span>
-                <Version image={entry.state === 'updated' ? entry.running : entry.candidate} />
-              </span>
-              {entry.finishedAt && (
-                <time
-                  dateTime={entry.finishedAt}
-                  title={dateTime(entry.finishedAt)}
-                  className="text-xs font-light text-text-muted"
-                >
-                  {relative(entry.finishedAt)}
-                </time>
-              )}
-              {entry.error && (
-                <bdi dir="ltr" className="text-xs break-words text-danger">
-                  {entry.error}
-                </bdi>
-              )}
-            </span>
-            <StateChip state={entry.state} />
-          </li>
-        ))}
-      </ul>
+      <div className="-mx-5 -mb-5 border-t">
+        <ul className="divide-y divide-border/70">
+          {visible.map((entry, index) => (
+            <HistoryRow key={`${entry.finishedAt ?? ''}-${index}`} entry={entry} />
+          ))}
+        </ul>
+        <ShowMore
+          {...props}
+          peek={
+            peek && (
+              <ul className="border-t border-border/70">
+                <HistoryRow entry={peek} />
+              </ul>
+            )
+          }
+        />
+      </div>
     </Panel>
+  );
+}
+
+function HistoryRow({ entry }: { entry: Status }) {
+  const relative = useRelativeTime();
+  const dateTime = useDateTime();
+  return (
+    <li className="flex items-start gap-3 px-5 py-3 text-sm">
+      <span className="grid min-w-0 flex-1 gap-1">
+        <span>
+          <Version image={entry.state === 'updated' ? entry.running : entry.candidate} />
+        </span>
+        {entry.finishedAt && (
+          <time
+            dateTime={entry.finishedAt}
+            title={dateTime(entry.finishedAt)}
+            className="text-xs font-light text-text-muted"
+          >
+            {relative(entry.finishedAt)}
+          </time>
+        )}
+        {entry.error && (
+          <bdi dir="ltr" className="text-xs break-words text-danger">
+            {entry.error}
+          </bdi>
+        )}
+      </span>
+      <StateChip state={entry.state} />
+    </li>
   );
 }
