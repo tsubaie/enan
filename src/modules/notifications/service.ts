@@ -3,9 +3,9 @@ import { transactional } from '@/core/db/transaction';
 import type { Context } from '@/core/auth/session';
 import { AppError } from '@/core/http/errors';
 import { notificationContributors } from '@/core/modules/registry';
-import { selectFeed, selectUnread, markRead, markManyRead } from '@/core/db/notifications-repo';
+import { selectFeed, selectOwn, markRead, markManyRead } from '@/core/db/notifications-repo';
 import { z } from 'zod';
-import type { FeedRow } from '@/core/db/notifications-repo';
+import type { FeedFilter, FeedRow } from '@/core/db/notifications-repo';
 import { NotificationKind, type Notification } from './schema/validation';
 // ADR 0022. Core owns the rows, the read state and the feed; modules own the kinds and turn a
 // subject id back into a title and a link.
@@ -59,24 +59,34 @@ const Cursor = z
   .regex(/^[^_]+_[^_]+$/u)
   .transform((value) => value.split('_'))
   .pipe(z.tuple([z.iso.datetime().transform((at) => new Date(at)), z.uuid()]));
-// NOTIF-B08: the unread rows the reader can see, all of them rather than one page's worth.
-async function visibleUnread(ctx: Context) {
-  const rows = await selectUnread(ctx.db, ctx.user.id);
+// NOTIF-B08/B15: the rows the reader can see, all of them rather than one page's worth.
+async function visible(ctx: Context) {
+  const rows = await selectOwn(ctx.db, ctx.user.id);
   const subjects = await resolveSubjects(ctx, rows);
   return rows.filter((row) => draw(row, subjects));
 }
-export async function feed(ctx: Context, limit: number, cursor: string | null) {
+const matches = (row: FeedRow, filter: FeedFilter) =>
+  (!filter.unread || !row.readAt) && (!filter.kinds || filter.kinds.includes(row.kind));
+export async function feed(
+  ctx: Context,
+  limit: number,
+  cursor: string | null,
+  filter: FeedFilter = {},
+) {
   const parsed = cursor === null ? null : Cursor.safeParse(cursor);
   if (parsed && !parsed.success) throw new AppError('validation_failed');
   const before = parsed?.data ? { createdAt: parsed.data[0], id: parsed.data[1] } : null;
-  const rows = await selectFeed(ctx.db, ctx.user.id, limit + 1, before);
+  const rows = await selectFeed(ctx.db, ctx.user.id, limit + 1, before, filter);
   const page = rows.slice(0, limit);
   const subjects = await resolveSubjects(ctx, page);
   const items = page.flatMap((row) => draw(row, subjects) ?? []);
   const last = page.at(-1);
+  const all = await visible(ctx);
   return {
     items,
-    unread: (await visibleUnread(ctx)).length,
+    // NOTIF-B08: the badge counts every unread row, whatever the page is filtered to.
+    unread: all.filter((row) => !row.readAt).length,
+    totalCount: all.filter((row) => matches(row, filter)).length,
     nextCursor: rows.length > limit && last ? `${last.createdAt.toISOString()}_${last.id}` : null,
   };
 }
@@ -92,9 +102,15 @@ export const readOne = transactional(async function readOne(ctx: Context, notifi
   if (!row) throw new AppError('not_found');
   return { id: row.id, readAt: row.readAt?.toISOString() ?? null };
 });
-// NOTIF-B07: exactly the rows the reader could see, however far down the feed. A notification
-// whose subject has gone is not something they were shown, so "mark all as read" leaves it.
-export const readAll = transactional(async function readAll(ctx: Context) {
-  const unread = (await visibleUnread(ctx)).map((row) => row.id);
+// NOTIF-B07: exactly the rows the reader could see, however far down the feed, narrowed to the
+// kinds the page is filtered to. A notification whose subject has gone is not something they were
+// shown, so "mark all as read" leaves it.
+export const readAll = transactional(async function readAll(
+  ctx: Context,
+  kinds: readonly string[] | null = null,
+) {
+  const unread = (await visible(ctx))
+    .filter((row) => matches(row, { unread: true, kinds }))
+    .map((row) => row.id);
   return { marked: await markManyRead(ctx.db, ctx.user.id, unread) };
 });

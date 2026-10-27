@@ -137,6 +137,8 @@ it('NOTIF-B07 marks read only what the reader could actually see', async () => {
   await harness.task('Visible', { ownerId: person.id });
   const hidden = await harness.task('Hidden', { ownerId: person.id });
   await db().update(tasks).set({ deletedAt: new Date() }).where(eq(tasks.id, hidden.id));
+  // NOTIF-B06/B15: the hidden row is counted in neither total.
+  expect(await feed()).toMatchObject({ unread: 1, totalCount: 1 });
   const result = await run((ctx) => service.readAll(ctx), member);
   expect(result.marked).toBe(1);
   const rows = await db().select().from(notifications);

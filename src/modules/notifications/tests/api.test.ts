@@ -122,11 +122,12 @@ it('NOTIF-A01 NOTIF-B08 the recipient reads one line naming the actor and the ta
         }),
       ],
       unread: 1,
+      totalCount: 1,
       nextCursor: null,
     },
   });
   const theirs = await feedAs(actor);
-  expect(theirs.body).toEqual({ data: { items: [], unread: 0, nextCursor: null } });
+  expect(theirs.body).toEqual({ data: { items: [], unread: 0, totalCount: 0, nextCursor: null } });
 });
 it('NOTIF-A02 NOTIF-B03 reassigning the same task twice leaves one unread line, at the top', async () => {
   const { member } = users();
@@ -175,8 +176,18 @@ it('NOTIF-A05 NOTIF-B04 assigning a task to a person with no account writes noth
   const { actor, member } = users();
   const adviser = await harness.unlinkedPerson('External Adviser');
   await harness.task('Work for someone who cannot sign in', { ownerId: adviser.id });
-  expect((await feedAs(member)).body.data).toEqual({ items: [], unread: 0, nextCursor: null });
-  expect((await feedAs(actor)).body.data).toEqual({ items: [], unread: 0, nextCursor: null });
+  expect((await feedAs(member)).body.data).toEqual({
+    items: [],
+    unread: 0,
+    totalCount: 0,
+    nextCursor: null,
+  });
+  expect((await feedAs(actor)).body.data).toEqual({
+    items: [],
+    unread: 0,
+    totalCount: 0,
+    nextCursor: null,
+  });
   expect(await stored()).toHaveLength(0);
 });
 it('NOTIF-A06 NOTIF-I04 a member can neither list nor mark another member notifications', async () => {
@@ -253,7 +264,7 @@ it('NOTIF-A04 NOTIF-B06 a trashed subject leaves the feed and the count without 
   expect((await feedAs(member)).body.data.unread).toBe(1);
   const { opId } = await harness.run((ctx) => removeTask(ctx, task.id, 1));
   const gone = await feedAs(member);
-  expect(gone.body.data).toEqual({ items: [], unread: 0, nextCursor: null });
+  expect(gone.body.data).toEqual({ items: [], unread: 0, totalCount: 0, nextCursor: null });
   expect(await stored()).toHaveLength(1);
   await harness.run((ctx) => restoreTask(ctx, task.id, opId));
   const back = await feedAs(member);
@@ -281,13 +292,16 @@ it('NOTIF-B08 NOTIF-B07 the feed names the field it refuses and a write without 
   await assigned('Validated');
   const [row] = await stored();
   if (!row) throw new Error('no notification');
-  for (const query of ['?limit=0', '?limit=51', '?limit=abc']) {
+  for (const query of ['?limit=0', '?limit=101', '?limit=abc']) {
     const response = await feedAs(member, query);
     expect(response.status).toBe(400);
     expect(response.body.error.code).toBe('validation_failed');
     expect(Object.keys(response.body.error.details.fieldErrors)).toEqual(['limit']);
   }
   expect((await feedAs(member, '?unknown=1')).status).toBe(400);
+  expect((await feedAs(member, '?kind=committees')).status).toBe(400);
+  expect((await feedAs(member, '?unread=yes')).status).toBe(400);
+  expect((await readAllAs(member, { body: '{"kind":"committees"}' })).status).toBe(400);
   const cursor = await feedAs(member, '?cursor=not-a-time');
   expect(cursor.status).toBe(400);
   expect(cursor.body.error.code).toBe('validation_failed');
@@ -297,4 +311,28 @@ it('NOTIF-B08 NOTIF-B07 the feed names the field it refuses and a write without 
   expect((await readAs(member, row.id, { body: '{"extra":1}' })).status).toBe(400);
   expect((await readAllAs(member, { body: 'not json' })).status).toBe(400);
   expect((await stored())[0]?.readAt).toBeNull();
+});
+it('NOTIF-B14 NOTIF-B15 the feed narrows to unread rows and to a kind group, counting what matches', async () => {
+  const { member } = users();
+  const { person, task: opened } = await assigned('Opened first');
+  await harness.task('Still unread', { ownerId: person.id });
+  const [row] = (await stored()).filter((stored) => stored.subjectId === opened.id);
+  if (!row) throw new Error('no notification');
+  await readAs(member, row.id);
+  const all = await feedAs(member);
+  expect(all.body.data).toMatchObject({ unread: 1, totalCount: 2 });
+  const unread = await feedAs(member, '?unread=1');
+  expect(unread.body.data.items.map((item: { title: string }) => item.title)).toEqual([
+    'Still unread',
+  ]);
+  expect(unread.body.data).toMatchObject({ unread: 1, totalCount: 1 });
+  expect((await feedAs(member, '?kind=tasks')).body.data.totalCount).toBe(2);
+  expect((await feedAs(member, '?kind=task.assigned&unread=true')).body.data.totalCount).toBe(1);
+  const notes = await feedAs(member, '?kind=notes');
+  // The badge still counts every unread row, whatever the page is filtered to (NOTIF-B08).
+  expect(notes.body.data).toMatchObject({ items: [], unread: 1, totalCount: 0 });
+  // NOTIF-B07: mark all on a filtered page marks only that filter's rows.
+  expect((await readAllAs(member, { body: '{"kind":"notes"}' })).body.data.marked).toBe(0);
+  expect((await readAllAs(member, { body: '{"kind":"tasks"}' })).body.data.marked).toBe(1);
+  expect((await feedAs(member)).body.data.unread).toBe(0);
 });

@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { Settings, UserCog } from 'lucide-react';
+import { Bell, Settings, UserCog } from 'lucide-react';
 import { routes } from '@/core/routes';
 import { PopoverContent } from '@/ui/primitives/popover';
 import { Button } from '@/ui/primitives/button';
@@ -20,6 +20,7 @@ export function AccountPanel({
   onDone: () => void;
 }) {
   const t = useTranslations('common');
+  const n = useTranslations('notifications');
   return (
     <PopoverContent align="end" className="w-64 p-1.5">
       <div className="grid gap-0.5 border-b px-2.5 pt-1.5 pb-2.5 text-start">
@@ -39,6 +40,16 @@ export function AccountPanel({
         >
           <UserCog aria-hidden={true} className="size-4" />
           {t('account')}
+        </Button>
+        {/* NOTIF-B16: the full feed is a destination of the reader's own, like the account. */}
+        <Button
+          variant="ghost"
+          className="w-full justify-start gap-2.5 font-normal"
+          nativeButton={false}
+          render={<Link href={routes.notifications()} onClick={onDone} />}
+        >
+          <Bell aria-hidden={true} className="size-4" />
+          {n('title')}
         </Button>
         {user.role === 'admin' && (
           <Button

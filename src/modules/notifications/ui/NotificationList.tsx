@@ -1,6 +1,8 @@
 'use client';
+import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { Bell, CheckCheck } from 'lucide-react';
+import { routes } from '@/core/routes';
 import { useCount } from '@/ui/format';
 import { Button } from '@/ui/primitives/button';
 import { PopoverContent } from '@/ui/primitives/popover';
@@ -8,17 +10,22 @@ import { useMarkAllRead } from './queries';
 import type { Notification } from '../schema/validation';
 import { NotificationRow } from './NotificationRow';
 // The centre itself. NOTIF-B12: the empty state names the purpose and offers nothing, because
-// there is no action a reader can take that creates a notification.
+// there is no action a reader can take that creates a notification. NOTIF-B15: it is a preview of
+// the newest ten, unread first among them, and links to the page for the rest.
 export function NotificationList({
   items,
   unread,
+  total,
   pending,
   onOpen,
+  onClose,
 }: {
   items: Notification[];
   unread: number;
+  total: number;
   pending: boolean;
   onOpen: (href: string) => void;
+  onClose: () => void;
 }) {
   const t = useTranslations('notifications');
   const count = useCount();
@@ -55,12 +62,44 @@ export function NotificationList({
           <p className="text-sm text-text-muted">{pending ? t('loading') : t('empty')}</p>
         </div>
       ) : (
-        <div className="grid max-h-[60dvh] gap-1 overflow-y-auto overscroll-contain p-2">
-          {items.map((item) => (
-            <NotificationRow key={item.id} item={item} onOpen={() => onOpen(item.href)} />
-          ))}
-        </div>
+        <Preview items={items} total={total} onOpen={onOpen} onClose={onClose} />
       )}
     </PopoverContent>
+  );
+}
+function Preview({
+  items,
+  total,
+  onOpen,
+  onClose,
+}: {
+  items: Notification[];
+  total: number;
+  onOpen: (href: string) => void;
+  onClose: () => void;
+}) {
+  const t = useTranslations('notifications');
+  return (
+    <>
+      <div className="grid gap-1 p-2">
+        {/* A stable sort, so the newest-first order holds within the unread and the read. */}
+        {[...items]
+          .sort((a, b) => Number(a.readAt !== null) - Number(b.readAt !== null))
+          .map((item) => (
+            <NotificationRow key={item.id} item={item} onOpen={() => onOpen(item.href)} />
+          ))}
+      </div>
+      <div className="border-t border-border/70 p-1.5">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full font-normal text-accent"
+          nativeButton={false}
+          render={<Link href={routes.notifications()} onClick={onClose} />}
+        >
+          {total > items.length ? t('seeAllCount', { count: total }) : t('seeAll')}
+        </Button>
+      </div>
+    </>
   );
 }

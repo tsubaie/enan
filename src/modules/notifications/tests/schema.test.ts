@@ -1,5 +1,12 @@
 import { expect, it } from 'vitest';
-import { FeedQuery, Notification, NotificationFeed, NotificationKind } from '../schema/validation';
+import {
+  FeedQuery,
+  Notification,
+  NotificationFeed,
+  NotificationGroup,
+  NotificationKind,
+  kindsOf,
+} from '../schema/validation';
 const line = {
   id: '01a08a9f-1991-760a-b73a-568f6f866500',
   kind: 'task.assigned',
@@ -37,9 +44,9 @@ it('NOTIF-B08 the feed query coerces and bounds its page size and refuses unknow
   expect(FeedQuery.parse({ limit: '20' })).toEqual({ limit: 20 });
   expect(FeedQuery.parse({})).toEqual({});
   expect(FeedQuery.safeParse({ limit: '1' }).success).toBe(true);
-  expect(FeedQuery.safeParse({ limit: '50' }).success).toBe(true);
+  expect(FeedQuery.safeParse({ limit: '100' }).success).toBe(true);
   expect(FeedQuery.safeParse({ limit: '0' }).success).toBe(false);
-  expect(FeedQuery.safeParse({ limit: '51' }).success).toBe(false);
+  expect(FeedQuery.safeParse({ limit: '101' }).success).toBe(false);
   expect(FeedQuery.safeParse({ limit: '2.5' }).success).toBe(false);
   expect(FeedQuery.safeParse({ cursor: 'x'.repeat(64) }).success).toBe(true);
   expect(FeedQuery.safeParse({ cursor: 'x'.repeat(65) }).success).toBe(false);
@@ -64,15 +71,38 @@ it('NOTIF-B06 NOTIF-B08 a feed line carries its resolved title and link, a nulla
   expect(Notification.safeParse({ ...line, kind: 'task.commented' }).success).toBe(false);
   expect(Notification.safeParse({ ...line, subjectId: 'not-a-uuid' }).success).toBe(false);
   expect(
-    NotificationFeed.safeParse({ data: { items: [line], unread: 1, nextCursor: null } }).success,
-  ).toBe(true);
-  expect(
     NotificationFeed.safeParse({
-      data: { items: [], unread: 0, nextCursor: '2026-09-10T09:00:00.000Z' },
+      data: { items: [line], unread: 1, totalCount: 1, nextCursor: null },
     }).success,
   ).toBe(true);
   expect(
-    NotificationFeed.safeParse({ data: { items: [], unread: 1.5, nextCursor: null } }).success,
+    NotificationFeed.safeParse({
+      data: { items: [], unread: 0, totalCount: 0, nextCursor: '2026-09-10T09:00:00.000Z' },
+    }).success,
+  ).toBe(true);
+  expect(
+    NotificationFeed.safeParse({
+      data: { items: [], unread: 1.5, totalCount: 0, nextCursor: null },
+    }).success,
   ).toBe(false);
   expect(NotificationFeed.safeParse({ data: { items: [], unread: 0 } }).success).toBe(false);
+  expect(
+    NotificationFeed.safeParse({ data: { items: [], unread: 0, nextCursor: null } }).success,
+  ).toBe(false);
+});
+it('NOTIF-B14 every kind belongs to exactly one group, and a filter is a group or a single kind', () => {
+  const groups = NotificationGroup.options.filter((group) => group !== 'all');
+  const covered = groups.flatMap((group) => kindsOf(group) ?? []);
+  expect([...covered].sort()).toEqual([...NotificationKind.options].sort());
+  expect(kindsOf('all')).toBeNull();
+  expect(kindsOf(undefined)).toBeNull();
+  expect(kindsOf('notes')).toEqual(['note.mentioned']);
+  expect(kindsOf('ai')).toEqual(['job.finished']);
+  expect(kindsOf('task.overdue')).toEqual(['task.overdue']);
+  expect(FeedQuery.parse({ kind: 'updates', unread: '1' })).toEqual({
+    kind: 'updates',
+    unread: '1',
+  });
+  expect(FeedQuery.safeParse({ kind: 'committees' }).success).toBe(false);
+  expect(FeedQuery.safeParse({ unread: '0' }).success).toBe(false);
 });

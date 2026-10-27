@@ -3262,6 +3262,11 @@
                   "null"
                 ]
               },
+              "totalCount": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
               "unread": {
                 "maximum": 9007199254740991,
                 "minimum": -9007199254740991,
@@ -3271,6 +3276,7 @@
             "required": [
               "items",
               "unread",
+              "totalCount",
               "nextCursor"
             ],
             "type": "object"
@@ -8312,7 +8318,41 @@
       "postNotificationsReadAllBody": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
-        "properties": {},
+        "properties": {
+          "kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "all",
+                  "tasks",
+                  "notes",
+                  "kpis",
+                  "ai",
+                  "updates"
+                ],
+                "type": "string"
+              },
+              {
+                "enum": [
+                  "task.assigned",
+                  "task.due_today",
+                  "task.overdue",
+                  "note.mentioned",
+                  "kpi.off_target",
+                  "job.finished",
+                  "update.available",
+                  "update.installed",
+                  "update.failed",
+                  "update.rollback_failed",
+                  "update.blocked",
+                  "update.stalled",
+                  "update.updater_outdated"
+                ],
+                "type": "string"
+              }
+            ]
+          }
+        },
         "type": "object"
       },
       "postNotificationsReadAllResponse": {
@@ -20923,9 +20963,59 @@
             "name": "limit",
             "required": false,
             "schema": {
-              "maximum": 50,
+              "maximum": 100,
               "minimum": 1,
               "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "unread",
+            "required": false,
+            "schema": {
+              "enum": [
+                "1",
+                "true"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "all",
+                    "tasks",
+                    "notes",
+                    "kpis",
+                    "ai",
+                    "updates"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "enum": [
+                    "task.assigned",
+                    "task.due_today",
+                    "task.overdue",
+                    "note.mentioned",
+                    "kpi.off_target",
+                    "job.finished",
+                    "update.available",
+                    "update.installed",
+                    "update.failed",
+                    "update.rollback_failed",
+                    "update.blocked",
+                    "update.stalled",
+                    "update.updater_outdated"
+                  ],
+                  "type": "string"
+                }
+              ]
             }
           }
         ],

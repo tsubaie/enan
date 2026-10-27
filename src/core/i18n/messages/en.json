@@ -1271,7 +1271,20 @@
     "updateBlocked": "Update waiting for you: {title}",
     "updateStalled": "The updater stopped checking: {title}",
     "updateAvailable": "New version available: {title}",
-    "updateUpdaterOutdated": "The updater needs updating ({title})"
+    "updateUpdaterOutdated": "The updater needs updating ({title})",
+    "seeAll": "See all notifications",
+    "seeAllCount": "See all · {count, number, integer}",
+    "caughtUp": "You are caught up.",
+    "show": "Show",
+    "showAll": "All",
+    "showUnread": "Unread",
+    "kindFilter": "Kind",
+    "kindAll": "All kinds",
+    "kindTasks": "Tasks",
+    "kindNotes": "Notes",
+    "kindKpis": "KPIs",
+    "kindAi": "AI",
+    "kindUpdates": "Updates"
   },
   "mail": {
     "testSubject": "Test email from {workspace}",

@@ -52,7 +52,9 @@ export function NotificationBell() {
           <NotificationList
             items={items}
             unread={unread}
+            total={feed.data?.data.totalCount ?? 0}
             pending={feed.isPending}
+            onClose={() => setOpen(false)}
             onOpen={(href) => {
               setOpen(false);
               router.push(href);

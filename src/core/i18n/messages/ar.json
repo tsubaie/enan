@@ -1271,7 +1271,20 @@
     "updateBlocked": "تحديث بانتظار موافقتك: {title}",
     "updateStalled": "توقّفت خدمة التحديث عن الفحص: {title}",
     "updateAvailable": "يتوفر إصدار جديد: {title}",
-    "updateUpdaterOutdated": "خدمة التحديث تحتاج إلى تحديث ({title})"
+    "updateUpdaterOutdated": "خدمة التحديث تحتاج إلى تحديث ({title})",
+    "seeAll": "عرض كل الإشعارات",
+    "seeAllCount": "عرض الكل · {count, number, integer}",
+    "caughtUp": "لا جديد عليك.",
+    "show": "عرض",
+    "showAll": "الكل",
+    "showUnread": "غير المقروءة",
+    "kindFilter": "النوع",
+    "kindAll": "كل الأنواع",
+    "kindTasks": "المهام",
+    "kindNotes": "الملاحظات",
+    "kindKpis": "المؤشرات",
+    "kindAi": "الذكاء الاصطناعي",
+    "kindUpdates": "التحديثات"
   },
   "mail": {
     "testSubject": "رسالة تجريبية من {workspace}",
