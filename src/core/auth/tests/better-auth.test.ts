@@ -9,7 +9,7 @@ import { insertUser, lockWorkspace } from '@/core/db/auth-repo';
 import { saveMailSettings } from '@/core/db/mail-settings-repo';
 import { writeSetting } from '@/core/db/settings-repo';
 import { auditLog, loginAttempts, users } from '@/core/db/system-schema';
-import { authSessions, authVerifications } from '@/core/db/auth-schema';
+import { authAccounts, authSessions, authVerifications } from '@/core/db/auth-schema';
 import { id } from '@/core/db/ids';
 import { env } from '@/core/config/env';
 import { maintenanceFile } from '@/core/backup/maintenance';
@@ -462,4 +462,114 @@ it('ADMIN-B13 during maintenance sign-in answers 503, and answers again once it 
     vi.useRealTimers();
     await maintenanceFile(false);
   }
+});
+
+// The whole Google round trip on the real handler: only Google's token endpoint is stood in for.
+const googleClientId = '1234-test.apps.googleusercontent.com';
+const unsigned = (claims: object) =>
+  [{ alg: 'RS256', typ: 'JWT' }, claims, 'signature']
+    .map((part) =>
+      Buffer.from(typeof part === 'string' ? part : JSON.stringify(part)).toString('base64url'),
+    )
+    .join('.');
+async function googleRoundTrip(email: string, emailVerified = true) {
+  await withTransaction(db(), (database) =>
+    saveGoogle(database, member, {
+      clientId: googleClientId,
+      clientSecret: 'fixture-google-secret',
+    }),
+  );
+  const started = await startGoogle();
+  const state = new URL(((await started.json()) as { url: string }).url).searchParams.get('state');
+  const cookie = started.headers
+    .getSetCookie()
+    .map((line) => line.split(';')[0])
+    .join('; ');
+  const now = Math.floor(Date.now() / 1000);
+  const idToken = unsigned({
+    sub: `google-${email}`,
+    email,
+    email_verified: emailVerified,
+    name: 'From Google',
+    iss: 'https://accounts.google.com',
+    aud: googleClientId,
+    iat: now,
+    exp: now + 3600,
+  });
+  const real = globalThis.fetch;
+  const stub = vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) =>
+    String(input instanceof Request ? input.url : input).startsWith(
+      'https://oauth2.googleapis.com/token',
+    )
+      ? Promise.resolve(
+          Response.json({
+            access_token: 'stub-access',
+            token_type: 'Bearer',
+            expires_in: 3600,
+            id_token: idToken,
+          }),
+        )
+      : real(input, init),
+  );
+  try {
+    const instance = await auth();
+    return await instance.handler(
+      new Request(
+        new URL(`/api/auth/callback/google?state=${state}&code=test-code`, env().APP_URL),
+        {
+          headers: { cookie },
+        },
+      ),
+    );
+  } finally {
+    stub.mockRestore();
+  }
+}
+const googleAccounts = () =>
+  db().select().from(authAccounts).where(eq(authAccounts.providerId, 'google'));
+const signIns = () =>
+  db()
+    .select()
+    .from(auditLog)
+    .where(and(eq(auditLog.entityType, 'session'), eq(auditLog.action, 'sign_in')));
+const sessionCookie = (response: Response) =>
+  /enan\.session_token=[^;]/u.test(response.headers.get('set-cookie') ?? '');
+it('ADMIN-B65 an unknown Google account is refused and creates nothing', async () => {
+  const response = await googleRoundTrip('stranger@example.test');
+  expect(response.headers.get('location')).toContain('/login?error=signup_disabled');
+  expect(sessionCookie(response)).toBe(false);
+  expect(await db().select().from(users)).toHaveLength(1);
+  expect(await googleAccounts()).toHaveLength(0);
+  expect(await signIns()).toHaveLength(0);
+});
+it('ADMIN-B65 ADMIN-B72 a known member is linked on Google’s verified email, signed in and audited; the next sign-in reuses the link', async () => {
+  const first = await googleRoundTrip('member@example.test');
+  expect(new URL(first.headers.get('location') ?? '', env().APP_URL).pathname).toBe('/home');
+  expect(sessionCookie(first)).toBe(true);
+  expect(await googleAccounts()).toMatchObject([{ userId: member, providerId: 'google' }]);
+  expect(
+    (await signIns()).map((row) => [row.actorId, (row.diff as { method: string }).method]),
+  ).toEqual([[member, 'google']]);
+  expect(sessionCookie(await googleRoundTrip('member@example.test'))).toBe(true);
+  expect(await googleAccounts()).toHaveLength(1);
+  expect(await signIns()).toHaveLength(2);
+});
+it('ADMIN-B65 an email Google has not verified is refused, before and after the account is linked', async () => {
+  const response = await googleRoundTrip('member@example.test', false);
+  expect(response.headers.get('location')).toContain('/login?error=EMAIL_NOT_VERIFIED');
+  expect(sessionCookie(response)).toBe(false);
+  expect(await googleAccounts()).toHaveLength(0);
+  expect(sessionCookie(await googleRoundTrip('member@example.test'))).toBe(true);
+  const again = await googleRoundTrip('member@example.test', false);
+  expect(again.headers.get('location')).toContain('/login?error=EMAIL_NOT_VERIFIED');
+  expect(sessionCookie(again)).toBe(false);
+  expect(await signIns()).toHaveLength(1);
+});
+it('ADMIN-B03 a deactivated member is refused by Google too, and no Google account is linked', async () => {
+  await addUser('former@example.test', false);
+  const response = await googleRoundTrip('former@example.test');
+  expect(response.headers.get('location')).toContain('/login?error=INVALID_EMAIL_OR_PASSWORD');
+  expect(sessionCookie(response)).toBe(false);
+  expect(await googleAccounts()).toHaveLength(0);
+  expect(await signIns()).toHaveLength(0);
 });
