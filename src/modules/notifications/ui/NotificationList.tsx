@@ -1,5 +1,7 @@
 'use client';
 import { useTranslations } from 'next-intl';
+import { Bell, CheckCheck } from 'lucide-react';
+import { useCount } from '@/ui/format';
 import { Button } from '@/ui/primitives/button';
 import { PopoverContent } from '@/ui/primitives/popover';
 import { useMarkAllRead } from './queries';
@@ -19,33 +21,46 @@ export function NotificationList({
   onOpen: (href: string) => void;
 }) {
   const t = useTranslations('notifications');
+  const count = useCount();
   const markAll = useMarkAllRead();
   return (
-    <PopoverContent align="end" className="w-[22rem] p-0">
-      <div className="flex items-center justify-between gap-2 border-b px-3 py-2.5">
-        <h2 className="font-medium">{t('title')}</h2>
+    <PopoverContent align="end" className="w-[25rem] p-0">
+      <div className="flex items-center justify-between gap-2 border-b border-border/70 px-3.5 py-2.5">
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm font-semibold">{t('title')}</h2>
+          {unread > 0 && (
+            <span className="rounded-full bg-accent-soft px-2 py-0.5 text-xs font-semibold tabular-nums text-accent">
+              {count(unread)}
+            </span>
+          )}
+        </div>
         {unread > 0 && (
           <Button
             variant="ghost"
             size="sm"
+            className="h-7 gap-1.5 rounded-full px-2.5 text-xs font-normal text-text-muted hover:text-text"
             disabled={markAll.isPending}
             onClick={() => markAll.mutate(undefined)}
           >
+            <CheckCheck className="size-3.5 text-accent" aria-hidden />
             {t('markAllRead')}
           </Button>
         )}
       </div>
-      <div className="max-h-[60dvh] overflow-y-auto overscroll-contain p-1.5">
-        {items.length === 0 ? (
-          <p className="px-2 py-8 text-center text-sm text-text-muted">
-            {pending ? t('loading') : t('empty')}
-          </p>
-        ) : (
-          items.map((item) => (
+      {items.length === 0 ? (
+        <div className="flex flex-col items-center justify-center gap-2 px-4 py-8 text-center">
+          <span className="flex size-9 items-center justify-center rounded-full bg-surface-raised text-text-muted">
+            <Bell className="size-4" aria-hidden />
+          </span>
+          <p className="text-sm text-text-muted">{pending ? t('loading') : t('empty')}</p>
+        </div>
+      ) : (
+        <div className="grid max-h-[60dvh] gap-1 overflow-y-auto overscroll-contain p-2">
+          {items.map((item) => (
             <NotificationRow key={item.id} item={item} onOpen={() => onOpen(item.href)} />
-          ))
-        )}
-      </div>
+          ))}
+        </div>
+      )}
     </PopoverContent>
   );
 }

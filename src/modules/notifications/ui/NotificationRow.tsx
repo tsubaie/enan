@@ -1,40 +1,102 @@
 'use client';
 import { useTranslations } from 'next-intl';
+import {
+  AlarmClock,
+  CircleAlert,
+  CircleCheck,
+  Clock,
+  Download,
+  ListChecks,
+  NotebookPen,
+  Target,
+  WandSparkles,
+  type LucideIcon,
+} from 'lucide-react';
 import { Button } from '@/ui/primitives/button';
 import { cn } from '@/ui/cn';
-import { useDateTime } from '@/ui/format';
+import { useDateTime, useRelativeTime } from '@/ui/format';
 import { useMarkRead } from './queries';
 import type { Notification } from '../schema/validation';
 // NOTIF-B09: opening marks it read and goes to the subject. The line says what happened in a
 // sentence the catalogue owns, so Arabic can order the actor and the record its own way.
 export function NotificationRow({ item, onOpen }: { item: Notification; onOpen: () => void }) {
+  const relative = useRelativeTime();
   const when = useDateTime();
   const read = useMarkRead();
+  const unread = !item.readAt;
+  const [Icon, tone] = badge[item.kind];
   return (
     <Button
       variant="ghost"
       className={cn(
-        'h-auto w-full justify-start gap-2.5 px-2 py-2 text-start font-normal',
-        !item.readAt && 'bg-accent-soft',
+        'h-auto w-full items-start justify-start gap-3 rounded-lg px-2.5 py-2.5 text-start font-normal',
+        unread
+          ? 'bg-accent-soft/75 ring-1 ring-inset ring-accent/20 hover:bg-accent-soft'
+          : 'hover:bg-surface-raised/60',
       )}
       onClick={() => {
-        if (!item.readAt) read.mutate(item.id);
+        if (unread) read.mutate(item.id);
         onOpen();
       }}
     >
-      <span className="grid min-w-0 flex-1 gap-0.5">
+      <span
+        aria-hidden
+        className={cn(
+          'mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full',
+          tone === 'info' ? infoTone(unread) : toneClass[tone],
+        )}
+      >
+        <Icon className="size-4" />
+      </span>
+      <span className="grid min-w-0 flex-1 gap-1">
         {/* The sentence is the notification; truncating it to one line hides which record it is
             about, which is the only thing the reader opened the centre to find out. */}
-        <span className="line-clamp-2 text-sm whitespace-normal" dir="auto">
+        <span
+          className={cn(
+            'line-clamp-2 text-sm leading-snug whitespace-normal',
+            unread ? 'font-medium text-text' : 'font-normal text-text-muted',
+          )}
+          dir="auto"
+        >
           <Sentence item={item} />
         </span>
-        <span className="text-xs text-text-muted" title={item.createdAt}>
-          {when(item.createdAt)}
-        </span>
+        <time
+          dateTime={item.createdAt}
+          title={when(item.createdAt)}
+          className="text-xs font-light text-text-muted tabular-nums"
+        >
+          {relative(item.createdAt)}
+        </time>
       </span>
+      {unread && <span aria-hidden className="mt-2 size-2 shrink-0 rounded-full bg-accent" />}
     </Button>
   );
 }
+// The badge says how urgent a kind is before the sentence is read: what is late or broken is
+// danger, what needs attention today is warning, the rest is activity.
+type Tone = 'danger' | 'warning' | 'success' | 'info';
+const toneClass: Record<Exclude<Tone, 'info'>, string> = {
+  danger: 'bg-danger-soft text-danger',
+  warning: 'bg-warning-soft text-warning',
+  success: 'bg-surface-raised text-success',
+};
+const infoTone = (unread: boolean) =>
+  unread ? 'bg-accent-soft text-accent' : 'bg-surface-raised text-text-muted';
+const badge: Record<Notification['kind'], [LucideIcon, Tone]> = {
+  'task.overdue': [AlarmClock, 'danger'],
+  'update.failed': [CircleAlert, 'danger'],
+  'update.rollback_failed': [CircleAlert, 'danger'],
+  'update.stalled': [CircleAlert, 'danger'],
+  'task.due_today': [Clock, 'warning'],
+  'kpi.off_target': [Target, 'warning'],
+  'update.blocked': [CircleAlert, 'warning'],
+  'update.updater_outdated': [CircleAlert, 'warning'],
+  'update.installed': [CircleCheck, 'success'],
+  'task.assigned': [ListChecks, 'info'],
+  'note.mentioned': [NotebookPen, 'info'],
+  'job.finished': [WandSparkles, 'info'],
+  'update.available': [Download, 'info'],
+};
 // Each kind names its own message key, in the map or the switch below, rather than one built from
 // the kind at runtime. next-intl
 // can check a literal key against the arguments it interpolates and cannot check a computed one,
