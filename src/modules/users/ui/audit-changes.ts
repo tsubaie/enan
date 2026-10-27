@@ -201,7 +201,7 @@ function settingValue(key: z.infer<typeof SettingKey>, raw: Json | undefined, t:
 }
 
 const SignIn = z.object({
-  method: z.enum(['password', 'code', 'google']).catch('password'),
+  method: z.enum(['password', 'code', 'google', 'passkey']).catch('password'),
   email: z.string().catch(''),
   address: z.string().optional(),
 });

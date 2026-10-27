@@ -350,3 +350,58 @@ for (const locale of ['en', 'ar']) {
     }
   });
 }
+// ADMIN-B76 ACCT-B10: a real WebAuthn ceremony against Chromium's virtual authenticator, which
+// answers every prompt as a platform passkey would.
+test('ACCT-B10 ADMIN-B76 a member adds a passkey with their password, signs in with it, and removes it @desktop', async ({
+  page,
+  browser,
+}) => {
+  await loginAs(page, 'en');
+  const before = await api(page, '/admin/sign-in');
+  const chosen = (before.body.data?.chosen ?? []) as string[];
+  const reader = await member(page);
+  const other = await secondBrowser(browser);
+  try {
+    const on = await api(page, '/admin/sign-in', 'PUT', {
+      methods: [...chosen.filter((method) => method !== 'passkey'), 'passkey'],
+    });
+    expect(on.status).toBe(200);
+    const cdp = await other.context.newCDPSession(other.page);
+    await cdp.send('WebAuthn.enable');
+    await cdp.send('WebAuthn.addVirtualAuthenticator', {
+      options: {
+        protocol: 'ctap2',
+        transport: 'internal',
+        hasResidentKey: true,
+        hasUserVerification: true,
+        isUserVerified: true,
+        automaticPresenceSimulation: true,
+      },
+    });
+    expect(await tryLogin(other.page, 'en', reader.email, reader.password)).toBe(true);
+    await other.page.goto('/account');
+    await other.page.getByRole('button', { name: en.account.passkeyAdd, exact: true }).click();
+    const dialog = other.page.getByRole('dialog');
+    await dialog.getByLabel(en.account.passkeyName).fill('Browser test key');
+    await dialog.getByLabel(en.account.currentPassword).fill(reader.password);
+    await dialog.getByRole('button', { name: en.account.passkeyAdd, exact: true }).click();
+    await expect(dialog).toBeHidden();
+    await expect(other.page.getByText('Browser test key')).toBeVisible();
+    // Signed out, the passkey alone signs the member back in.
+    await other.context.clearCookies();
+    await other.page.goto('/login');
+    await other.page.getByRole('button', { name: en.auth.passkeyLink, exact: true }).click();
+    await other.page.waitForURL(/home/, { timeout: 15_000 });
+    await other.page.goto('/account');
+    await other.page.getByRole('button', { name: en.account.passkeyRemove, exact: true }).click();
+    await other.page
+      .getByRole('dialog')
+      .getByRole('button', { name: en.common.confirm, exact: true })
+      .click();
+    await expect(other.page.getByText(en.account.passkeyNone)).toBeVisible();
+  } finally {
+    await other.context.close();
+    await api(page, '/admin/sign-in', 'PUT', { methods: chosen });
+    await deactivate(page, reader.id);
+  }
+});

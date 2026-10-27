@@ -4,7 +4,7 @@ import { MonthlyBudgetMicros } from './ai-controls-schema';
 import { ModelId } from './ai-model-schema';
 import { Locale, defaults } from './defaults';
 import { WallpaperChoice, defaultWallpaper } from './wallpapers';
-import { SignInMethod, SignInMethods } from './sign-in-schema';
+import { SignInMethods } from './sign-in-schema';
 export const Theme = z.enum(['dark', 'light']);
 export const Timezone = z.string().refine((value) => {
   try {
@@ -54,7 +54,8 @@ export const settingsRegistry = {
   'retention.meeting_files_days': entry(z.number().int().min(0).max(3650), 365),
   'retention.backup_count': entry(z.number().int().min(0).max(100), 14),
   // ADMIN-B64: what the login page may offer; only methods the server can serve take effect.
-  'auth.sign_in_methods': entry(SignInMethods, SignInMethod.options),
+  // Passkeys start off: nobody has one until a member registers it (ADMIN-B76).
+  'auth.sign_in_methods': entry(SignInMethods, ['password', 'code', 'google']),
   'ai.model.default': entry(ModelId, defaults.models.default),
   'ai.model.fast': entry(ModelId, defaults.models.fast),
   'ai.enabled_capabilities': entry(z.array(AiCapability), AiCapability.options),

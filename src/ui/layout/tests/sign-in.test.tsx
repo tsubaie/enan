@@ -7,18 +7,19 @@ import { AuthForm } from '../AuthForm';
 import { CodeSignIn } from '../CodeSignIn';
 import { mount } from '../../../../tests/fixtures/mount';
 
-const http = vi.hoisted(() => ({ request: vi.fn(), social: vi.fn() }));
+const http = vi.hoisted(() => ({ request: vi.fn(), social: vi.fn(), passkey: vi.fn() }));
 vi.mock('@/core/http/auth-client', async (original) => ({
   ...(await original<typeof import('@/core/http/auth-client')>()),
   authClient: {
     emailOtp: { sendVerificationOtp: http.request },
-    signIn: { social: http.social, emailOtp: vi.fn(), email: vi.fn() },
+    signIn: { social: http.social, emailOtp: vi.fn(), email: vi.fn(), passkey: http.passkey },
   },
 }));
 vi.mock('../Preferences', () => ({ Preferences: () => null }));
 afterEach(() => {
   http.request.mockReset();
   http.social.mockReset();
+  http.passkey.mockReset();
 });
 
 it('ADMIN-B64 the login page offers the password form and, when on, an emailed code', () => {
@@ -66,4 +67,18 @@ it('ADMIN-B65 Continue with Google hands the browser to Better Auth, and a faile
   expect(screen.getByRole('alert').textContent).toBe(en.auth.googleUnknown);
   mount(<AuthForm mode="login" methods={['password']} />);
   expect(screen.queryByRole('button', { name: en.auth.googleLink })).toBeNull();
+});
+it('ADMIN-B76 the passkey button asks the browser, says nothing when cancelled and says why otherwise', async () => {
+  mount(<AuthForm mode="login" methods={['password']} />);
+  expect(screen.queryByRole('button', { name: en.auth.passkeyLink })).toBeNull();
+  http.passkey.mockResolvedValue({ data: null, error: { code: 'AUTH_CANCELLED', status: 400 } });
+  mount(<AuthForm mode="login" methods={['passkey']} />, 'ar');
+  const button = screen.getByRole('button', { name: ar.auth.passkeyLink });
+  fireEvent.click(button);
+  await waitFor(() => expect(button).toHaveProperty('disabled', false));
+  expect(http.passkey).toHaveBeenCalledTimes(1);
+  expect(screen.queryByRole('alert')).toBeNull();
+  http.passkey.mockResolvedValue({ data: null, error: { code: 'INVALID', status: 401 } });
+  fireEvent.click(button);
+  await waitFor(() => expect(screen.getByRole('alert').textContent).toBe(ar.auth.passkeyFailed));
 });

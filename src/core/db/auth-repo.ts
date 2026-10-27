@@ -2,7 +2,7 @@ import 'server-only';
 import { and, eq, gt, ne, desc, sql, or } from 'drizzle-orm';
 import { db, type Database } from './client';
 import { users, workspace, loginAttempts, recoveryTokens } from './system-schema';
-import { authAccounts, authSessions } from './auth-schema';
+import { authAccounts, authPasskeys, authSessions } from './auth-schema';
 import { id } from './ids';
 
 export async function initialized(database: Database = db()) {
@@ -204,4 +204,19 @@ export async function unlinkGoogle(database: Database, userId: string) {
 export async function userById(database: Database, userId: string) {
   const [row] = await database.select().from(users).where(eq(users.id, userId));
   return row;
+}
+// ACCT-B10: the reader's passkeys, oldest first; the public key and credential id stay here.
+export async function userPasskeys(database: Database, userId: string) {
+  return database
+    .select({
+      id: authPasskeys.id,
+      name: authPasskeys.name,
+      deviceType: authPasskeys.deviceType,
+      backedUp: authPasskeys.backedUp,
+      createdAt: authPasskeys.createdAt,
+      aaguid: authPasskeys.aaguid,
+    })
+    .from(authPasskeys)
+    .where(eq(authPasskeys.userId, userId))
+    .orderBy(authPasskeys.createdAt);
 }

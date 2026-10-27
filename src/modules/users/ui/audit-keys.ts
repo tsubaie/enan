@@ -34,6 +34,8 @@ export const ActionKey = z.enum([
   'update_update_updater',
   'update_settings',
   'purge',
+  'account_passkey_add',
+  'account_passkey_remove',
 ]);
 export const EntityKey = z.enum([
   'task',

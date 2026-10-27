@@ -8,6 +8,7 @@ import { useAccount } from './queries';
 import { AccountIdentity } from './AccountIdentity';
 import { AccountSignIn } from './AccountSignIn';
 import { AccountSessions } from './AccountSessions';
+import { AccountPasskeys } from './AccountPasskeys';
 import { AccountPreferences } from './AccountPreferences';
 // ACCT-B08: one record and no list, so this is a plain settings page rather than an entity page.
 // It takes Administration's section shape so that the reader's own settings and the workspace's
@@ -31,6 +32,11 @@ export function AccountPage() {
       <Section title={t('signIn')}>
         <AccountSignIn account={data} />
       </Section>
+      {(data.signInMethods.includes('passkey') || data.passkeys.length > 0) && (
+        <Section title={t('passkeys')} description={t('passkeysDescription')}>
+          <AccountPasskeys account={data} />
+        </Section>
+      )}
       <Section title={t('sessions')} description={t('sessionsDescription')}>
         <AccountSessions account={data} />
       </Section>

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import en from '@/core/i18n/messages/en.json';
 import ar from '@/core/i18n/messages/ar.json';
 import { ApiError } from '@/core/http/client';
@@ -15,6 +15,8 @@ import { mount } from './harness';
 const state = vi.hoisted(() => ({
   query: {} as { isPending: boolean; error: Error | null; data?: { data: Account } },
   patch: { mutate: vi.fn(), isPending: false, error: null as Error | null },
+  add: { mutate: vi.fn(), reset: vi.fn(), isPending: false, error: null as Error | null },
+  remove: { mutate: vi.fn(), isPending: false, error: null as Error | null },
 }));
 vi.mock('../../ui/queries', () => ({
   useAccount: () => state.query,
@@ -23,9 +25,13 @@ vi.mock('../../ui/queries', () => ({
   useChangePassword: () => mutation(),
   useRevokeSession: () => mutation(),
   useSignOutOthers: () => mutation(),
+  useAddPasskey: () => state.add,
+  useRemovePasskey: () => state.remove,
 }));
 beforeEach(() => {
   state.patch = { mutate: vi.fn(), isPending: false, error: null };
+  state.add = { mutate: vi.fn(), reset: vi.fn(), isPending: false, error: null };
+  state.remove = { mutate: vi.fn(), isPending: false, error: null };
   state.query = { isPending: false, error: null, data: { data: account() } };
 });
 const messages = { en, ar };
@@ -221,4 +227,61 @@ describe('ACCT-B04 ACCT-I03 each preference is a choice between its values and f
     mount(<AccountPreferences account={account()} />);
     expect(screen.getByRole('alert').textContent).toContain('Check the entered values.');
   });
+});
+const passkey = {
+  id: 'pk-1',
+  name: null,
+  deviceType: 'multiDevice',
+  backedUp: true,
+  createdAt: '2026-10-20T09:00:00.000Z',
+  aaguid: null,
+};
+it('ACCT-B10 the passkeys section appears while the method is on or a passkey remains', () => {
+  mount(<AccountPage />);
+  expect(screen.queryByRole('heading', { name: en.account.passkeys })).toBeNull();
+  state.query.data = { data: account({ passkeys: [passkey] }) };
+  mount(<AccountPage />, 'ar');
+  expect(screen.getByRole('heading', { name: ar.account.passkeys })).toBeTruthy();
+  expect(screen.getByText(ar.account.passkeyUnnamed)).toBeTruthy();
+  expect(screen.getByText(ar.account.passkeySynced)).toBeTruthy();
+  // Off for the workspace, a passkey can still be removed but no new one added.
+  expect(screen.queryByRole('button', { name: ar.account.passkeyAdd })).toBeNull();
+});
+it('ACCT-B10 removing a passkey asks first, then removes that one', () => {
+  state.query.data = {
+    data: account({ signInMethods: ['passkey'], passkeys: [{ ...passkey, name: 'Laptop' }] }),
+  };
+  mount(<AccountPage />);
+  expect(screen.getByText('Laptop')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: en.account.passkeyRemove }));
+  expect(state.remove.mutate).not.toHaveBeenCalled();
+  const dialog = within(screen.getByRole('dialog'));
+  expect(dialog.getByText(en.account.passkeyRemoveConfirm)).toBeTruthy();
+  fireEvent.click(dialog.getByRole('button', { name: en.common.confirm }));
+  expect(state.remove.mutate).toHaveBeenCalledWith('pk-1');
+});
+it('ACCT-B10 ADMIN-B76 adding a passkey asks for the current password only while passwords are on', () => {
+  state.query.data = { data: account({ signInMethods: ['password', 'passkey'] }) };
+  mount(<AccountPage />);
+  expect(screen.getByText(en.account.passkeyNone)).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: en.account.passkeyAdd }));
+  const dialog = within(screen.getByRole('dialog'));
+  const submit = dialog.getByRole('button', { name: en.account.passkeyAdd });
+  expect(submit).toHaveProperty('disabled', true);
+  fireEvent.change(dialog.getByLabelText(en.account.passkeyName), { target: { value: ' Laptop ' } });
+  fireEvent.change(dialog.getByLabelText(en.account.currentPassword), {
+    target: { value: 'secret-password' },
+  });
+  fireEvent.click(submit);
+  expect(state.add.mutate.mock.calls[0]?.[0]).toEqual({
+    name: 'Laptop',
+    currentPassword: 'secret-password',
+  });
+  cleanup();
+  state.query.data = { data: account({ signInMethods: ['passkey'] }) };
+  mount(<AccountPage />);
+  fireEvent.click(screen.getByRole('button', { name: en.account.passkeyAdd }));
+  const alone = within(screen.getByRole('dialog'));
+  expect(alone.getByLabelText(en.account.passkeyName)).toBeTruthy();
+  expect(alone.queryByLabelText(en.account.currentPassword)).toBeNull();
 });

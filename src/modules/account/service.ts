@@ -4,7 +4,9 @@ import { currentSessionId, currentUser, type Context } from '@/core/auth/session
 import { db } from '@/core/db/client';
 import { AppError } from '@/core/http/errors';
 import { hashPassword } from '@/core/auth/password';
+import { getAuthenticatorName } from '@better-auth/passkey';
 import { checkCurrentPassword } from '@/core/auth/login';
+import { signInMethods } from '@/core/auth/methods';
 import {
   userById,
   userByEmail,
@@ -14,6 +16,7 @@ import {
   revokeOwnSession,
   setPassword,
   unlinkGoogle,
+  userPasskeys,
 } from '@/core/db/auth-repo';
 import { getSetting, hasSetting, writeSetting, clearSetting } from '@/core/db/settings-repo';
 import { toJson, writeAudit } from '@/core/db/audit-repo';
@@ -48,6 +51,13 @@ export async function getAccount(ctx: Context): Promise<Account> {
     person,
     preferences: await preferences(ctx),
     sessions: await sessions(ctx),
+    signInMethods: (await signInMethods(ctx.db)).enabled,
+    passkeys: (await userPasskeys(ctx.db, ctx.user.id)).map((row) => ({
+      ...row,
+      // Unnamed, a passkey is called by its authenticator ("iCloud Keychain") where that is known.
+      name: row.name || getAuthenticatorName(row.aaguid) || null,
+      createdAt: row.createdAt.toISOString(),
+    })),
   };
 }
 async function preferences(ctx: Context) {

@@ -25,19 +25,27 @@ import { writeAudit } from '@/core/db/audit-repo';
 import { getSetting, hasSetting } from '@/core/db/settings-repo';
 import { codeRequests, recordCodeRequest } from '@/core/db/sign-in-code-repo';
 import { users } from '@/core/db/system-schema';
-import { authAccounts, authSessions, authVerifications } from '@/core/db/auth-schema';
+import {
+  authAccounts,
+  authPasskeys,
+  authSessions,
+  authVerifications,
+} from '@/core/db/auth-schema';
+import { type SignInMethod } from '@/core/config/sign-in-schema';
 import { clientIp } from '@/core/http/client-ip';
 import { AppError } from '@/core/http/errors';
 import { mailUser } from '@/core/mail/send';
 import { googleClient } from './google-settings';
 import { throttle } from './login';
 import { requireMethod } from './methods';
+import { passkeyAfter, passkeyBefore, passkeys } from './passkey-hooks';
 import { hashPassword, verifyPassword } from './password';
 /**
  * ADR 0055: sign-in and sessions are Better Auth's. Enan's own rules ride on its hooks:
  * - ADMIN-B64 a method the workspace has not turned on is refused on the API, not only hidden;
  * - ADMIN-B20 the email and the client address (resolved by `clientIp`, ADR 0013) are throttled as
- *   independent buckets for passwords and codes, and every attempt is recorded;
+ *   independent buckets for passwords and codes, the address alone for passkeys, and every attempt
+ *   is recorded;
  * - ADMIN-B63 code requests are throttled per email and per address, known or not;
  * - a deactivated or deleted account gets no session, whatever the method (ADMIN-B03);
  * - every state-changing call carries `X-Requested-With: Enan` (ADR 0005, ADR 0048).
@@ -73,13 +81,16 @@ async function hashing<T>(work: () => Promise<T>) {
     throw error;
   }
 }
-type Guard = { method: 'password' | 'code' | 'google'; throttle?: 'login' | 'send' };
+// `address`: a passkey names no email, so only the client's address is counted (ADMIN-B76).
+type Guard = { method: SignInMethod; throttle?: 'login' | 'send' | 'address' };
 const guards: Record<string, Guard> = {
   '/sign-in/email': { method: 'password', throttle: 'login' },
   '/sign-in/email-otp': { method: 'code', throttle: 'login' },
   '/email-otp/send-verification-otp': { method: 'code', throttle: 'send' },
   '/sign-in/social': { method: 'google' },
   '/callback/:id': { method: 'google' },
+  '/passkey/generate-authenticate-options': { method: 'passkey' },
+  '/passkey/verify-authentication': { method: 'passkey', throttle: 'address' },
 };
 // Counted and recorded in one write transaction, so a burst of requests cannot all read a count
 // under the limit before any of them is recorded.
@@ -94,6 +105,7 @@ async function sendThrottle(email: string, ip: string | null) {
 const before = createAuthMiddleware(async (ctx) => {
   if (ctx.request?.method === 'POST' && ctx.request.headers.get('x-requested-with') !== 'Enan')
     throw refused('ORIGIN');
+  await passkeyBefore(ctx);
   const guard = guards[ctx.path];
   if (!guard) return;
   // Checked first, so a request for anything but a sign-in code spends none of the send quota.
@@ -105,6 +117,7 @@ const before = createAuthMiddleware(async (ctx) => {
     await requireMethod(db(), guard.method);
     if (guard.throttle === 'login' && email) await throttle(db(), email, ip);
     if (guard.throttle === 'send' && email) await sendThrottle(email, ip);
+    if (guard.throttle === 'address') await throttle(db(), null, ip);
   });
   // Better Auth stores and looks up the address as given, so it is given the canonical one.
   if (email) return { context: { body: { ...ctx.body, email } } };
@@ -134,28 +147,39 @@ const afterwards = createAuthMiddleware(async (ctx) => {
     );
     if (guard) await auditSignIn(queued(), signedIn.user.id, guard.method, signedIn.user.email, ip);
   }
-  if (guard?.throttle !== 'login') return;
+  await passkeyAfter(ctx, returned, queued());
+  if (guard) await recordAttempt(guard, ctx.body, returned, ip, Boolean(signedIn));
+});
+// Checked again, recorded and audited in one write transaction: of attempts that passed the check
+// above together, those finishing after the bucket closed are refused, not a sixth failure.
+async function recordAttempt(
+  guard: Guard,
+  body: unknown,
+  returned: unknown,
+  ip: string | null,
+  succeeded: boolean,
+) {
+  if (guard.throttle !== 'login' && guard.throttle !== 'address') return;
   // A busy hasher's "try again" (429) is not a wrong password, so it fills no bucket.
   if (returned instanceof APIError && returned.statusCode === 429) return;
-  const email = Email.safeParse(ctx.body).data?.email;
-  if (!email) return;
-  // Checked again, recorded and audited in one write transaction: of attempts that passed the check
-  // above together, those finishing after the bucket closed are refused, not a sixth failure.
+  const email = guard.throttle === 'login' ? Email.safeParse(body).data?.email : null;
+  if (email === undefined) return;
+  const method = guard.method;
   await ours(() =>
     withTransaction(db(), async (database) => {
-      if (!signedIn) await throttle(database, email, ip);
-      await recordLogin(database, email, ip, Boolean(signedIn));
-      if (!signedIn) await auditSignIn(database, null, guard.method, email, ip);
+      if (!succeeded) await throttle(database, email, ip);
+      await recordLogin(database, email, ip, succeeded);
+      if (!succeeded) await auditSignIn(database, null, method, email ?? '', ip);
     }),
   );
-});
+}
 // ADMIN-B72: every sign-in, by any method, and every failed password or code attempt reach the
 // audit log, with the email and, behind a trusted proxy, the client address (ADR 0013). A failed
 // attempt names nobody: whoever typed the email is not known to be its owner.
 async function auditSignIn(
   database: Database,
   userId: string | null,
-  method: Guard['method'],
+  method: SignInMethod,
   email: string,
   ip: string | null,
 ) {
@@ -229,6 +253,8 @@ const unused = [
   '/forget-password/email-otp',
   '/email-otp/request-email-change',
   '/email-otp/change-email',
+  '/passkey/list-user-passkeys',
+  '/passkey/update-passkey',
 ];
 
 const userFields = {
@@ -311,6 +337,7 @@ async function build() {
         session: authSessions,
         account: authAccounts,
         verification: authVerifications,
+        passkey: authPasskeys,
       },
     }),
     user: userFields,
@@ -323,7 +350,7 @@ async function build() {
     verification: { storeIdentifier: 'hashed' },
     emailAndPassword: passwords,
     socialProviders: await googleProvider(),
-    plugins: [codes(), nextCookies()],
+    plugins: [codes(), passkeys(config), nextCookies()],
     // ADMIN-B20 replaces Better Auth's own limiter, which keys by address alone; what it would still
     // guard and Enan does not use is switched off instead.
     rateLimit: { enabled: false },

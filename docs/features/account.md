@@ -88,6 +88,7 @@ No new tables. The account is a view over two that exist:
 - ACCT-B08 The page is reachable at `/account` from the avatar menu and nowhere else in the nav; it
   is a destination a reader visits rarely and not a module.
 - ACCT-B09 **The login cookie slides with the session.** An API request made more than a day after the session was last refreshed extends it to 30 days from then and re-issues the cookie (Better Auth, ADR 0055). Page renders read the session without extending it, because a server-rendered page cannot set cookies; the API requests every page makes do the extending.
+- ACCT-B10 **Passkeys.** While the workspace offers passkeys (ADMIN-B76), or while the reader still has one, the page has a Passkeys section listing each with its name (or, unnamed, its authenticator's, else "Passkey"), when it was added, and "Synced" when it is backed up to the reader's other devices. **Add a passkey** (only while the method is on) opens a dialog with an optional name and, while password sign-in is on, the current password; the browser then creates the passkey. **Remove** asks for confirmation first. `GET /account` carries the workspace's enabled `signInMethods` and the reader's `passkeys` (id, name, device type, backed up, added, AAGUID), never the key itself.
 
 ## API
 

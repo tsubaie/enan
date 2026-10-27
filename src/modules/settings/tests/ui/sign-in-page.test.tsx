@@ -17,7 +17,7 @@ const box = (name: string) => screen.getByRole('checkbox', { name });
 it('ADMIN-B64 a method the server cannot serve says what it needs and cannot be chosen', () => {
   show({
     chosen: ['password', 'code', 'google'],
-    available: { password: true, code: false, google: false },
+    available: { password: true, code: false, google: false, passkey: true },
     enabled: ['password'],
   });
   expect(box(en.admin.signInMethod_code).getAttribute('aria-disabled')).toBe('true');
@@ -33,7 +33,7 @@ it('ADMIN-B64 with two methods on either can be switched off', () => {
   show(
     {
       chosen: ['password', 'code'],
-      available: { password: true, code: true, google: false },
+      available: { password: true, code: true, google: false, passkey: true },
       enabled: ['password', 'code'],
     },
     'ar',
@@ -55,7 +55,7 @@ function showGoogle(google: object, locale: 'en' | 'ar' = 'en') {
   client.setQueryData(['admin', 'sign-in'], {
     data: {
       chosen: ['password', 'code', 'google'],
-      available: { password: true, code: false, google: true },
+      available: { password: true, code: false, google: true, passkey: true },
       enabled: ['password', 'google'],
     },
   });
@@ -146,4 +146,15 @@ it('ADMIN-B65 the saved summary reads in Arabic', () => {
   expect(screen.getByText(ar.admin.googleSaved)).toBeTruthy();
   expect(screen.getByRole('button', { name: ar.common.edit })).toBeTruthy();
   expect(screen.getByRole('button', { name: ar.admin.googleRemove })).toBeTruthy();
+});
+it('ADMIN-B76 passkeys are offered on the Sign-in page and say what they are', () => {
+  show({
+    chosen: ['password', 'code', 'google'],
+    available: { password: true, code: true, google: true, passkey: true },
+    enabled: ['password', 'code', 'google'],
+  });
+  const passkey = box(en.admin.signInMethod_passkey);
+  expect(passkey.getAttribute('aria-checked')).toBe('false');
+  expect(passkey.getAttribute('aria-disabled')).toBeNull();
+  expect(screen.getByText(en.admin.signInMethodHelp_passkey)).toBeTruthy();
 });

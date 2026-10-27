@@ -35,6 +35,8 @@ export const account = (overrides: Partial<Account> = {}): Account => ({
   person,
   preferences: { locale: 'en', timezone: 'UTC', theme: 'dark', numerals: 'western', explicit: [] },
   sessions: [current, other],
+  signInMethods: ['password'],
+  passkeys: [],
   ...overrides,
 });
 export function mutation() {

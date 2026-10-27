@@ -58,7 +58,7 @@ One decision per file. Format: **Status**, **Context**, **Decision**, **Conseque
 | 0052 | The push deploy is removed; the maintainer's install updates itself | accepted |
 | 0053 | Email and new sign-in methods extend the own auth; their credentials are sealed in the database | accepted; extending the own auth superseded by 0055 |
 | 0054 | Slow work happens before the write lock | accepted |
-| 0055 | Better Auth replaces the own auth | accepted |
+| 0055 | Better Auth replaces the own auth | accepted, extended by 0064 |
 | 0056 | Calendar versions, published by a workflow | accepted |
 | 0057 | Updates are announced by default and installed when an administrator chooses | accepted |
 | 0058 | Releases add linux/arm64 images, built at release time | accepted |
@@ -67,5 +67,6 @@ One decision per file. Format: **Status**, **Context**, **Decision**, **Conseque
 | 0061 | Lists show more on request, and the audit log reads as a diff | accepted |
 | 0062 | The updater replaces itself through a helper | accepted; its separate action on the page superseded by 0063 |
 | 0063 | One Install now for the updater and the app | accepted |
+| 0064 | Passkeys through Better Auth | accepted |
 
 Open decisions awaiting an ADR: license (see roadmap); chart library confirmation (`recharts`).
