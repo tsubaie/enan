@@ -8,6 +8,7 @@ import { createTask } from '@/modules/tasks';
 import { TaskCreate } from '@/modules/tasks/schema/validation';
 import { fixtureModel, finishedJob } from '../../../../tests/fixtures/ai/jobs';
 import refinement from '../../../../tests/fixtures/ai/notes.refine.v1.en.json';
+import suggestedTags from '../../../../tests/fixtures/ai/notes.tags.v1.en.json';
 import { harness, actorId } from './fixtures';
 import { startNoteAi } from '../ai/service';
 import { refinePrompt } from '../ai/prompts/select';
@@ -179,6 +180,60 @@ it('NOTES-B08 NOTES-B18 applying suggestions keeps a participant mentioned by di
   );
   const updated = await harness.run((ctx) => getNote(ctx, note.id));
   expect(updated.participants.map((row) => row.id)).toEqual([sam.id]);
+});
+it('NOTES-B08 NOTES-B18 applying tags alone leaves the body and the participants picked by hand', async () => {
+  for (const [capability, output] of [
+    ['notes.suggest_tags', suggestedTags],
+    ['notes.refine', refinement],
+  ] as const) {
+    const pat = await harness.person(`Pat ${capability}`);
+    const note = await harness.note('Plan', {
+      content: 'Review the draft.',
+      participantIds: [pat.id],
+    });
+    const job = await finishedJob(db(), actorId(), capability, note.id, note.revision, output);
+    await harness.run((ctx) =>
+      applyNoteAi(
+        ctx,
+        note.id,
+        { jobId: job.id, acceptContent: false, taskIndexes: [], tagIndexes: [0], taskTitles: [] },
+        capability,
+        vi.fn(),
+      ),
+    );
+    const updated = await harness.run((ctx) => getNote(ctx, note.id));
+    expect(updated.content).toBe('Review the draft.');
+    expect(updated.tags).toEqual(['planning']);
+    expect(updated.participants.map((row) => row.id)).toEqual([pat.id]);
+  }
+});
+it('NOTES-B08 NOTES-B18 accepted content adds who it mentions and keeps participants it does not', async () => {
+  const alex = await harness.person('Alex');
+  const pat = await harness.person('Pat');
+  const note = await harness.note('Plan', {
+    content: 'Review the draft.',
+    participantIds: [pat.id],
+  });
+  const job = await finishedJob(
+    db(),
+    actorId(),
+    'notes.refine',
+    note.id,
+    note.revision,
+    refinement,
+  );
+  await harness.run((ctx) =>
+    applyNoteAi(
+      ctx,
+      note.id,
+      { jobId: job.id, acceptContent: true, taskIndexes: [], tagIndexes: [], taskTitles: [] },
+      'notes.refine',
+      vi.fn(),
+    ),
+  );
+  const updated = await harness.run((ctx) => getNote(ctx, note.id));
+  expect(updated.content).toBe(refinement.refined_content);
+  expect(updated.participants.map((row) => row.id).sort()).toEqual([alex.id, pat.id].sort());
 });
 it('NOTES-B26 refine jobs are admitted with prompt v3, which keeps checklist markers out of refined content, and older versions stay executable', async () => {
   const note = await harness.note('Plan', { content: 'Review the draft.' });

@@ -1,9 +1,13 @@
 import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
 import { db, closeDatabase } from '@/core/db/client';
+import { id } from '@/core/db/ids';
 import { migrateDatabase } from '@/core/db/migrate';
 import { countQueries } from '@/core/db/query-log';
 import { addDays } from '@/core/time/days';
 import { KpiListQuery } from '../schema/validation';
+import { kpis } from '../schema/db';
+import { homeSummary } from '../home';
 import * as repo from '../repo';
 import * as service from '../service';
 import { harness, workspaceToday } from './fixtures';
@@ -40,6 +44,37 @@ it('KPIS-B07 the candidate select carries deleted rows so every view counts from
   const rows = await repo.selectKpis(db(), empty, window(today));
   expect(rows).toHaveLength(2);
   expect(rows.filter((row) => row.deletedAt)).toHaveLength(1);
+});
+it('KPIS-B07 a full trash that sorts first never crowds a live KPI out of the list or Home', async () => {
+  const today = await workspaceToday();
+  const live = await harness.kpi('Zulu');
+  // Stale, so Home lists it among the KPIs that need attention.
+  await harness.reading(live.id, addDays(today, -400), 1);
+  const [row] = await db().select().from(kpis).where(eq(kpis.id, live.id));
+  if (!row) throw new Error('the KPI was not created');
+  await db()
+    .insert(kpis)
+    .values(
+      Array.from({ length: repo.CANDIDATE_LIMIT }, (_, index) => ({
+        ...row,
+        id: id(),
+        name: `Alpha ${index}`,
+        deletedAt: new Date(),
+      })),
+    );
+  const candidates = await countQueries(() => repo.selectKpis(db(), empty, window(today)));
+  expect(candidates.queries).toBe(1);
+  expect(candidates.result.filter((item) => !item.deletedAt).map((item) => item.id)).toEqual([
+    live.id,
+  ]);
+  const listed = await countQueries(() =>
+    harness.run((ctx) => service.listKpis(ctx, KpiListQuery.parse({ view: 'all' }))),
+  );
+  expect(listed.queries).toBe(3);
+  expect(listed.result.data.map((item) => item.id)).toEqual([live.id]);
+  expect(listed.result.meta.counts.trash).toBe(repo.CANDIDATE_LIMIT);
+  const [home] = await harness.run((ctx) => homeSummary(ctx, today));
+  expect(home?.items.map((item) => item.id)).toEqual([live.id]);
 });
 it('KPIS-B05 the candidate select reads the current, previous and sparkline values as numbers', async () => {
   const today = await workspaceToday();

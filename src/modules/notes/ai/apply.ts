@@ -41,7 +41,7 @@ export const applyNoteAi = transactional(async function applyNoteAi(
   const { refined, chosenTags, chosenTasks } = choices(result.output, capability, input);
   const people = await peopleForAi(ctx);
   const content =
-    input.acceptContent && refined ? (input.content ?? refined.refined_content) : note.content;
+    input.acceptContent && refined ? (input.content ?? refined.refined_content) : null;
   const mergedTags = [...note.tags, ...chosenTags].filter(
     (tag, index, all) =>
       all.findIndex((other) => other.toLowerCase() === tag.toLowerCase()) === index,
@@ -51,12 +51,23 @@ export const applyNoteAi = transactional(async function applyNoteAi(
   for (const task of chosenTasks) {
     ids.push(await createTask(ctx, task, ownerFor(task.owner_name, people)));
   }
+  // Only accepted content touches the body and the participants; tags alone leave both as they are.
   await patchNote(ctx, noteId, {
     revision: note.revision,
-    content,
     tags: Tags.parse(mergedTags),
-    // NOTES-B08: the directory plus the note's own participants, who may be mentioned by display name.
-    participantIds: [...new Set(derivedParticipants(content, [...people, ...note.participants]))],
+    ...(content === null
+      ? {}
+      : {
+          content,
+          // NOTES-B08: everyone already on the note stays; anyone the new text mentions is added,
+          // from the directory or by the display name a participant has on this note.
+          participantIds: [
+            ...new Set([
+              ...note.participants.map((person) => person.id),
+              ...derivedParticipants(content, [...people, ...note.participants]),
+            ]),
+          ],
+        }),
   });
   await applied(ctx, input.jobId, result, ids);
   if (refined) await reviewRefinement(ctx.db, input.jobId, 'applied', ctx.user.id, ids);
