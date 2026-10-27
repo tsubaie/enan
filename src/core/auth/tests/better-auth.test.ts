@@ -374,3 +374,62 @@ it('ADMIN-B72 an attempt the lockout refuses is not one more failed sign-in', as
     .where(and(eq(auditLog.entityType, 'session'), eq(auditLog.action, 'sign_in_failed')));
   expect(failed).toHaveLength(5);
 });
+const failedSignIns = () =>
+  db()
+    .select()
+    .from(auditLog)
+    .where(and(eq(auditLog.entityType, 'session'), eq(auditLog.action, 'sign_in_failed')));
+it('ADMIN-B63 a burst of code requests sends no more than the limit', async () => {
+  await mailReady();
+  const replies = await Promise.all(
+    Array.from({ length: 10 }, () =>
+      call('/email-otp/send-verification-otp', { email: 'member@example.test', type: 'sign-in' }),
+    ),
+  );
+  expect(replies.map((reply) => reply.status).sort()).toEqual([
+    ...Array<number>(3).fill(200),
+    ...Array<number>(7).fill(429),
+  ]);
+});
+it('ADMIN-B20 ADMIN-B72 a burst of wrong codes is cut off at five failures', async () => {
+  await mailReady();
+  await call('/email-otp/send-verification-otp', { email: 'member@example.test', type: 'sign-in' });
+  const replies = await Promise.all(
+    Array.from({ length: 10 }, () =>
+      call('/sign-in/email-otp', { email: 'member@example.test', otp: '000000' }),
+    ),
+  );
+  expect(replies.filter((reply) => reply.status === 429)).toHaveLength(5);
+  expect(await failedSignIns()).toHaveLength(5);
+  expect(
+    await db().select().from(loginAttempts).where(eq(loginAttempts.succeeded, false)),
+  ).toHaveLength(5);
+});
+it('ADMIN-B20 ADMIN-B72 wrong passwords checked together record no failure past the fifth', async () => {
+  for (let attempt = 0; attempt < 4; attempt++) await signIn('member@example.test', 'wrong');
+  // Both pass the check while four are recorded; the hasher admits two at a time (ADMIN-B21).
+  const replies = await Promise.all([1, 2].map(() => signIn('member@example.test', 'wrong')));
+  // The one finishing second is refused in the reply's body; its status stays the endpoint's.
+  const codes = await Promise.all(
+    replies.map(async (reply) => ((await reply.json()) as { code: string }).code),
+  );
+  expect(codes.sort()).toEqual(['INVALID_EMAIL_OR_PASSWORD', 'RATE_LIMITED']);
+  expect(await failedSignIns()).toHaveLength(5);
+});
+it('ADMIN-B63 an address typed in another case or with spaces gets and uses the same code', async () => {
+  await mailReady();
+  expect(
+    (
+      await call('/email-otp/send-verification-otp', {
+        email: 'Member@Example.test',
+        type: 'sign-in',
+      })
+    ).status,
+  ).toBe(200);
+  await Promise.all(io.later);
+  expect(io.sent.map((mail) => mail.to)).toEqual(['member@example.test']);
+  const code = /\b(\d{6})\b/u.exec(io.sent[0]?.text ?? '')?.[1] ?? '';
+  expect(
+    (await call('/sign-in/email-otp', { email: ' MEMBER@example.test ', otp: code })).status,
+  ).toBe(200);
+});

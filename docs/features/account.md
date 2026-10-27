@@ -54,6 +54,8 @@ No new tables. The account is a view over two that exist:
   error on `email`. Changing the email requires the current password, because the email is half
   of the sign-in credentials; a wrong one fails with a field error on `current` and changes
   nothing. Changing an email does not re-verify it: no verification mail is sent.
+  A changed email unlinks Google sign-in: the Google account linked to the old address no longer
+  signs in to this one until it is linked again.
 - ACCT-B02 **Password.** Changing it requires the current password, and the new one is validated by
   the same `Password` schema registration uses. On success every **other** session is revoked and
   the current one is kept, and `password_changed_at` is set. A reader changing their password

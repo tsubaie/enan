@@ -19,7 +19,7 @@ import { type SignInMethod } from '@/core/config/sign-in-schema';
 import { Field } from './Field';
 import { ErrorPanel } from './ErrorPanel';
 const Form = z.object({
-  email: z.email(),
+  email: z.string().trim().toLowerCase().pipe(z.email()),
   password: z.string().min(1).max(256),
   name: z.string(),
   workspaceName: z.string(),
@@ -60,9 +60,8 @@ function useAuthState(mode: Mode) {
   // ADR 0055: signing in is Better Auth's. Setup makes the administrator first, then signs in the
   // same way; recovery sets a password and sends the reader to sign in with it.
   const signIn = (values: FormValues) =>
-    authCall(
-      authClient.signIn.email({ email: values.email, password: values.password }),
-      (code) => word(code),
+    authCall(authClient.signIn.email({ email: values.email, password: values.password }), (code) =>
+      word(code),
     );
   const mutation = useMutation({
     mutationFn: async (values: FormValues) => {
@@ -204,6 +203,8 @@ function CredentialFields({ state }: { state: AuthState }) {
           <Input
             type="email"
             autoComplete="username"
+            autoCapitalize="none"
+            autoCorrect="off"
             required
             {...control}
             {...state.form.register('email')}

@@ -8,7 +8,14 @@ import { emailOTP } from 'better-auth/plugins';
 import { z } from 'zod';
 import { env, secureCookies } from '@/core/config/env';
 import { logger } from '@/core/config/logger';
-import { databaseFor, db, pool, queuedWrites } from '@/core/db/client';
+import {
+  databaseFor,
+  db,
+  pool,
+  queuedWrites,
+  withTransaction,
+  type Database,
+} from '@/core/db/client';
 // ADR 0029: Better Auth writes through its own queries, so its writes take their turn in the
 // write queue; its reads, the password check and calls to Google never hold it.
 const queued = () => databaseFor(queuedWrites(pool()));
@@ -42,10 +49,7 @@ const sendsPerAddress = 10;
 // An attempt that does not send a real email is refused by Better Auth and recorded nowhere: what
 // a stranger types is kept only when it is one, as long as an account email may be (ADMIN-B72).
 const Email = z.object({
-  email: z
-    .email()
-    .max(320)
-    .transform((value) => value.toLowerCase()),
+  email: z.string().trim().toLowerCase().pipe(z.email().max(320)),
 });
 const refused = (code: string) => new APIError('FORBIDDEN', { code, message: code });
 // Enan's errors become Better Auth's, so its client reads one shape.
@@ -77,11 +81,15 @@ const guards: Record<string, Guard> = {
   '/sign-in/social': { method: 'google' },
   '/callback/:id': { method: 'google' },
 };
+// Counted and recorded in one write transaction, so a burst of requests cannot all read a count
+// under the limit before any of them is recorded.
 async function sendThrottle(email: string, ip: string | null) {
-  const sent = await codeRequests(db(), email, ip);
-  if (sent.byEmail >= sendsPerEmail || sent.byAddress >= sendsPerAddress)
-    throw new AppError('rate_limited', { scope: 'sign_in_code', retryAfterSeconds: 900 });
-  await recordCodeRequest(queued(), email, ip);
+  await withTransaction(db(), async (database) => {
+    const sent = await codeRequests(database, email, ip);
+    if (sent.byEmail >= sendsPerEmail || sent.byAddress >= sendsPerAddress)
+      throw new AppError('rate_limited', { scope: 'sign_in_code', retryAfterSeconds: 900 });
+    await recordCodeRequest(database, email, ip);
+  });
 }
 const before = createAuthMiddleware(async (ctx) => {
   if (ctx.request?.method === 'POST' && ctx.request.headers.get('x-requested-with') !== 'Enan')
@@ -98,6 +106,8 @@ const before = createAuthMiddleware(async (ctx) => {
     if (guard.throttle === 'login' && email) await throttle(db(), email, ip);
     if (guard.throttle === 'send' && email) await sendThrottle(email, ip);
   });
+  // Better Auth stores and looks up the address as given, so it is given the canonical one.
+  if (email) return { context: { body: { ...ctx.body, email } } };
 });
 // ACCT-B04: a language the reader chose follows them to the browser they sign in on, over whatever
 // cookie it kept. Without a choice, the cookie (perhaps set on the sign-in page) stands.
@@ -114,26 +124,34 @@ const afterwards = createAuthMiddleware(async (ctx) => {
     await rememberLocale(signedIn.user.id, (name, value) =>
       ctx.setCookie(name, value, { path: '/', sameSite: 'lax', maxAge: 31536000 }),
     );
-    if (guard) await auditSignIn(signedIn.user.id, guard.method, signedIn.user.email, ip);
+    if (guard) await auditSignIn(queued(), signedIn.user.id, guard.method, signedIn.user.email, ip);
   }
   if (guard?.throttle !== 'login') return;
   // A busy hasher's "try again" (429) is not a wrong password, so it fills no bucket.
   if (ctx.context.returned instanceof APIError && ctx.context.returned.statusCode === 429) return;
   const email = Email.safeParse(ctx.body).data?.email;
   if (!email) return;
-  await recordLogin(queued(), email, ip, Boolean(signedIn));
-  if (!signedIn) await auditSignIn(null, guard.method, email, ip);
+  // Checked again, recorded and audited in one write transaction: of attempts that passed the check
+  // above together, those finishing after the bucket closed are refused, not a sixth failure.
+  await ours(() =>
+    withTransaction(db(), async (database) => {
+      if (!signedIn) await throttle(database, email, ip);
+      await recordLogin(database, email, ip, Boolean(signedIn));
+      if (!signedIn) await auditSignIn(database, null, guard.method, email, ip);
+    }),
+  );
 });
 // ADMIN-B72: every sign-in, by any method, and every failed password or code attempt reach the
 // audit log, with the email and, behind a trusted proxy, the client address (ADR 0013). A failed
 // attempt names nobody: whoever typed the email is not known to be its owner.
 async function auditSignIn(
+  database: Database,
   userId: string | null,
   method: Guard['method'],
   email: string,
   ip: string | null,
 ) {
-  await writeAudit(queued(), userId, userId ? 'sign_in' : 'sign_in_failed', 'session', null, {
+  await writeAudit(database, userId, userId ? 'sign_in' : 'sign_in_failed', 'session', null, {
     method,
     email,
     ...(ip ? { address: ip } : {}),
@@ -151,7 +169,7 @@ async function activeOnly(session: { userId: string }) {
 }
 async function mailCode(email: string, otp: string) {
   // Better Auth asks whether the address exists; a deactivated or deleted account gets no code.
-  const user = await userByEmail(db(), email);
+  const user = await userByEmail(db(), email.trim().toLowerCase());
   if (!user || !user.isActive || user.deletedAt) return;
   await mailUser(db(), user, (copy, workspace) => ({
     subject: copy.codeSubject.replaceAll('{workspace}', workspace),
@@ -253,9 +271,20 @@ async function googleProvider(): Promise<BetterAuthOptions['socialProviders']> {
     },
   };
 }
+// ADMIN-B20: code sign-ins take turns, so each one's check in `before` sees every earlier attempt
+// recorded. A code check is quick; password checks are bounded by the hasher instead (ADMIN-B21).
+let codeSignIns: Promise<void> = Promise.resolve();
+function inTurn(work: () => Promise<Response>) {
+  const turn = codeSignIns.then(work);
+  codeSignIns = turn.then(
+    () => undefined,
+    () => undefined,
+  );
+  return turn;
+}
 async function build() {
   const config = env();
-  return betterAuth({
+  const instance = betterAuth({
     appName: 'Enan',
     baseURL: config.APP_URL,
     basePath: '/api/auth',
@@ -296,6 +325,12 @@ async function build() {
     },
     telemetry: { enabled: false },
   });
+  const { handler } = instance;
+  instance.handler = (request) =>
+    new URL(request.url).pathname.endsWith('/sign-in/email-otp')
+      ? inTurn(() => handler(request))
+      : handler(request);
+  return instance;
 }
 // Built for the connection it was given: a restore closes the pool and the next query opens a new
 // one (ADMIN-B38), so an instance still holding the closed one is rebuilt rather than kept.

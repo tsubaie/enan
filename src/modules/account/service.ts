@@ -13,6 +13,7 @@ import {
   revokeOtherSessions,
   revokeOwnSession,
   setPassword,
+  unlinkGoogle,
 } from '@/core/db/auth-repo';
 import { getSetting, hasSetting, writeSetting, clearSetting } from '@/core/db/settings-repo';
 import { toJson, writeAudit } from '@/core/db/audit-repo';
@@ -126,7 +127,12 @@ const emailChange = transactional(async function changeEmail(
   if (email === user.email) return getAccount(ctx);
   const taken = await userByEmail(ctx.db, email);
   if (taken) throw new AppError('validation_failed', { fieldErrors: { email: ['email_taken'] } });
-  await updateUserAccount(ctx.db, ctx.user.id, { email, revision: user.revision + 1 });
+  await updateUserAccount(ctx.db, ctx.user.id, {
+    email,
+    googleSubject: null,
+    revision: user.revision + 1,
+  });
+  await unlinkGoogle(ctx.db, ctx.user.id);
   await writeAudit(
     ctx.db,
     ctx.user.id,
@@ -156,11 +162,7 @@ const passwordChange = transactional(async function changePassword(
   if (!(await checkCurrentPassword(ctx.db, user, current))) return null;
   // ADR 0055: written where Better Auth reads it, and on the row, with the revision moved on.
   await setPassword(ctx.db, ctx.user.id, await hashPassword(next));
-  const revoked = await revokeOtherSessions(
-    ctx.db,
-    ctx.user.id,
-    (await currentSessionId()) ?? '',
-  );
+  const revoked = await revokeOtherSessions(ctx.db, ctx.user.id, (await currentSessionId()) ?? '');
   // The diff records that sessions were ended and how many; it never records either password.
   await writeAudit(
     ctx.db,
@@ -178,11 +180,7 @@ export async function changePassword(...args: Parameters<typeof passwordChange>)
   return result;
 }
 export const signOutOthers = transactional(async function signOutOthers(ctx: Context) {
-  const revoked = await revokeOtherSessions(
-    ctx.db,
-    ctx.user.id,
-    (await currentSessionId()) ?? '',
-  );
+  const revoked = await revokeOtherSessions(ctx.db, ctx.user.id, (await currentSessionId()) ?? '');
   return { revoked };
 });
 // The session id is the reader's own or it revokes nothing: the update is scoped by user id, so an
