@@ -115,10 +115,18 @@ async function rememberLocale(userId: string, set: (name: string, value: string)
   if (await hasSetting(db(), 'user.locale', userId))
     set('eos_locale', await getSetting(db(), 'user.locale', userId));
 }
+// ADMIN-B65: a refusal Better Auth does not turn into a redirect itself (an unverified Google
+// email) still lands the browser on the login page rather than a bare JSON reply.
+function refusedCallback(returned: unknown, redirect: (url: string) => Error) {
+  if (returned instanceof APIError && returned.statusCode === 403)
+    throw redirect(`/login?error=${String(returned.body?.code ?? 'FORBIDDEN')}`);
+}
 // ADMIN-B20: every password or code attempt is recorded, so the buckets above count it.
 const afterwards = createAuthMiddleware(async (ctx) => {
   const signedIn = ctx.context.newSession;
   const guard = guards[ctx.path];
+  const returned = ctx.context.returned;
+  if (ctx.path === '/callback/:id') refusedCallback(returned, ctx.redirect);
   const ip = ctx.request ? clientIp(ctx.request) : null;
   if (signedIn) {
     await rememberLocale(signedIn.user.id, (name, value) =>
@@ -128,7 +136,7 @@ const afterwards = createAuthMiddleware(async (ctx) => {
   }
   if (guard?.throttle !== 'login') return;
   // A busy hasher's "try again" (429) is not a wrong password, so it fills no bucket.
-  if (ctx.context.returned instanceof APIError && ctx.context.returned.statusCode === 429) return;
+  if (returned instanceof APIError && returned.statusCode === 429) return;
   const email = Email.safeParse(ctx.body).data?.email;
   if (!email) return;
   // Checked again, recorded and audited in one write transaction: of attempts that passed the check
@@ -159,8 +167,8 @@ async function auditSignIn(
 }
 // The account behind a session must still be one: deactivated and deleted accounts are refused the
 // way a wrong password is, so the answer says nothing about which it was.
-async function activeOnly(session: { userId: string }) {
-  const user = await userById(db(), session.userId);
+async function activeOnly(row: { userId: string }) {
+  const user = await userById(db(), row.userId);
   if (!user || !user.isActive || user.deletedAt)
     throw new APIError('UNAUTHORIZED', {
       code: 'INVALID_EMAIL_OR_PASSWORD',
@@ -267,7 +275,14 @@ async function googleProvider(): Promise<BetterAuthOptions['socialProviders']> {
       clientId: google.clientId,
       clientSecret: google.clientSecret,
       disableSignUp: true,
+      disableImplicitSignUp: true,
       prompt: 'select_account',
+      // Checked on every sign-in, not only the first link: an address Google has not verified
+      // proves nothing about who holds it.
+      mapProfileToUser: (profile) => {
+        if (!profile.email_verified) throw refused('EMAIL_NOT_VERIFIED');
+        return {};
+      },
     },
   };
 }
@@ -302,7 +317,8 @@ async function build() {
     session: { expiresIn: sessionDays * 86400, updateAge: 86400 },
     account: {
       encryptOAuthTokens: true,
-      accountLinking: { enabled: true, trustedProviders: ['google'] },
+      // Google is not trusted by name, so linking needs Google's verified email (ADMIN-B65).
+      accountLinking: { enabled: true },
     },
     verification: { storeIdentifier: 'hashed' },
     emailAndPassword: passwords,
@@ -313,7 +329,11 @@ async function build() {
     rateLimit: { enabled: false },
     disabledPaths: unused,
     hooks: { before, after: afterwards },
-    databaseHooks: { session: { create: { before: activeOnly } } },
+    // A deactivated account gets neither a session nor a newly linked Google account.
+    databaseHooks: {
+      session: { create: { before: activeOnly } },
+      account: { create: { before: activeOnly } },
+    },
     onAPIError: { errorURL: '/login' },
     advanced: {
       cookiePrefix: 'enan',

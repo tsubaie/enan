@@ -723,6 +723,7 @@
     "signInSaved": "Saved. The login page now offers what is checked.",
     "signInNeedsGoogle": "Set up the Google client below first.",
     "googleClient": "Google client",
+    "googleSaved": "Google client saved",
     "googleHelp": "In Google Cloud Console, create an OAuth client of type Web application, add the redirect address below as an authorized redirect URI, then paste its client ID and secret here. Only people an administrator has added can sign in, matched on their Google email.",
     "googleFromEnv": "The server's GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are in use. A client saved here takes their place.",
     "googleRedirect": "Redirect address:",
