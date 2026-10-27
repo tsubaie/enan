@@ -114,6 +114,34 @@ it('NOTIF-B09 NOTIF-B07 a row already read is only opened, never marked again', 
   await waitFor(() => expect(mocks.push).toHaveBeenCalledWith(item.href));
   expect(writes()).toEqual([]);
 });
+it('NOTIF-B08 NOTIF-B07 the header counts the unread and each row reads bold until opened, with a relative time', async () => {
+  const unread = line();
+  const seen = line({
+    id: '01a08a9f-1991-760a-b73a-568f6f866502',
+    actorName: 'Seen Actor',
+    readAt: '2026-09-10T08:30:00.000Z',
+  });
+  serve([unread, seen]);
+  mount(<NotificationBell />);
+  fireEvent.click(
+    await screen.findByRole('button', { name: plural(en.notifications.unread, 'one') }),
+  );
+  await screen.findByText(sentence(en, unread));
+  const content = popover() as HTMLElement;
+  const pill = within(content).getByText('1');
+  expect(pill.className).toContain('tabular-nums');
+  expect(pill.className).toContain('bg-accent-soft');
+  expect(screen.getByText(sentence(en, unread)).className).toContain('font-medium');
+  expect(screen.getByText(sentence(en, seen)).className).toContain('font-normal');
+  expect(screen.getByText(sentence(en, seen)).className).not.toContain('font-medium');
+  const times = content.querySelectorAll('time');
+  expect([...times].map((time) => time.dateTime)).toEqual([unread.createdAt, seen.createdAt]);
+  // The relative wording is in the row; the absolute moment rides in the title.
+  for (const time of times) {
+    expect(time.title).toBeTruthy();
+    expect(time.title).not.toBe(time.textContent);
+  }
+});
 it('NOTIF-B07 mark all as read is one write for the whole feed', async () => {
   serve([line()]);
   mount(<NotificationBell />);
