@@ -366,6 +366,10 @@ test('ACCT-B10 ADMIN-B76 a member adds a passkey with their password, signs in w
       methods: [...chosen.filter((method) => method !== 'passkey'), 'passkey'],
     });
     expect(on.status).toBe(200);
+    await page.goto('/admin/signin');
+    await expect(
+      page.getByRole('link', { name: en.admin.signInPasskeyAccountLink }),
+    ).toHaveAttribute('href', '/account#passkeys');
     const cdp = await other.context.newCDPSession(other.page);
     await cdp.send('WebAuthn.enable');
     await cdp.send('WebAuthn.addVirtualAuthenticator', {

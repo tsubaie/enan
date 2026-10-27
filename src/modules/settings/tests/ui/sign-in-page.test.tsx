@@ -158,3 +158,35 @@ it('ADMIN-B76 passkeys are offered on the Sign-in page and say what they are', (
   expect(passkey.getAttribute('aria-disabled')).toBeNull();
   expect(screen.getByText(en.admin.signInMethodHelp_passkey)).toBeTruthy();
 });
+it('ADMIN-B76 with passkeys off the row does not link to the account page', () => {
+  show({
+    chosen: ['password'],
+    available: { password: true, code: true, google: true, passkey: true },
+    enabled: ['password'],
+  });
+  expect(screen.queryByText(en.admin.signInPasskeyAccountHint, { exact: false })).toBeNull();
+  expect(screen.queryByRole('link', { name: en.admin.signInPasskeyAccountLink })).toBeNull();
+});
+it('ADMIN-B76 with passkeys on the row links to the Passkeys section of the account page, even as the only way in', () => {
+  for (const [locale, messages, enabled] of [
+    ['en', en, ['password', 'passkey']],
+    ['ar', ar, ['password', 'passkey']],
+    ['en', en, ['passkey']],
+    ['ar', ar, ['passkey']],
+  ] as const) {
+    show(
+      {
+        chosen: enabled,
+        available: { password: true, code: true, google: true, passkey: true },
+        enabled,
+      },
+      locale,
+    );
+    expect(
+      screen.getByText(messages.admin.signInPasskeyAccountHint, { exact: false }),
+    ).toBeTruthy();
+    const link = screen.getByRole('link', { name: messages.admin.signInPasskeyAccountLink });
+    expect(link.getAttribute('href')).toBe('/account#passkeys');
+    cleanup();
+  }
+});

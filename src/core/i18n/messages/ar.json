@@ -724,6 +724,8 @@
     "signInMethodHelp_passkey": "يدخل الأعضاء بمفتاح مرور أضافوه من صفحة حسابهم: بصمة أو وجه أو رمز الجهاز بدلًا من كلمة المرور.",
     "signInNeedsMail": "أعدّ البريد أولًا",
     "signInLast": "هذه الطريقة الوحيدة المفعّلة، فلا يمكن إيقافها.",
+    "signInPasskeyAccountHint": "تفعيل مفاتيح المرور هنا يتيح الخيار لمساحة العمل. للدخول بمفتاح مرور بنفسك،",
+    "signInPasskeyAccountLink": "أضف مفتاح مرور من صفحة حسابك",
     "signInSaved": "حُفظ. تعرض صفحة الدخول الآن ما هو محدّد.",
     "signInNeedsGoogle": "أعدّ عميل Google أدناه أولًا.",
     "googleClient": "عميل Google",

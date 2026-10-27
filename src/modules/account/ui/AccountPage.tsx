@@ -33,7 +33,7 @@ export function AccountPage() {
         <AccountSignIn account={data} />
       </Section>
       {(data.signInMethods.includes('passkey') || data.passkeys.length > 0) && (
-        <Section title={t('passkeys')} description={t('passkeysDescription')}>
+        <Section id="passkeys" title={t('passkeys')} description={t('passkeysDescription')}>
           <AccountPasskeys account={data} />
         </Section>
       )}
@@ -47,7 +47,10 @@ export function AccountPage() {
           stops a reader hunting for them on the page that holds everything else. */}
       <p className="mt-10 border-t pt-5 text-sm text-text-muted">
         {t('workspaceElsewhere')}{' '}
-        <Link href={routes.admin('settings')} className="text-accent underline-offset-4 hover:underline">
+        <Link
+          href={routes.admin('settings')}
+          className="text-accent underline-offset-4 hover:underline"
+        >
           {c('admin')}
         </Link>
       </p>
@@ -55,16 +58,18 @@ export function AccountPage() {
   );
 }
 function Section({
+  id,
   title,
   description,
   children,
 }: {
+  id?: string;
   title: string;
   description?: string;
   children: React.ReactNode;
 }) {
   return (
-    <section className="mb-10">
+    <section id={id} className="mb-10 scroll-mt-20">
       <h2 className="mb-1 text-base font-medium">{title}</h2>
       {description && <p className="mb-4 text-sm text-text-muted">{description}</p>}
       <div className={description ? '' : 'mt-4'}>{children}</div>

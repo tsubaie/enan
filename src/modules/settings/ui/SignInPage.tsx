@@ -109,6 +109,25 @@ function MethodRow({
           t(`signInMethodHelp_${method}`)
         )}
       </p>
+      <PasskeyAccountLink method={method} status={status} />
     </div>
+  );
+}
+// ADMIN-B76: switching passkeys on does not give the administrator one; point them to where they add it.
+function PasskeyAccountLink({ method, status }: { method: SignInMethod; status: Status }) {
+  const t = useTranslations('admin');
+  if (method !== 'passkey' || !status.chosen.includes(method) || !status.available[method]) {
+    return null;
+  }
+  return (
+    <p className="ps-7 pt-1.5 text-sm text-text-muted">
+      {t('signInPasskeyAccountHint')}{' '}
+      <Link
+        href={routes.accountPasskeys()}
+        className="font-medium text-accent underline underline-offset-4"
+      >
+        {t('signInPasskeyAccountLink')}
+      </Link>
+    </p>
   );
 }

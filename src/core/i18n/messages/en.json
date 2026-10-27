@@ -724,6 +724,8 @@
     "signInMethodHelp_passkey": "Members sign in with a passkey they added on their account page: a fingerprint, face or device PIN instead of a password.",
     "signInNeedsMail": "Set up email first",
     "signInLast": "This is the only way in that is on, so it cannot be turned off.",
+    "signInPasskeyAccountHint": "Enabling passkeys here turns the option on for the workspace. To sign in with one yourself,",
+    "signInPasskeyAccountLink": "add a passkey on your Account page",
     "signInSaved": "Saved. The login page now offers what is checked.",
     "signInNeedsGoogle": "Set up the Google client below first.",
     "googleClient": "Google client",
