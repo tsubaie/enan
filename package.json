@@ -79,7 +79,7 @@
     "tailwind-merge": "3.7.0",
     "tar": "7.5.22",
     "uuid": "14.0.2",
-    "zod": "4.6.5"
+    "zod": "4.6.6"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
@@ -118,7 +118,8 @@
       "brace-expansion@5": "5.0.12",
       "fast-uri@3": "3.1.8",
       "sharp": "0.35.5",
-      "source-map-js": "1.2.2"
+      "source-map-js": "1.2.2",
+      "undici@8": "8.12.2"
     }
   }
 }
