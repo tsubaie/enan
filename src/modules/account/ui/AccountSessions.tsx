@@ -23,7 +23,7 @@ export function AccountSessions({ account }: { account: Account }) {
   const [confirming, setConfirming] = useState(false);
   const rest = account.sessions.filter((session) => !session.current);
   return (
-    <div className="grid gap-2">
+    <div className="grid min-w-0 gap-2">
       {account.sessions.map((session) => (
         <SessionRow
           key={session.id}
@@ -78,10 +78,10 @@ function SessionRow({
   const t = useTranslations('account');
   const when = useDateTime();
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border p-3 text-sm">
+    <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border p-3 text-sm">
       {/* A session's own id says nothing to the reader; where there is no user agent and no
           address to name the device by, say that rather than printing a UUID at them. */}
-      <span className="min-w-0 flex-1 truncate" translate="no" dir="ltr">
+      <span className="w-full min-w-0 truncate sm:w-auto sm:flex-1" translate="no" dir="ltr">
         {session.userAgent ?? session.ip ?? t('unknownDevice')}
       </span>
       {session.current && (

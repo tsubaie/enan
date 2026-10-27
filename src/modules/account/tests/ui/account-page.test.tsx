@@ -8,7 +8,7 @@ import type { Account } from '../../schema/validation';
 import { AccountPage } from '../../ui/AccountPage';
 import { AccountIdentity } from '../../ui/AccountIdentity';
 import { AccountPreferences } from '../../ui/AccountPreferences';
-import { account, mutation, person } from './fixtures';
+import { account, current, mutation, other, person } from './fixtures';
 import { mount } from './harness';
 // The page is exercised without its network layer: the query hooks are the only seam, so each
 // scenario hands the account in and watches what the controls ask to write.
@@ -63,6 +63,26 @@ it('ACCT-B08 the page waits on its query and reports a failed one instead of ren
   state.query = { isPending: false, error: new ApiError('not_found', 'Gone', null, 'req-1') };
   mount(<AccountPage />);
   expect(screen.getByRole('alert').textContent).toContain('Gone');
+});
+it('ACCT-B03 a long user agent truncates inside its row instead of widening the sessions list', () => {
+  const userAgent =
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36 Edg/147.0.3912.160 Vivaldi/7.6.3797.52';
+  expect(userAgent).toHaveLength(140);
+  state.query.data = {
+    data: account({
+      sessions: [
+        { ...current, userAgent },
+        { ...other, userAgent },
+      ],
+    }),
+  };
+  mount(<AccountPage />);
+  const [agent] = screen.getAllByText(userAgent);
+  const row = agent?.parentElement;
+  expect(agent?.classList).toContain('truncate');
+  expect(agent?.classList).toContain('min-w-0');
+  expect(row?.classList).toContain('min-w-0');
+  expect(row?.parentElement?.classList).toContain('min-w-0');
 });
 it('ACCT-B01 ACCT-B06 the name saves through an explicit action that wakes only for a real change', () => {
   mount(<AccountIdentity account={account()} />);
