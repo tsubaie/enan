@@ -1063,7 +1063,8 @@
             "enum": [
               "password",
               "code",
-              "google"
+              "google",
+              "passkey"
             ],
             "type": "string"
           }
@@ -1084,7 +1085,8 @@
                 "required": [
                   "password",
                   "code",
-                  "google"
+                  "google",
+                  "passkey"
                 ],
                 "type": "object"
               },
@@ -6331,6 +6333,47 @@
           "data": {
             "additionalProperties": false,
             "properties": {
+              "passkeys": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "aaguid": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "backedUp": {
+                      "type": "boolean"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "deviceType": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "deviceType",
+                    "backedUp",
+                    "createdAt",
+                    "aaguid"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
               "person": {
                 "anyOf": [
                   {
@@ -6462,6 +6505,18 @@
                 },
                 "type": "array"
               },
+              "signInMethods": {
+                "items": {
+                  "enum": [
+                    "password",
+                    "code",
+                    "google",
+                    "passkey"
+                  ],
+                  "type": "string"
+                },
+                "type": "array"
+              },
               "user": {
                 "additionalProperties": false,
                 "properties": {
@@ -6504,7 +6559,9 @@
               "user",
               "person",
               "preferences",
-              "sessions"
+              "sessions",
+              "signInMethods",
+              "passkeys"
             ],
             "type": "object"
           }
@@ -10758,7 +10815,8 @@
             "enum": [
               "password",
               "code",
-              "google"
+              "google",
+              "passkey"
             ],
             "type": "string"
           }
@@ -10811,7 +10869,8 @@
             "enum": [
               "password",
               "code",
-              "google"
+              "google",
+              "passkey"
             ],
             "type": "string"
           }
@@ -10832,7 +10891,8 @@
                 "required": [
                   "password",
                   "code",
-                  "google"
+                  "google",
+                  "passkey"
                 ],
                 "type": "object"
               },

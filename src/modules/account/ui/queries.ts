@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import { request } from '@/core/http/client';
+import { authCall, authClient } from '@/core/http/auth-client';
 import { Account, type AccountPatch } from '../schema/validation';
 const response = z.object({ data: Account });
 const revoked = z.object({ data: z.object({ revoked: z.number().int() }) });
@@ -41,5 +42,22 @@ export function useRevokeSession() {
 export function useSignOutOthers() {
   return useAccountMutation(() =>
     request('/account/sessions/revoke-others', revoked, { method: 'POST', body: {} }),
+  );
+}
+// ACCT-B10: passkeys are Better Auth's to add and remove; the account query lists them.
+export function useAddPasskey(word: Parameters<typeof authCall>[1]) {
+  return useAccountMutation((input: { name: string; currentPassword: string }) =>
+    authCall(
+      authClient.passkey.addPasskey({
+        ...(input.name ? { name: input.name } : {}),
+        fetchOptions: { headers: { 'x-current-password': input.currentPassword } },
+      }),
+      word,
+    ),
+  );
+}
+export function useRemovePasskey(word: Parameters<typeof authCall>[1]) {
+  return useAccountMutation((id: string) =>
+    authCall(authClient.passkey.deletePasskey({ id }), word),
   );
 }

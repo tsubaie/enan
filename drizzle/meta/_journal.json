@@ -120,6 +120,13 @@
       "when": 1792765895916,
       "tag": "0016_notifications_updater_outdated",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1793100294332,
+      "tag": "0017_passkeys",
+      "breakpoints": true
     }
   ]
 }

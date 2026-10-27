@@ -19,7 +19,7 @@ import { GoogleClient } from './GoogleClient';
 const response = z.object({ data: SignInMethodsStatus });
 type Status = z.infer<typeof SignInMethodsStatus>;
 // The methods this version can offer, in the order the login page shows them.
-const offered: SignInMethod[] = ['password', 'code', 'google'];
+const offered: SignInMethod[] = ['password', 'code', 'google', 'passkey'];
 // ADMIN-B64: which ways in the login page offers. A method the server cannot serve yet says what it
 // needs; the last one switched on cannot be switched off. Every change saves at once.
 export function SignInPage() {

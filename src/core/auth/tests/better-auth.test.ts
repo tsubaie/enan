@@ -9,7 +9,12 @@ import { insertUser, lockWorkspace } from '@/core/db/auth-repo';
 import { saveMailSettings } from '@/core/db/mail-settings-repo';
 import { writeSetting } from '@/core/db/settings-repo';
 import { auditLog, loginAttempts, users } from '@/core/db/system-schema';
-import { authAccounts, authSessions, authVerifications } from '@/core/db/auth-schema';
+import {
+  authAccounts,
+  authPasskeys,
+  authSessions,
+  authVerifications,
+} from '@/core/db/auth-schema';
 import { id } from '@/core/db/ids';
 import { env } from '@/core/config/env';
 import { maintenanceFile } from '@/core/backup/maintenance';
@@ -97,7 +102,7 @@ const mailReady = () =>
       fromAddress: 'office@example.test',
     }),
   );
-const choose = (methods: ('password' | 'code' | 'google')[]) =>
+const choose = (methods: ('password' | 'code' | 'google' | 'passkey')[]) =>
   withTransaction(db(), (database) =>
     writeSetting(database, 'auth.sign_in_methods', methods, member),
   );
@@ -572,4 +577,111 @@ it('ADMIN-B03 a deactivated member is refused by Google too, and no Google accou
   expect(sessionCookie(response)).toBe(false);
   expect(await googleAccounts()).toHaveLength(0);
   expect(await signIns()).toHaveLength(0);
+});
+// ADMIN-B76: passkeys. A browser's WebAuthn ceremony is the browser suite's (e2e/account.spec.ts);
+// here, Enan's own rules around it, on the real handler.
+async function sessionFor(email: string) {
+  const cookie = (await signIn(email)).headers.get('set-cookie') ?? '';
+  return { Cookie: cookie.split(';')[0] ?? '' };
+}
+function fetchGet(path: string, headers: Record<string, string> = {}) {
+  return auth().then((instance) =>
+    instance.handler(
+      new Request(new URL(`/api/auth${path}`, env().APP_URL), {
+        headers: { Origin: env().APP_URL, ...headers },
+      }),
+    ),
+  );
+}
+const codeOf = async (response: Response) =>
+  ((await response.json()) as { code?: string }).code;
+const addPasskey = (userId: string) =>
+  withTransaction(db(), (database) =>
+    database.insert(authPasskeys).values({
+      id: id(),
+      userId,
+      publicKey: 'key',
+      credentialID: id(),
+      counter: 0,
+      deviceType: 'multiDevice',
+      backedUp: true,
+    }),
+  );
+it('ADMIN-B76 ADMIN-B64 passkey sign-in is refused while the method is off', async () => {
+  expect((await fetchGet('/passkey/generate-authenticate-options')).status).toBe(403);
+  await choose(['password', 'passkey']);
+  expect((await fetchGet('/passkey/generate-authenticate-options')).status).toBe(200);
+});
+it('ADMIN-B76 ADMIN-B72 a failed passkey sign-in is audited with no email and counted', async () => {
+  await choose(['password', 'passkey']);
+  const response = await call('/passkey/verify-authentication', {
+    response: { id: 'x', rawId: 'x', type: 'public-key', response: {}, clientExtensionResults: {} },
+  });
+  expect(response.status).toBeGreaterThanOrEqual(400);
+  const rows = await db().select().from(auditLog).where(eq(auditLog.entityType, 'session'));
+  expect(rows.map((row) => [row.action, row.actorId, row.diff])).toEqual([
+    ['sign_in_failed', null, { method: 'passkey', email: '' }],
+  ]);
+  expect(await db().select().from(loginAttempts)).toHaveLength(1);
+});
+it('ADMIN-B76 adding a passkey needs a session and the method on', async () => {
+  expect((await fetchGet('/passkey/generate-register-options')).status).toBe(401);
+  const session = await sessionFor('member@example.test');
+  const off = await fetchGet('/passkey/generate-register-options', session);
+  expect([off.status, await codeOf(off)]).toEqual([403, 'METHOD_DISABLED']);
+  await choose(['password', 'passkey']);
+  expect((await fetchGet('/passkey/generate-register-options', session)).status).toBe(200);
+});
+it('ADMIN-B76 ADMIN-B20 with passwords on, storing a passkey needs the current password, and a wrong one counts', async () => {
+  await choose(['password', 'passkey']);
+  const session = await sessionFor('member@example.test');
+  const body = { response: { id: 'x', response: {} } };
+  const missing = await call('/passkey/verify-registration', body, session);
+  expect([missing.status, await codeOf(missing)]).toEqual([400, 'INVALID_PASSWORD']);
+  const wrong = await call('/passkey/verify-registration', body, {
+    ...session,
+    'x-current-password': 'wrong-password',
+  });
+  expect([wrong.status, await codeOf(wrong)]).toEqual([400, 'INVALID_PASSWORD']);
+  const failed = await db().select().from(loginAttempts).where(eq(loginAttempts.succeeded, false));
+  expect(failed).toHaveLength(1);
+  // The right password passes Enan's check; the plugin then finds no challenge for this request.
+  const right = await call('/passkey/verify-registration', body, {
+    ...session,
+    'x-current-password': password,
+  });
+  expect(await codeOf(right)).not.toBe('INVALID_PASSWORD');
+  expect(await db().select().from(authPasskeys)).toHaveLength(0);
+});
+it('ADMIN-B76 with passwords off, storing a passkey needs a session under ten minutes old', async () => {
+  await choose(['password', 'passkey']);
+  const session = await sessionFor('member@example.test');
+  await choose(['passkey']);
+  const body = { response: { id: 'x', response: {} } };
+  expect(await codeOf(await call('/passkey/verify-registration', body, session))).not.toBe(
+    'SESSION_NOT_FRESH',
+  );
+  await db()
+    .update(authSessions)
+    .set({ createdAt: new Date(Date.now() - 11 * 60000) })
+    .where(eq(authSessions.userId, member));
+  const stale = await call('/passkey/verify-registration', body, session);
+  expect([stale.status, await codeOf(stale)]).toEqual([403, 'SESSION_NOT_FRESH']);
+});
+it('ADMIN-B76 ACCT-B10 the last passkey stays while passkeys are the only way in; removing one is audited', async () => {
+  await choose(['password', 'passkey']);
+  const session = await sessionFor('member@example.test');
+  await addPasskey(member);
+  await choose(['passkey']);
+  const [only] = await db().select().from(authPasskeys);
+  const refused = await call('/passkey/delete-passkey', { id: only?.id }, session);
+  expect([refused.status, await codeOf(refused)]).toEqual([409, 'LAST_SIGN_IN_METHOD']);
+  await addPasskey(member);
+  expect((await call('/passkey/delete-passkey', { id: only?.id }, session)).status).toBe(200);
+  expect(await db().select().from(authPasskeys)).toHaveLength(1);
+  const removed = await db()
+    .select()
+    .from(auditLog)
+    .where(eq(auditLog.action, 'account.passkey.remove'));
+  expect(removed.map((row) => [row.actorId, row.entityId])).toEqual([[member, member]]);
 });

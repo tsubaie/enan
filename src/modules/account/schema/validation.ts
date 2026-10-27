@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { Password } from '@/core/http/user-schema';
 import { Locale } from '@/core/config/defaults';
 import { Theme, Timezone } from '@/core/config/settings';
+import { SignInMethod } from '@/core/config/sign-in-schema';
 // ACCT-I02: role and active state are Administration's. They are absent from every schema here,
 // which is what the module audit checks — a field that cannot be named cannot be smuggled through
 // a patch.
@@ -34,6 +35,15 @@ export const AccountSession = z.object({
   ip: z.string().nullable(),
   userAgent: z.string().nullable(),
 });
+// ACCT-B10: what the reader may know of their passkeys; the key itself never leaves the server.
+export const AccountPasskey = z.object({
+  id: z.string(),
+  name: z.string().nullable(),
+  deviceType: z.string(),
+  backedUp: z.boolean(),
+  createdAt: z.string(),
+  aaguid: z.string().nullable(),
+});
 // The real unions rather than `string`: the response then carries the same types the patch accepts,
 // so a control can be checked against its own key without a cast standing in for the check.
 export const AccountPreferences = z.object({
@@ -62,7 +72,11 @@ export const Account = z.object({
   person: AccountPerson.nullable(),
   preferences: AccountPreferences,
   sessions: z.array(AccountSession),
+  // The workspace's enabled sign-in methods, so the page offers only what works (ADMIN-B64).
+  signInMethods: z.array(SignInMethod),
+  passkeys: z.array(AccountPasskey),
 });
 export type Account = z.infer<typeof Account>;
 export type AccountSession = z.infer<typeof AccountSession>;
+export type AccountPasskey = z.infer<typeof AccountPasskey>;
 export type AccountPatch = z.infer<typeof AccountPatch>;

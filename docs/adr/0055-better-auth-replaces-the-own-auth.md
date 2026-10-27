@@ -1,6 +1,6 @@
 # ADR 0055 — Better Auth replaces the own auth
 
-**Status:** accepted (2026-10-23); supersedes ADR 0005 (sessions, cookie, login) and the decision of ADR 0053 to extend the own auth. ADR 0053's sealed credentials and its SMTP transport stand; ADR 0013's address resolution and throttling buckets stand and now ride on Better Auth's hooks.
+**Status:** accepted (2026-10-23); supersedes ADR 0005 (sessions, cookie, login) and the decision of ADR 0053 to extend the own auth. ADR 0053's sealed credentials and its SMTP transport stand; ADR 0013's address resolution and throttling buckets stand and now ride on Better Auth's hooks; extended by ADR 0064 (passkeys).
 
 ## Context
 
