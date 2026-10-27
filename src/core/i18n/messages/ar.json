@@ -723,6 +723,7 @@
     "signInSaved": "حُفظ. تعرض صفحة الدخول الآن ما هو محدّد.",
     "signInNeedsGoogle": "أعدّ عميل Google أدناه أولًا.",
     "googleClient": "عميل Google",
+    "googleSaved": "تم حفظ عميل Google",
     "googleHelp": "في Google Cloud Console أنشئ عميل OAuth من نوع تطبيق ويب، وأضف عنوان إعادة التوجيه أدناه ضمن عناوين إعادة التوجيه المصرّح بها، ثم الصق معرّف العميل وسرّه هنا. لا يدخل إلا من أضافه مسؤول، بمطابقة بريده في Google.",
     "googleFromEnv": "يُستخدم الآن GOOGLE_CLIENT_ID وGOOGLE_CLIENT_SECRET على الخادم. ما تحفظه هنا يحلّ محلّهما.",
     "googleRedirect": "عنوان إعادة التوجيه:",

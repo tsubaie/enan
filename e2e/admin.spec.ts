@@ -507,8 +507,17 @@ test('ADMIN-B65 ADMIN-B66 a Google client saved on the Sign-in page puts Continu
   await page.getByLabel(en.admin.googleClientId).fill('1234-e2e.apps.googleusercontent.com');
   await page.getByLabel(en.admin.googleClientSecret).fill('e2e-google-secret');
   await page.getByRole('button', { name: en.common.save, exact: true }).click();
-  await expect(page.getByText(en.admin.googleSecretKept)).toBeVisible();
+  await expect(page.getByText(en.admin.googleSaved)).toBeVisible();
+  await expect(page.getByText('1234-e2e.apps.googleusercontent.com')).toBeVisible();
   await expect(page.getByRole('checkbox', { name: en.admin.signInMethod_google })).toBeChecked();
+  await page.getByRole('button', { name: en.common.edit, exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByText(en.admin.googleSecretKept)).toBeVisible();
+  await expect(dialog.getByLabel(en.admin.googleClientId)).toHaveValue(
+    '1234-e2e.apps.googleusercontent.com',
+  );
+  await dialog.getByRole('button', { name: en.common.cancel, exact: true }).click();
+  await expect(dialog).toBeHidden();
   const status = await api(page, '/admin/sign-in/google');
   expect(JSON.stringify(status.body)).not.toContain('e2e-google-secret');
   const visitor = await browser.newContext({ baseURL: laneBaseURL() });

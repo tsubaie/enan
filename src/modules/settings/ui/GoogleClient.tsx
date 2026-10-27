@@ -5,7 +5,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import { GoogleStatus, type GoogleSettingsWrite } from '@/core/config/google-schema';
 import { request } from '@/core/http/client';
+import { CircleCheck } from 'lucide-react';
 import { Button } from '@/ui/primitives/button';
+import { Dialog, DialogContent, DialogTitle } from '@/ui/primitives/dialog';
 import { Input } from '@/ui/primitives/input';
 import { Field } from '@/ui/layout/Field';
 import { RecordSection } from '@/ui/layout/Record';
@@ -35,60 +37,125 @@ function useGoogle() {
   });
   return { query, save, remove };
 }
+type Status = z.infer<typeof GoogleStatus>;
+type Google = ReturnType<typeof useGoogle>;
 // ADMIN-B65: the OAuth client Google sign-in uses. The redirect address is shown to copy into
 // Google Cloud Console; a saved secret is never shown and is kept when the field is left empty.
+// A saved client is summarised and edited in a dialog; one from the environment is only shown.
 export function GoogleClient() {
   const t = useTranslations('admin');
-  const { query, save, remove } = useGoogle();
+  const google = useGoogle();
+  const { query, save } = google;
   if (!query.data) return query.error ? <ErrorPanel error={query.error} /> : null;
   const status = query.data.data;
   return (
     <RecordSection title={t('googleClient')}>
-      <p className="px-1 text-sm leading-relaxed font-light text-text-muted">
-        {status.source === 'environment' ? t('googleFromEnv') : t('googleHelp')}
+      {status.source === 'none' && (
+        <>
+          <p className="px-1 text-sm leading-relaxed font-light text-text-muted">
+            {t('googleHelp')}
+          </p>
+          <Redirect uri={status.redirectUri} />
+          <GoogleForm
+            status={status}
+            pending={save.isPending}
+            onSave={(input) => save.mutate(input)}
+          />
+          {save.error && <ErrorPanel error={save.error} />}
+        </>
+      )}
+      {status.source === 'saved' && <SavedGoogle status={status} google={google} />}
+      {status.source === 'environment' && (
+        <>
+          <p className="px-1 text-sm leading-relaxed font-light text-text-muted">
+            {t('googleFromEnv')}
+          </p>
+          {status.clientId && <ClientId value={status.clientId} />}
+          <Redirect uri={status.redirectUri} />
+        </>
+      )}
+    </RecordSection>
+  );
+}
+function Redirect({ uri }: { uri: string }) {
+  const t = useTranslations('admin');
+  return (
+    <p className="px-1 text-sm">
+      {t('googleRedirect')}{' '}
+      <span dir="ltr" translate="no" className="font-mono break-all text-text">
+        {uri}
+      </span>
+    </p>
+  );
+}
+function ClientId({ value }: { value: string }) {
+  return (
+    <span dir="ltr" translate="no" className="px-1 font-mono text-xs break-all text-text-muted">
+      {value}
+    </span>
+  );
+}
+function SavedGoogle({ status, google }: { status: Status; google: Google }) {
+  const t = useTranslations('admin');
+  const c = useTranslations('common');
+  const [editing, setEditing] = useState(false);
+  const { save, remove } = google;
+  return (
+    <div className="grid gap-3 rounded-xl border bg-bg/50 p-4">
+      <p className="flex items-center gap-2 text-sm">
+        <CircleCheck className="size-4 shrink-0 text-success" aria-hidden />
+        {t('googleSaved')}
       </p>
-      <p className="px-1 text-sm">
-        {t('googleRedirect')}{' '}
-        <code
-          dir="ltr"
-          translate="no"
-          className="break-all rounded bg-surface-raised px-1.5 py-0.5"
-        >
-          {status.redirectUri}
-        </code>
-      </p>
-      <GoogleForm
-        key={JSON.stringify(status)}
-        status={status}
-        pending={save.isPending}
-        onSave={(input) => save.mutate(input)}
-      />
-      {save.error && <ErrorPanel error={save.error} />}
+      {status.clientId && <ClientId value={status.clientId} />}
+      <Redirect uri={status.redirectUri} />
       {remove.error && <ErrorPanel error={remove.error} />}
-      {status.source === 'saved' && (
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+          {c('edit')}
+        </Button>
         <Button
           variant="ghost"
-          className="justify-self-start text-danger hover:text-danger"
+          size="sm"
+          className="text-danger hover:text-danger"
           disabled={remove.isPending}
           onClick={() => remove.mutate()}
         >
           {t('googleRemove')}
         </Button>
-      )}
-    </RecordSection>
+      </div>
+      <Dialog
+        open={editing}
+        onOpenChange={(open) => {
+          setEditing(open);
+          if (!open) save.reset();
+        }}
+      >
+        <DialogContent>
+          <DialogTitle>{t('googleClient')}</DialogTitle>
+          <GoogleForm
+            status={status}
+            pending={save.isPending}
+            onCancel={() => setEditing(false)}
+            onSave={(input) => save.mutate(input, { onSuccess: () => setEditing(false) })}
+          />
+          {save.error && <ErrorPanel error={save.error} />}
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
 function GoogleForm({
   status,
   pending,
   onSave,
+  onCancel,
 }: {
-  status: z.infer<typeof GoogleStatus>;
+  status: Status;
   pending: boolean;
   onSave: (input: z.infer<typeof GoogleSettingsWrite>) => void;
+  onCancel?: () => void;
 }) {
   const t = useTranslations('admin');
-  const c = useTranslations('common');
   const [clientId, setClientId] = useState(
     status.source === 'saved' ? (status.clientId ?? '') : '',
   );
@@ -128,9 +195,28 @@ function GoogleForm({
           />
         )}
       </Field>
-      <Button type="submit" className="justify-self-start" disabled={pending}>
+      <FormActions pending={pending} onCancel={onCancel} />
+    </form>
+  );
+}
+function FormActions({
+  pending,
+  onCancel,
+}: {
+  pending: boolean;
+  onCancel?: (() => void) | undefined;
+}) {
+  const c = useTranslations('common');
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Button type="submit" disabled={pending}>
         {pending ? c('saving') : c('save')}
       </Button>
-    </form>
+      {onCancel && (
+        <Button type="button" variant="outline" onClick={onCancel}>
+          {c('cancel')}
+        </Button>
+      )}
+    </div>
   );
 }
