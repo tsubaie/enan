@@ -1,10 +1,11 @@
 'use client';
 import { useEffect, useId, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, ShieldAlert } from 'lucide-react';
 import { cn } from '@/ui/cn';
 import { defaults } from '@/core/config/defaults';
-import { State, type Status } from './update-queries';
+import { useDateTime, useRelativeTime } from '@/ui/format';
+import { intervalOf, State, type Status } from './update-queries';
 
 const tone: Record<State, string> = {
   checking: 'bg-surface-raised text-text-muted',
@@ -147,5 +148,64 @@ export function Candidate({ candidate }: { candidate: NonNullable<Status['candid
         </a>
       )}
     </p>
+  );
+}
+
+export function Stalled() {
+  const t = useTranslations('admin');
+  return (
+    <div role="alert" className="mb-4 grid gap-2 text-sm text-danger">
+      <p className="flex items-center gap-2 font-medium">
+        <ShieldAlert className="size-4 shrink-0" aria-hidden />
+        {t('updaterStalled')}
+      </p>
+      <p className="font-light text-text-muted">{t('updaterStalledHelp')}</p>
+      <Code>{commands.logs}</Code>
+    </div>
+  );
+}
+
+export function Facts({ status }: { status: Status }) {
+  const t = useTranslations('admin');
+  const relative = useRelativeTime();
+  const dateTime = useDateTime();
+  const every = intervalOf(status.intervalSeconds);
+  return (
+    <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-[auto_1fr]">
+      <dt className="text-text-muted">{t('updateRunning')}</dt>
+      <dd className="flex flex-wrap items-center gap-2">
+        <Version image={status.running} />
+        {status.running?.version && (
+          <a
+            href={`${releases}${status.running.version}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-accent underline-offset-4 hover:underline"
+          >
+            {t('updateReleaseNotes')}
+            <ExternalLink className="size-3" aria-hidden />
+          </a>
+        )}
+      </dd>
+      <dt className="text-text-muted">{t('updateChannel')}</dt>
+      <dd>
+        <bdi dir="ltr">{status.channel || t('updateVersionUnknown')}</bdi>
+      </dd>
+      <dt className="text-text-muted">{t('updateLastCheck')}</dt>
+      <dd>
+        {status.lastCheckAt ? (
+          <time dateTime={status.lastCheckAt} title={dateTime(status.lastCheckAt)}>
+            {relative(status.lastCheckAt)}
+          </time>
+        ) : (
+          t('updateNever')
+        )}
+        <span className="text-text-muted"> · {t('updateEvery', every)}</span>
+      </dd>
+      <dt className="text-text-muted">{t('updateLastResult')}</dt>
+      <dd className="flex items-center gap-2">
+        <StateChip state={status.paused ? 'paused' : status.state} />
+      </dd>
+    </dl>
   );
 }

@@ -12,12 +12,15 @@ import { extremeZones } from '../../../../../tests/fixtures/timezones';
 
 const state = vi.hoisted(() => ({
   updates: {} as object,
+  // A refresh that failed, as one does while an install swaps the container.
+  error: null as Error | null,
   // The page re-reads the updater's status as a refresh would, when a scenario changes it.
   listeners: new Set<() => void>(),
   command: {
     mutate: vi.fn(),
     isPending: false,
     isSuccess: false,
+    isError: false,
     error: null as Error | null,
     data: undefined as { data: { command: string } } | undefined,
   },
@@ -32,7 +35,7 @@ vi.mock('../../ui/update-queries', async (original) => ({
       },
       () => state.updates,
     );
-    return { isPending: false, error: null, data: { data } };
+    return { isPending: false, error: state.error, data: { data }, refetch: vi.fn() };
   },
   useCommand: () => state.command,
 }));
@@ -63,6 +66,7 @@ function show(
   act(() => state.listeners.forEach((listener) => listener()));
 }
 beforeEach(() => {
+  state.error = null;
   state.command = {
     // Accepted at once (202), as the API answers when the updater is there.
     mutate: vi.fn((body: { command: string }) => {
@@ -71,6 +75,7 @@ beforeEach(() => {
     }),
     isPending: false,
     isSuccess: false,
+    isError: false,
     error: null,
     data: undefined,
   };
@@ -268,8 +273,11 @@ it('ADMIN-B68 automatic installing is off by default and saved with its window',
   mount(<UpdatesPage />);
   const toggle = screen.getByRole('checkbox', { name: new RegExp(en.admin.updateAutomatic) });
   expect(toggle.getAttribute('aria-checked')).toBe('false');
-  expect(screen.getByText(en.admin.updateWindow.replace('{zone}', extremeZones.east))).toBeTruthy();
+  // Off, the window has nothing to apply to, so it is not shown.
+  expect(screen.queryByText(en.admin.updateWindow.replace('{zone}', extremeZones.east))).toBeNull();
+  expect(screen.queryByLabelText(en.admin.updateWindowFrom)).toBeNull();
   fireEvent.click(toggle);
+  expect(screen.getByText(en.admin.updateWindow.replace('{zone}', extremeZones.east))).toBeTruthy();
   const save = screen.getByRole('button', { name: en.admin.updateAutomaticSave });
   fireEvent.change(screen.getByLabelText(en.admin.updateWindowFrom), {
     target: { value: '02:00' },
@@ -293,6 +301,8 @@ it('ADMIN-B68 the page shows the setting the updater recorded, and reads in Arab
   expect(screen.getByLabelText(ar.admin.updateWindowFrom)).toHaveProperty('value', '23:00');
   expect(screen.getByLabelText(ar.admin.updateWindowTo)).toHaveProperty('value', '04:00');
   fireEvent.click(toggle);
+  // Hidden once off, but the recorded window is kept for when it is turned back on.
+  expect(screen.queryByLabelText(ar.admin.updateWindowFrom)).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: ar.admin.updateAutomaticSave }));
   expect(state.command.mutate).toHaveBeenCalledWith({
     command: 'settings',
@@ -543,4 +553,100 @@ it('ADMIN-B75 checking and downloading a release count as preparing it', () => {
   expect(
     within(installing).getByRole('status').querySelector('[aria-current="step"]')?.textContent,
   ).toBe(en.admin.updateProgress_updater);
+});
+
+it('ADMIN-B67 Install now locks at once and says the update is starting, until the updater starts it or the request fails', () => {
+  state.command.mutate = vi.fn();
+  show('running', status({ state: 'available', candidate: { version: '2026.11.0', digest } }));
+  mount(<UpdatesPage />);
+  fireEvent.click(screen.getByRole('button', { name: en.admin.updateInstallNow }));
+  const starting = screen.getByRole('button', { name: en.admin.updateInstallStarting });
+  expect(starting.hasAttribute('disabled')).toBe(true);
+  expect(starting.getAttribute('aria-busy')).toBe('true');
+  // A refresh with nothing new yet keeps it locked.
+  show('running', status({ state: 'available', candidate: { version: '2026.11.0', digest } }));
+  expect(screen.getByRole('button', { name: en.admin.updateInstallStarting })).toBeTruthy();
+  // The request failed: Install now can be pressed again.
+  state.command.isError = true;
+  show('running', status({ state: 'available', candidate: { version: '2026.11.0', digest } }));
+  expect(
+    screen.getByRole('button', { name: en.admin.updateInstallNow }).hasAttribute('disabled'),
+  ).toBe(false);
+});
+
+it('ADMIN-B67 the install card shows the step count, the versions, the time taken, the stages done and the backup', () => {
+  vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+  vi.setSystemTime(new Date('2026-09-10T09:01:05Z'));
+  try {
+    show(
+      'running',
+      status({
+        state: 'updating',
+        step: 'verify',
+        startedAt: '2026-09-10T09:00:00Z',
+        candidate: { version: '2026.11.0' },
+        backup: 'pre-update-b-7',
+      }),
+    );
+    mount(<UpdatesPage />);
+    const installing = screen.getByRole('region', { name: en.admin.updateInstalling });
+    const text = () => installing.textContent ?? '';
+    expect(text()).toContain('Step 4 of 4');
+    expect(text()).toContain('1.1.0');
+    expect(text()).toContain('2026.11.0');
+    expect(text()).toContain('Elapsed 1:05');
+    act(() => vi.advanceTimersByTime(2000));
+    expect(text()).toContain('Elapsed 1:07');
+    expect(within(installing).getByText('pre-update-b-7').getAttribute('dir')).toBe('ltr');
+    expect(
+      within(installing).getByText(en.admin.updateProgress_verify).getAttribute('aria-current'),
+    ).toBe('step');
+    // The new container takes a few seconds to answer; the card says so.
+    expect(within(installing).getByText(en.admin.updateReconnectingNotice)).toBeTruthy();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('ADMIN-B67 a refresh that fails while the container is swapped keeps the install on the page, in Arabic', () => {
+  show(
+    'running',
+    status({ state: 'updating', step: 'backup', candidate: { version: '2027.1.0' } }),
+  );
+  mount(<UpdatesPage />, 'ar');
+  expect(screen.queryByText(ar.admin.updateReconnectingNotice)).toBeNull();
+  state.error = new Error('fetch failed');
+  show(
+    'running',
+    status({ state: 'updating', step: 'backup', candidate: { version: '2027.1.0' } }),
+  );
+  expect(screen.queryByRole('alert')).toBeNull();
+  expect(screen.getByRole('heading', { name: ar.admin.updateInstalling })).toBeTruthy();
+  expect(screen.getByText(ar.admin.updateReconnectingNotice)).toBeTruthy();
+  // Outside an install a failed refresh is an error, as before.
+  show('running', status());
+  expect(screen.getByRole('alert')).toBeTruthy();
+});
+
+it('ADMIN-B67 an install the page watched finish says so, with the version and backup, and offers a reload', () => {
+  const reload = vi.fn();
+  vi.stubGlobal('location', { ...window.location, reload });
+  try {
+    show('running', status({ state: 'updated', running: { version: '1.0.0' } }));
+    mount(<UpdatesPage />);
+    // Read about afterwards, it is history, not news.
+    expect(screen.queryByRole('heading', { name: en.admin.updateCompletedTitle })).toBeNull();
+    show('running', status({ state: 'updating', step: 'switch' }));
+    show(
+      'running',
+      status({ state: 'updated', running: { version: '2026.11.0' }, backup: 'pre-update-b-8' }),
+    );
+    const done = screen.getByRole('region', { name: en.admin.updateCompletedTitle });
+    expect(done.textContent).toContain('2026.11.0');
+    expect(within(done).getByText('pre-update-b-8')).toBeTruthy();
+    fireEvent.click(within(done).getByRole('button', { name: en.admin.updateReloadPage }));
+    expect(reload).toHaveBeenCalled();
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });

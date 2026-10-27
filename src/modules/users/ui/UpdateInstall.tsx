@@ -4,17 +4,11 @@ import { useTranslations } from 'next-intl';
 import { Download } from 'lucide-react';
 import { Button } from '@/ui/primitives/button';
 import { Checkbox } from '@/ui/primitives/checkbox';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogTitle,
-} from '@/ui/primitives/dialog';
 import { Input } from '@/ui/primitives/input';
 import { Field } from '@/ui/layout/Field';
-import { type Status, type useCommand } from './update-queries';
-import { Candidate, Panel, Version } from './update-parts';
+import { type Status, type useCommand, useFinished } from './update-queries';
+import { Candidate, Panel } from './update-parts';
+import { Completed, ConfirmInstall, Pressed, Progress } from './UpdateProgress';
 
 type Send = ReturnType<typeof useCommand>;
 
@@ -24,17 +18,30 @@ export function Install({
   status,
   command,
   enabled,
+  reconnecting,
 }: {
   status: Status;
   command: Send;
   enabled: boolean;
+  reconnecting: boolean;
 }) {
-  if (status.state === 'updating') return <Progress status={status} />;
+  const finished = useFinished(status.state);
+  if (status.state === 'updating') return <Progress status={status} reconnecting={reconnecting} />;
   const updater = status.protocol >= 3 && Boolean(status.updaterUpdate);
-  if (status.state === 'available' || updater)
-    return <Available status={status} command={command} enabled={enabled} />;
-  return null;
+  return (
+    <>
+      {finished && <Completed status={status} />}
+      {(status.state === 'available' || updater) && (
+        <Available status={status} command={command} enabled={enabled} />
+      )}
+    </>
+  );
 }
+
+const help = (status: Status, release: boolean) => {
+  if (!release) return 'updateAvailableSmall';
+  return status.confirm ? 'updateAvailableContract' : 'updateAvailableHelp';
+};
 
 // ADMIN-B67: a release the updater announced, installed only when an administrator chooses.
 function Available({
@@ -48,35 +55,36 @@ function Available({
 }) {
   const t = useTranslations('admin');
   const [confirming, setConfirming] = useState(false);
+  // What Install now was pressed for: it stays pressed until the updater starts, or the request fails.
+  const [queued, setQueued] = useState<string | null>(null);
   // Only the updater newer: no release of Enan to name, and nothing of Enan's to back up.
   const candidate = status.state === 'available' ? status.candidate : undefined;
   const digest = candidate?.digest;
-  if (!digest && !status.updaterUpdate) return null;
-  const install = (confirm: boolean) =>
+  const target = digest ?? status.updaterUpdate;
+  if (!target) return null;
+  const starting = queued === target && !command.isError;
+  const install = (confirm: boolean) => {
+    setQueued(target);
     command.mutate(
       digest ? { command: 'install', digest, confirm } : { command: 'install', confirm },
       { onSuccess: () => setConfirming(false) },
     );
+  };
   return (
     <Panel title={t('updateAvailableTitle')} tone="border-accent/40">
       <div className="grid gap-3 text-sm">
         {candidate && <Candidate candidate={candidate} />}
-        <p className="font-light text-text-muted">
-          {t(
-            !candidate
-              ? 'updateAvailableSmall'
-              : status.confirm
-                ? 'updateAvailableContract'
-                : 'updateAvailableHelp',
-          )}
-        </p>
+        <p className="font-light text-text-muted">{t(help(status, Boolean(candidate)))}</p>
         <div>
           <Button
-            disabled={command.isPending || !enabled || status.paused}
+            disabled={starting || command.isPending || !enabled || status.paused}
+            aria-busy={starting}
             onClick={() => (status.confirm ? setConfirming(true) : install(false))}
           >
-            <Download className="size-4" aria-hidden />
-            {t('updateInstallNow')}
+            <Pressed starting={starting}>
+              <Download className="size-4" aria-hidden />
+              {t('updateInstallNow')}
+            </Pressed>
           </Button>
         </div>
       </div>
@@ -84,75 +92,9 @@ function Available({
         open={confirming}
         onOpenChange={setConfirming}
         pending={command.isPending}
+        starting={starting}
         onInstall={() => install(true)}
       />
-    </Panel>
-  );
-}
-
-// ADMIN-B67: a release the running one cannot go back from is installed only once confirmed.
-function ConfirmInstall({
-  open,
-  onOpenChange,
-  pending,
-  onInstall,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  pending: boolean;
-  onInstall: () => void;
-}) {
-  const t = useTranslations('admin');
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogTitle>{t('updateConfirmTitle')}</DialogTitle>
-        <DialogDescription>{t('updateConfirmBody')}</DialogDescription>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            {t('updateConfirmCancel')}
-          </Button>
-          <Button disabled={pending} onClick={onInstall}>
-            {t('updateConfirmInstall')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ADMIN-B75: the updater's own step comes first when it is newer, named only as preparing.
-const steps: ('updater' | 'backup' | 'switch' | 'verify')[] = [
-  'updater',
-  'backup',
-  'switch',
-  'verify',
-];
-
-// ADMIN-B67: where an install stands; done and rolled back are the outcomes the page shows after.
-function Progress({ status }: { status: Status }) {
-  const t = useTranslations('admin');
-  // Checking and downloading the release are preparing it too.
-  const current = ['check', 'pull', 'updater'].includes(status.step ?? '')
-    ? 'updater'
-    : status.step;
-  const at = steps.findIndex((step) => step === current);
-  return (
-    <Panel title={t('updateInstalling')}>
-      <p className="mb-3 text-sm text-text-muted">
-        {t('updateCandidate')} <Version image={status.candidate} />
-      </p>
-      <ol role="status" className="grid gap-1 text-sm">
-        {steps.map((step, index) => (
-          <li
-            key={step}
-            aria-current={index === at ? 'step' : undefined}
-            className={index === at ? 'font-medium text-accent' : 'text-text-muted'}
-          >
-            {t(`updateProgress_${step}`)}
-          </li>
-        ))}
-      </ol>
     </Panel>
   );
 }
@@ -178,7 +120,8 @@ export function Automatic({
   const [to, setTo] = useState(span(status.window).to);
   // Both ends or neither: half a window is no window.
   const window = from && to ? `${from}-${to}` : '';
-  const partial = Boolean(from) !== Boolean(to) || (from !== '' && from === to);
+  // A window is kept while automatic installing is off, but only checked while it is on.
+  const partial = automatic && (Boolean(from) !== Boolean(to) || (from !== '' && from === to));
   return (
     <Panel title={t('updateAutomaticTitle')}>
       <form
@@ -199,16 +142,18 @@ export function Automatic({
             <span className="font-light text-text-muted">{t('updateAutomaticHelp')}</span>
           </span>
         </label>
-        <fieldset className="grid gap-2" disabled={!automatic}>
-          <legend className="mb-2 font-medium">
-            {t('updateWindow', { zone: status.timeZone ?? 'UTC' })}
-          </legend>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Time label={t('updateWindowFrom')} value={from} onChange={setFrom} />
-            <Time label={t('updateWindowTo')} value={to} onChange={setTo} />
-          </div>
-          <p className="font-light text-text-muted">{t('updateWindowHelp')}</p>
-        </fieldset>
+        {automatic && (
+          <fieldset className="grid gap-2">
+            <legend className="mb-2 font-medium">
+              {t('updateWindow', { zone: status.timeZone ?? 'UTC' })}
+            </legend>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Time label={t('updateWindowFrom')} value={from} onChange={setFrom} />
+              <Time label={t('updateWindowTo')} value={to} onChange={setTo} />
+            </div>
+            <p className="font-light text-text-muted">{t('updateWindowHelp')}</p>
+          </fieldset>
+        )}
         <div>
           <Button type="submit" disabled={command.isPending || !enabled || partial}>
             {t('updateAutomaticSave')}

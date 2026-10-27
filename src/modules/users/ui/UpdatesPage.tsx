@@ -1,9 +1,8 @@
 'use client';
 import { type ReactNode, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { CircleCheck, ExternalLink, RefreshCw, RotateCcw, ShieldAlert } from 'lucide-react';
+import { CircleCheck, RefreshCw, RotateCcw } from 'lucide-react';
 import { type z } from 'zod';
-import { useDateTime, useRelativeTime } from '@/ui/format';
 import { Button } from '@/ui/primitives/button';
 import { ErrorPanel } from '@/ui/layout/ErrorPanel';
 import Loading from '@/ui/layout/Loading';
@@ -15,16 +14,7 @@ import {
   useCommand,
   useUpdates,
 } from './update-queries';
-import {
-  type Asked,
-  Code,
-  commands,
-  Followup,
-  Panel,
-  releases,
-  StateChip,
-  Version,
-} from './update-parts';
+import { type Asked, Code, commands, Facts, Followup, Panel, Stalled } from './update-parts';
 import { History, Outcome, UpdaterOutdated } from './UpdateDetails';
 import { UpdaterUpdate } from './UpdaterUpdate';
 import { Automatic, Install } from './UpdateInstall';
@@ -33,17 +23,24 @@ export function UpdatesPage() {
   const query = useUpdates();
   const command = useCommand();
   if (query.isPending) return <Loading />;
-  if (query.error) return <ErrorPanel error={query.error} retry={() => void query.refetch()} />;
-  return <Updates answer={query.data.data} command={command} />;
+  // ADMIN-B67: an install swaps the container, so a refresh fails for a few seconds; while one is
+  // under way the last answer stays on the page, and the page keeps asking.
+  const answer = query.data?.data;
+  if (query.error && answer?.status?.state !== 'updating')
+    return <ErrorPanel error={query.error} retry={() => void query.refetch()} />;
+  if (!answer) return <Loading />;
+  return <Updates answer={answer} command={command} reconnecting={Boolean(query.error)} />;
 }
 
 // What the updater said, and what can be asked of it.
 function Updates({
   answer,
   command,
+  reconnecting,
 }: {
   answer: Answer['data'];
   command: ReturnType<typeof useCommand>;
+  reconnecting: boolean;
 }) {
   const { health, status, history, commands, outdated } = answer;
   const issue = latestIssue(status, history);
@@ -60,7 +57,14 @@ function Updates({
       ) : (
         live && <UpdaterUpdate status={live} command={command} enabled={commands} />
       )}
-      {askable && <Install status={askable} command={command} enabled={commands} />}
+      {askable && (
+        <Install
+          status={askable}
+          command={command}
+          enabled={commands}
+          reconnecting={reconnecting}
+        />
+      )}
       {command.error && <ErrorPanel error={command.error} />}
       {issue && <Outcome status={issue} />}
       {askable && (
@@ -113,71 +117,6 @@ function UpdaterPanel({
   );
 }
 
-function Stalled() {
-  const t = useTranslations('admin');
-  return (
-    <div role="alert" className="mb-4 grid gap-2 text-sm text-danger">
-      <p className="flex items-center gap-2 font-medium">
-        <ShieldAlert className="size-4 shrink-0" aria-hidden />
-        {t('updaterStalled')}
-      </p>
-      <p className="font-light text-text-muted">{t('updaterStalledHelp')}</p>
-      <Code>{commands.logs}</Code>
-    </div>
-  );
-}
-
-function Facts({ status }: { status: Status }) {
-  const t = useTranslations('admin');
-  const relative = useRelativeTime();
-  const dateTime = useDateTime();
-  const every = intervalOf(status.intervalSeconds);
-  return (
-    <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-[auto_1fr]">
-      <dt className="text-text-muted">{t('updateRunning')}</dt>
-      <dd className="flex flex-wrap items-center gap-2">
-        <Version image={status.running} />
-        {status.running?.version && (
-          <a
-            href={`${releases}${status.running.version}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-xs text-accent underline-offset-4 hover:underline"
-          >
-            {t('updateReleaseNotes')}
-            <ExternalLink className="size-3" aria-hidden />
-          </a>
-        )}
-      </dd>
-      <dt className="text-text-muted">{t('updateChannel')}</dt>
-      <dd>
-        <bdi dir="ltr">{status.channel || t('updateVersionUnknown')}</bdi>
-      </dd>
-      <dt className="text-text-muted">{t('updateLastCheck')}</dt>
-      <dd>
-        {status.lastCheckAt ? (
-          <time dateTime={status.lastCheckAt} title={dateTime(status.lastCheckAt)}>
-            {relative(status.lastCheckAt)}
-          </time>
-        ) : (
-          t('updateNever')
-        )}
-        <span className="text-text-muted"> · {t('updateEvery', every)}</span>
-      </dd>
-      <dt className="text-text-muted">{t('updateLastResult')}</dt>
-      <dd className="flex items-center gap-2">
-        <StateChip state={status.paused ? 'paused' : status.state} />
-      </dd>
-    </dl>
-  );
-}
-
-// How often the updater checks, in the largest whole unit: a day reads "daily", not 1440 minutes.
-function intervalOf(seconds: number) {
-  if (seconds >= 86400 && seconds % 86400 === 0) return { unit: 'day', count: seconds / 86400 };
-  if (seconds >= 3600 && seconds % 3600 === 0) return { unit: 'hour', count: seconds / 3600 };
-  return { unit: 'minute', count: Math.max(1, Math.round(seconds / 60)) };
-}
 // Try again clears the updater's list of images that failed; it does nothing for an update held
 // back as a contract migration (step `guard`), which waits for the operator.
 const retryable = (status: Status) =>
