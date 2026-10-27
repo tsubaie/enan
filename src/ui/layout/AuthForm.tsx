@@ -60,8 +60,9 @@ function useAuthState(mode: Mode) {
   // ADR 0055: signing in is Better Auth's. Setup makes the administrator first, then signs in the
   // same way; recovery sets a password and sends the reader to sign in with it.
   const signIn = (values: FormValues) =>
-    authCall(authClient.signIn.email({ email: values.email, password: values.password }), (code) =>
-      word(code),
+    authCall(
+      authClient.signIn.email({ email: values.email, password: values.password }),
+      (code) => word(code),
     );
   const mutation = useMutation({
     mutationFn: async (values: FormValues) => {

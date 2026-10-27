@@ -20,9 +20,8 @@ export function CodeSignIn({ passwordEnabled }: { passwordEnabled: boolean }) {
   const word = useTranslations('errors');
   const send = useMutation({
     mutationFn: (address: string) =>
-      authCall(
-        authClient.emailOtp.sendVerificationOtp({ email: address, type: 'sign-in' }),
-        (code) => word(code),
+      authCall(authClient.emailOtp.sendVerificationOtp({ email: address, type: 'sign-in' }), (code) =>
+        word(code),
       ),
     onSuccess: (_, address) => setSentTo(address),
   });
