@@ -1,4 +1,4 @@
-import type { Browser, Page } from '@playwright/test';
+import type { Browser, Locator, Page } from '@playwright/test';
 import { test, expect } from './fixtures/test';
 import { laneBaseURL } from './lanes';
 import { credentials, loginAs } from './fixtures/auth';
@@ -293,3 +293,60 @@ test('ACCT-A04 ACCT-I01 ACCT-I02 the API has no way to name another account or t
     await deactivate(page, created.id);
   }
 });
+// A real browser's user agent is far wider than a phone; the row truncates it rather than pushing
+// the badge, the time and the action out of the card.
+const longAgent =
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36 Edg/147.0.3912.160 Vivaldi/7.6.3797.52';
+async function expectInView(locator: Locator, viewport: { width: number; height: number }) {
+  await locator.scrollIntoViewIfNeeded();
+  const box = await locator.boundingBox();
+  expect(box).not.toBeNull();
+  if (!box) return;
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.y).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
+  expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
+}
+for (const locale of ['en', 'ar']) {
+  const m = locale === 'ar' ? ar : en;
+  test(`ACCT-B03 a long user agent stays inside its session row at desktop and phone widths ${locale} @desktop`, async ({
+    browser,
+  }) => {
+    const reader = await browser.newContext({ userAgent: longAgent });
+    const elsewhere = await browser.newContext({ userAgent: longAgent });
+    try {
+      // A second signed-in device gives the list a row with a Revoke button.
+      await loginAs(await elsewhere.newPage(), locale);
+      const page = await reader.newPage();
+      await loginAs(page, locale);
+      for (const viewport of [
+        { width: 1280, height: 800 },
+        { width: 375, height: 667 },
+      ]) {
+        await page.setViewportSize(viewport);
+        await page.goto('/account');
+        const rows = page.locator('span[translate="no"]', { hasText: longAgent }).locator('..');
+        await expect(rows.first()).toBeVisible();
+        expect(await rows.count()).toBeGreaterThanOrEqual(2);
+        expect(
+          await rows.evaluateAll((all) => all.every((row) => row.scrollWidth <= row.clientWidth)),
+        ).toBe(true);
+        expect(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+          ),
+        ).toBe(true);
+        const mine = rows.filter({ hasText: m.account.currentSession });
+        await expectInView(mine.getByText(m.account.currentSession, { exact: true }), viewport);
+        await expectInView(mine.getByText(m.account.lastSeen), viewport);
+        await expectInView(
+          rows.getByRole('button', { name: m.account.revoke, exact: true }).first(),
+          viewport,
+        );
+      }
+    } finally {
+      await elsewhere.close();
+      await reader.close();
+    }
+  });
+}
