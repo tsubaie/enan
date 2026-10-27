@@ -19,7 +19,7 @@ import { type SignInMethod } from '@/core/config/sign-in-schema';
 import { Field } from './Field';
 import { ErrorPanel } from './ErrorPanel';
 const Form = z.object({
-  email: z.email(),
+  email: z.string().trim().toLowerCase().pipe(z.email()),
   password: z.string().min(1).max(256),
   name: z.string(),
   workspaceName: z.string(),
@@ -204,6 +204,8 @@ function CredentialFields({ state }: { state: AuthState }) {
           <Input
             type="email"
             autoComplete="username"
+            autoCapitalize="none"
+            autoCorrect="off"
             required
             {...control}
             {...state.form.register('email')}

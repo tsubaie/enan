@@ -13,6 +13,7 @@ import {
   revokeOtherSessions,
   revokeOwnSession,
   setPassword,
+  unlinkGoogle,
 } from '@/core/db/auth-repo';
 import { getSetting, hasSetting, writeSetting, clearSetting } from '@/core/db/settings-repo';
 import { toJson, writeAudit } from '@/core/db/audit-repo';
@@ -126,7 +127,12 @@ const emailChange = transactional(async function changeEmail(
   if (email === user.email) return getAccount(ctx);
   const taken = await userByEmail(ctx.db, email);
   if (taken) throw new AppError('validation_failed', { fieldErrors: { email: ['email_taken'] } });
-  await updateUserAccount(ctx.db, ctx.user.id, { email, revision: user.revision + 1 });
+  await updateUserAccount(ctx.db, ctx.user.id, {
+    email,
+    googleSubject: null,
+    revision: user.revision + 1,
+  });
+  await unlinkGoogle(ctx.db, ctx.user.id);
   await writeAudit(
     ctx.db,
     ctx.user.id,

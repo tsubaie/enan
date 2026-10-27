@@ -5,7 +5,7 @@ import { migrateDatabase } from '@/core/db/migrate';
 import { clearDatabase } from '@/core/db/reset';
 import { insertUser, insertSession } from '@/core/db/auth-repo';
 import { users, settings } from '@/core/db/system-schema';
-import { authSessions } from '@/core/db/auth-schema';
+import { authAccounts, authSessions } from '@/core/db/auth-schema';
 import { getSetting, writeSetting } from '@/core/db/settings-repo';
 import { hashPassword } from '@/core/auth/password';
 import { User } from '@/core/http/user-schema';
@@ -72,6 +72,24 @@ it('ACCT-B01 lowercases a changed address', async () => {
   );
   const [row] = await db().select().from(users).where(eq(users.id, actor.id));
   expect(row?.email).toBe('holder.new@example.test');
+});
+
+it('ACCT-B01 a changed address drops the Google account linked to the old one', async () => {
+  await db().update(users).set({ googleSubject: 'google-subject' }).where(eq(users.id, actor.id));
+  await db().insert(authAccounts).values({
+    id: id(),
+    accountId: 'google-subject',
+    providerId: 'google',
+    userId: actor.id,
+  });
+  await run((ctx) => service.changeEmail(ctx, 1, 'moved@example.test', 'correct horse battery'));
+  const [row] = await db().select().from(users).where(eq(users.id, actor.id));
+  expect(row?.googleSubject).toBeNull();
+  const accounts = await db()
+    .select({ providerId: authAccounts.providerId })
+    .from(authAccounts)
+    .where(eq(authAccounts.userId, actor.id));
+  expect(accounts).toEqual([{ providerId: 'credential' }]);
 });
 
 it('ACCT-B01 refuses an email change with a wrong current password and changes nothing', async () => {

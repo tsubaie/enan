@@ -32,7 +32,7 @@ export function CodeSignIn({ passwordEnabled }: { passwordEnabled: boolean }) {
           className="grid gap-5"
           onSubmit={(event) => {
             event.preventDefault();
-            send.mutate(email);
+            send.mutate(email.trim().toLowerCase());
           }}
         >
           <Field label={t('email')}>
@@ -40,6 +40,8 @@ export function CodeSignIn({ passwordEnabled }: { passwordEnabled: boolean }) {
               <Input
                 type="email"
                 autoComplete="username"
+                autoCapitalize="none"
+                autoCorrect="off"
                 required
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}

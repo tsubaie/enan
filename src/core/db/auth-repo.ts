@@ -31,7 +31,10 @@ export async function finishSetup(database: Database, replayHash: string) {
     .where(eq(workspace.id, 1));
 }
 export async function userByEmail(database: Database, email: string) {
-  const [row] = await database.select().from(users).where(eq(users.email, email));
+  const [row] = await database
+    .select()
+    .from(users)
+    .where(eq(users.email, email.trim().toLowerCase()));
   return row;
 }
 // Every member is added by an administrator, so the address counts as verified, and the password
@@ -191,6 +194,12 @@ export async function updateUserAccount(
     .where(eq(users.id, userId))
     .returning();
   return row;
+}
+// ACCT-B01: a Google account linked to the old address no longer signs in to this one.
+export async function unlinkGoogle(database: Database, userId: string) {
+  await database
+    .delete(authAccounts)
+    .where(and(eq(authAccounts.userId, userId), eq(authAccounts.providerId, 'google')));
 }
 export async function userById(database: Database, userId: string) {
   const [row] = await database.select().from(users).where(eq(users.id, userId));
