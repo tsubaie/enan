@@ -44,11 +44,13 @@ export function ShellHeader({ user }: { user: { name: string; email: string; rol
         <Button
           variant="ghost"
           className="gap-2 font-normal text-text-muted"
-          aria-label={t('searchWorkspace')}
           onClick={() => openSearchPalette()}
         >
           <Search aria-hidden={true} className="size-4" />
-          <span className="hidden sm:inline">{t('searchOpen')}</span>
+          <span className="sr-only">{t('searchWorkspace')}</span>
+          <span aria-hidden={true} className="hidden sm:inline">
+            {t('searchOpen')}
+          </span>
           <kbd
             translate="no"
             aria-hidden={true}
