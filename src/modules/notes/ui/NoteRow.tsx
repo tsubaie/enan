@@ -1,6 +1,7 @@
 'use client';
 import { CommitteeChip } from '@/modules/committees/ui';
 import { useTranslations } from 'next-intl';
+import { Mic } from 'lucide-react';
 import { PersonAvatar } from '@/ui/layout/PersonAvatar';
 import { CardBody, CardProgress, CardTitle, Chip } from '@/ui/entity/Card';
 import type { Note, Participant } from '../schema/validation';
@@ -32,6 +33,16 @@ export function NoteTrail({ note, inCommittee = false }: { note: Note; inCommitt
         </span>
       )}
       {note.type && <Chip>{typeLabel(note.type)}</Chip>}
+      {note.voiceMemoCount > 0 && (
+        <span
+          title={t('voiceMemoCount', { count: note.voiceMemoCount })}
+          className="flex items-center gap-1 tabular-nums"
+        >
+          <Mic className="size-3" aria-hidden />
+          <span aria-hidden>{note.voiceMemoCount}</span>
+          <span className="sr-only">{t('voiceMemoCount', { count: note.voiceMemoCount })}</span>
+        </span>
+      )}
       <span data-card-more className="contents">
         {note.archivedAt && <Chip tone="warning">{t('archivedChip')}</Chip>}
         <CardProgress

@@ -2,7 +2,7 @@ import 'server-only';
 import { sqliteTable, text, integer, index, uniqueIndex, check } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
 import { committees } from '@/modules/committees/schema/db';
-import { users, jobs, time, now, json, stamps } from '@/core/db/system-schema';
+import { users, jobs, files, time, now, json, stamps } from '@/core/db/system-schema';
 import { people } from '@/modules/people/schema/db';
 export const notes = sqliteTable(
   'notes',
@@ -97,6 +97,43 @@ export const noteRefinements = sqliteTable(
     check(
       'note_refinements_status_check',
       sql`${t.status} in ('pending', 'applied', 'discarded', 'stale')`,
+    ),
+  ],
+);
+// NOTES-I08: a voice memo on a note. The audio is a content-addressed `files` row written before
+// the row (ADR 0054); removing a memo soft-deletes it and keeps the binary (ADR 0034).
+export const noteVoiceMemos = sqliteTable(
+  'note_voice_memos',
+  {
+    id: text().primaryKey(),
+    noteId: text('note_id')
+      .notNull()
+      .references(() => notes.id, { onDelete: 'cascade' }),
+    fileId: text('file_id')
+      .notNull()
+      .references(() => files.id, { onDelete: 'restrict' }),
+    durationSeconds: integer('duration_seconds').notNull().default(0),
+    transcript: text(),
+    transcriptionStatus: text('transcription_status').notNull().default('pending'),
+    transcriptionJobId: text('transcription_job_id').references(() => jobs.id, {
+      onDelete: 'set null',
+    }),
+    transcriptionError: text('transcription_error'),
+    createdAt: time('created_at').notNull().default(now),
+    updatedAt: time('updated_at').notNull().default(now),
+    createdBy: text('created_by').references(() => users.id),
+    deletedAt: time('deleted_at'),
+    deletedOpId: text('deleted_op_id'),
+  },
+  (t) => [
+    index('note_voice_memos_note_idx').on(t.noteId, t.createdAt),
+    index('note_voice_memos_file_idx').on(t.fileId),
+    index('note_voice_memos_job_idx').on(t.transcriptionJobId),
+    index('note_voice_memos_creator_idx').on(t.createdBy),
+    check('note_voice_memos_duration_check', sql`${t.durationSeconds} between 0 and 900`),
+    check(
+      'note_voice_memos_status_check',
+      sql`${t.transcriptionStatus} in ('pending', 'done', 'failed', 'skipped')`,
     ),
   ],
 );

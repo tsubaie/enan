@@ -56,6 +56,8 @@ const columns = {
   participants,
   openTaskCount: openTasks,
   doneTaskCount: doneTasks,
+  // NOTES-B33: counted inside the list's one statement.
+  voiceMemoCount: sql<number>`(select count(*) from note_voice_memos vm where vm.note_id = notes.id and vm.deleted_at is null)`,
 };
 // The corpus search reads (ADR 0029, docs/features/search.md): the title first, then the content
 // and the tags. Tags are stored as the reader typed them, so their normalised form lives here

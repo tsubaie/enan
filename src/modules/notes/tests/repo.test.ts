@@ -5,6 +5,8 @@ import { countQueries } from '@/core/db/query-log';
 import { NoteListQuery } from '../schema/validation';
 import * as service from '../service';
 import * as repo from '../repo';
+import * as voiceRepo from '../voice/repo';
+import { id } from '@/core/db/ids';
 import { harness } from './fixtures';
 beforeAll(async () => {
   await migrateDatabase();
@@ -36,4 +38,30 @@ it('NOTES-B02 selects the page with every view count in one statement', async ()
   expect(
     await repo.countNotes(db(), NoteListQuery.parse({ q: 'zzz' }), dates, views),
   ).toMatchObject({ all: 0 });
+});
+it('NOTES-B33 the list counts each note’s live voice memos inside its one statement', async () => {
+  const spoken = await harness.note('Spoken');
+  await harness.note('Silent');
+  await harness.run(async (ctx) => {
+    const fileId = await voiceRepo.upsertAudioFile(ctx.db, {
+      storageKey: 'voice-0000',
+      originalName: 'Memo.webm',
+      mime: 'audio/webm',
+      sizeBytes: 4,
+      sha256: '0000',
+    });
+    for (const deletedAt of [null, null, new Date()])
+      await voiceRepo.insertVoiceMemo(ctx.db, { id: id(), noteId: spoken.id, fileId, deletedAt });
+    return {};
+  });
+  const views = service.viewsFor([]);
+  const dates = { today: '2026-09-10', weekStart: '2026-09-04' };
+  const { result, queries } = await countQueries(() =>
+    repo.selectNotes(db(), NoteListQuery.parse({}), dates, views, repo.sortSpec('title'), 10, null),
+  );
+  expect(queries).toBe(1);
+  expect(result.map((row) => [row.title, row.voiceMemoCount])).toEqual([
+    ['Silent', 0],
+    ['Spoken', 2],
+  ]);
 });

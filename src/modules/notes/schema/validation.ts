@@ -90,9 +90,44 @@ export const Note = z.object({
   openTaskCount: z.number().default(0),
   doneTaskCount: z.number().default(0),
   band: Band.nullable().default(null),
+  voiceMemoCount: z.number().int().nonnegative().default(0),
 });
 export type Note = z.infer<typeof Note>;
-export const NoteDetail = Note.extend({ tasks: z.array(NoteTask).default([]) });
+// NOTES-I08: a voice memo on a note; `skipped` means no transcript was given with the audio.
+export const VoiceMemoStatus = z.enum(['pending', 'done', 'failed', 'skipped']);
+export const NoteVoiceMemo = z.strictObject({
+  id: z.uuid(),
+  noteId: z.uuid(),
+  fileId: z.uuid(),
+  originalName: z.string(),
+  mime: z.string(),
+  sizeBytes: z.number().int().nonnegative(),
+  durationSeconds: z.number().int().min(0).max(900),
+  transcript: z.string().nullable(),
+  transcriptionStatus: VoiceMemoStatus,
+  transcriptionJobId: z.uuid().nullable(),
+  transcriptionError: z.string().nullable(),
+  audioUrl: z.string(),
+  createdAt: timestamp,
+  createdBy: z.uuid().nullable(),
+});
+export type NoteVoiceMemo = z.infer<typeof NoteVoiceMemo>;
+const Transcript = z.string().trim().min(1).max(50000);
+export const VoiceUpload = z.strictObject({
+  file: z.file(),
+  durationSeconds: z.coerce.number().int().min(0).max(900).default(0),
+  transcript: Transcript.optional(),
+});
+// NOTES-B31: the transcript is never put into the note unless `appendToNote` asks for it.
+export const VoiceTranscribe = z.strictObject({
+  transcript: Transcript.optional(),
+  appendToNote: z.boolean().default(false),
+  refine: z.boolean().default(false),
+});
+export const NoteDetail = Note.extend({
+  tasks: z.array(NoteTask).default([]),
+  voiceMemos: z.array(NoteVoiceMemo).default([]),
+});
 export type NoteDetail = z.infer<typeof NoteDetail>;
 export const NoteType = z.object({
   id: z.string(),

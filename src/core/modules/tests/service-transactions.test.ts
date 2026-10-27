@@ -8,7 +8,7 @@ declare global {
   }
 }
 // Exports that only read, or that open their transaction themselves (setup takes a handle,
-// manageTags predates the wrapper, the wallpaper upload and delete do slow work outside it, and
+// manageTags predates the wrapper, the wallpaper and voice memo uploads and the wallpaper delete do slow work outside it, and
 // the account's email and password changes wrap one to throw after a recorded failure commits). Everything else a service exports writes and must be atomic.
 const exempt: Record<string, string[]> = {
   account: ['getAccount', 'readerTheme', 'readerLocale', 'changeEmail', 'changePassword'],
@@ -47,6 +47,7 @@ const exempt: Record<string, string[]> = {
     'listManagedTags',
     'manageTags',
   ],
+  'notes/voice/service': ['uploadVoiceMemo', 'voiceMemoAudio'],
   notifications: ['feed'],
   people: [
     'personNameSql',
@@ -74,7 +75,12 @@ const exempt: Record<string, string[]> = {
 // module's service.ts (keyed by the module name) and every file under its ai/ except the route
 // handlers in api.ts (keyed by path).
 const discovered = import.meta.glob(
-  ['../../../modules/*/service.ts', '../../../modules/*/ai/*.ts', '!../../../modules/*/ai/api.ts'],
+  [
+    '../../../modules/*/service.ts',
+    '../../../modules/*/voice/service.ts',
+    '../../../modules/*/ai/*.ts',
+    '!../../../modules/*/ai/api.ts',
+  ],
   { eager: true },
 );
 const surfaces = Object.entries(discovered).map(([path, exports]) => {
@@ -87,7 +93,14 @@ const surfaces = Object.entries(discovered).map(([path, exports]) => {
 describe('service transaction ownership', () => {
   it('ADMIN-B36 discovery covers every module service and its AI services', () => {
     const keys = surfaces.map(([key]) => key);
-    expect(keys).toEqual(expect.arrayContaining(['tasks', 'tasks/ai/service', 'notes/ai/apply']));
+    expect(keys).toEqual(
+      expect.arrayContaining([
+        'tasks',
+        'tasks/ai/service',
+        'notes/ai/apply',
+        'notes/voice/service',
+      ]),
+    );
   });
   it.each(surfaces)(
     'ADMIN-B36 every writing export of %s owns its transaction',

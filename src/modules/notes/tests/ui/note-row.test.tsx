@@ -51,6 +51,13 @@ describe('note row', () => {
     expect(screen.getByRole('button', { name: 'Show Leila Haddad' })).toBeTruthy();
     expect(screen.getByText('+1')).toBeTruthy();
   });
+  it('NOTES-B33 a note with voice memos shows a microphone and their count; one without shows none', () => {
+    mount(<NoteTrail note={{ ...note, voiceMemoCount: 2 }} />);
+    expect(screen.getByTitle('2 voice memos')).toBeTruthy();
+    expect(screen.getByText('2 voice memos').className).toContain('sr-only');
+    mount(<NoteTrail note={note} />);
+    expect(screen.queryByTitle(/voice memo/u)).toBeNull();
+  });
   it('NOTES-A01 renders the Arabic labels in the Arabic view', () => {
     mount(<><NoteRow note={note} /><NoteTrail note={note} /></>, 'ar');
     expect(screen.getByText(ar.notes.board_meeting)).toBeTruthy();
