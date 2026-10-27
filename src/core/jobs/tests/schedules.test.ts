@@ -6,6 +6,7 @@ import { jobs, schedules } from '@/core/db/system-schema';
 import { eq } from 'drizzle-orm';
 import { handlerFor } from '../registry';
 import { scheduleDue } from '../scheduler';
+import { maintenanceFile } from '@/core/backup/maintenance';
 beforeAll(() => resetDatabase());
 afterAll(() => closeDatabase());
 it('ADMIN-B12 NOTIF-B10 ADMIN-B59 a migrated database schedules the backup, prune, notification purge and update notifications', async () => {
@@ -62,4 +63,17 @@ it('ADMIN-B12 a schedule that cannot be queued skips itself only: the backup is 
   expect(backups.some((job) => job.dedupKey?.startsWith('system.backup:2026-10-2'))).toBe(true);
   const [bad] = await db().select().from(schedules).where(eq(schedules.cron, 'not a cron expression'));
   expect(bad?.lastOccurrence).toBeNull();
+});
+it('ADMIN-B13 nothing is scheduled while a restore is marked', async () => {
+  const queued = async () => (await db().select({ id: jobs.id }).from(jobs)).length;
+  const before = await queued();
+  await maintenanceFile(true);
+  try {
+    await scheduleDue(new Date('2026-10-30T12:00:00Z'));
+  } finally {
+    await maintenanceFile(false);
+  }
+  expect(await queued()).toBe(before);
+  await scheduleDue(new Date('2026-10-30T12:00:00Z'));
+  expect(await queued()).toBeGreaterThan(before);
 });

@@ -4,7 +4,7 @@ import { users } from '@/core/db/system-schema';
 import { closeDatabase, databaseFor, pool } from '@/core/db/client';
 import { migrateDatabase } from '@/core/db/migrate';
 import { createBackup } from '../dump';
-import { isRestoring } from '../maintenance';
+import { isRestoring, maintenanceFile } from '../maintenance';
 import { swapByHand, workspace } from './fixtures/archive';
 // This file's module instance has never run a maintenance check before the swap below, which is
 // the state of an application process that booted, opened its client, and was then restored from
@@ -55,4 +55,13 @@ it('ADMIN-B38 a client opened before a restore in another process reopens on its
   const reopened = pool();
   expect(await isRestoring()).toBe(false);
   expect(pool()).toBe(reopened);
+});
+it('ADMIN-B13 while a restore is marked, a maintenance check closes the live connections', async () => {
+  const live = pool();
+  await maintenanceFile(true);
+  expect(await isRestoring()).toBe(true);
+  expect(live.closed).toBe(true);
+  await maintenanceFile(false);
+  expect(await isRestoring()).toBe(false);
+  expect(await emails()).toEqual([]);
 });

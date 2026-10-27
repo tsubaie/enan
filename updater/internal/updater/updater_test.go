@@ -32,6 +32,7 @@ type fake struct {
 	calls      []string
 	onInspect  func() // runs at every container inspection, to read the status mid-update
 	onStart    func(id string)
+	killed     []string // containers removed while still running
 }
 
 func newFake() *fake {
@@ -249,6 +250,9 @@ func (f *fake) Remove(_ context.Context, id string) error {
 	if err != nil {
 		return err
 	}
+	if c.State.Running {
+		f.killed = append(f.killed, c.ID)
+	}
 	delete(f.containers, c.ID)
 	return nil
 }
@@ -319,6 +323,9 @@ func TestScenarios(t *testing.T) {
 		{"ADMIN-B56 an update interrupted during the switch is reversed", anUpdateInterruptedDuringTheSwitchIsReversed},
 		{"ADMIN-B56 pause and resume", pauseAndResume},
 		{"ADMIN-B56 a manual rollback goes back to the replaced image", manualRollbackGoesBackToTheReplacedImage},
+		{"ADMIN-B56 a failing container is stopped before it is removed", aFailingContainerIsStoppedBeforeRemoval},
+		{"ADMIN-B56 the new container runs the channel's tag, not the name the old one was started with", theNewContainerRunsTheChannelTag},
+		{"ADMIN-B56 a container started from a pinned digest is replaced by one on the tag", aPinnedContainerIsReplacedOnTheTag},
 		{"ADMIN-B56 a failed rollback pauses the updater instead of installing the image again", aFailedRollbackPausesTheUpdater},
 		{"ADMIN-B56 a shutdown during verification records nothing and the next start finishes the update", aShutdownDuringVerificationIsLeftForRecovery},
 		{"ADMIN-B56 a second updater is refused", aSecondUpdaterIsRefused},
@@ -572,14 +579,58 @@ func manualRollbackGoesBackToTheReplacedImage(t *testing.T) {
 	f.image("img-2", "sha256:two", "1.1.0", 8, 0)
 	f.publish("latest", "sha256:two")
 	u.Check(context.Background())
+	u.status.UpdaterUpdate = "sha256:updater"
 	u.Apply(context.Background(), Command{Command: "rollback"})
 	if u.status.State != Updated || app(t, f).Image != "img-1" {
 		t.Fatalf("state %s: %s, running %s", u.status.State, u.status.Error, app(t, f).Image)
+	}
+	// The image left behind was rejected, so it is no way back; the updater's own news stays.
+	if u.state.LastPrevious != nil || u.status.UpdaterUpdate != "sha256:updater" {
+		t.Fatalf("last previous %+v, updater update %q", u.state.LastPrevious, u.status.UpdaterUpdate)
 	}
 	// The channel still names img-2; the next check must keep the operator's choice.
 	u.Check(context.Background())
 	if u.status.State != Blocked || app(t, f).Image != "img-1" {
 		t.Fatalf("next check: state %s, running %s", u.status.State, app(t, f).Image)
+	}
+}
+
+func aFailingContainerIsStoppedBeforeRemoval(t *testing.T) {
+	u, f, _ := setup(t)
+	f.image("img-2", "sha256:two", "1.1.0", 8, 0)
+	f.publish("latest", "sha256:two")
+	f.broken["img-2"] = true
+	u.Check(context.Background())
+	if u.status.State != RolledBack || len(f.killed) != 0 {
+		t.Fatalf("state %s, removed while running %v", u.status.State, f.killed)
+	}
+}
+
+func theNewContainerRunsTheChannelTag(t *testing.T) {
+	u, f, _ := setup(t)
+	u.Config.Channel = "edge"
+	f.image("img-2", "sha256:two", "1.1.0", 8, 0)
+	f.publish("edge", "sha256:two")
+	u.Check(context.Background())
+	running := app(t, f)
+	if u.status.State != Updated || running.Ref() != repo+":edge" || running.Image != "img-2" {
+		t.Fatalf("state %s: %s, running %s on %s", u.status.State, u.status.Error, running.Ref(), running.Image)
+	}
+	if f.tags[repo+":edge"] != "img-2" || f.tags[repo+":latest"] != "img-1" {
+		t.Fatalf("tags %v", f.tags)
+	}
+}
+
+func aPinnedContainerIsReplacedOnTheTag(t *testing.T) {
+	u, f, _ := setup(t)
+	f.image("img-2", "sha256:two", "1.1.0", 8, 0)
+	pinned := app(t, f)
+	pinned.Config["Image"] = repo + "@sha256:one"
+	target := &Image{ID: "img-2"}
+	err := u.switchTo(context.Background(), *pinned, registry.Reference{Repository: repo}, &Image{ID: "img-1"}, target, "backup-1")
+	running := app(t, f)
+	if err != nil || running.Ref() != repo+":latest" || running.Image != "img-2" {
+		t.Fatalf("error %v, running %s on %s", err, running.Ref(), running.Image)
 	}
 }
 
