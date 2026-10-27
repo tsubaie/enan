@@ -128,7 +128,7 @@ jobs:
     # Chromium and its system packages are preinstalled in the image. The tag must equal the
     # lockfile's @playwright/test version (checked below).
     container:
-      image: mcr.microsoft.com/playwright:v1.63.0-noble
+      image: mcr.microsoft.com/playwright:v1.64.1-noble
       options: --init --ipc=host
     steps:
       - uses: actions/checkout@v4
@@ -146,7 +146,7 @@ jobs:
       - name: Check the Playwright image matches the lockfile
         run: |
           installed=$(node -p "require('@playwright/test/package.json').version")
-          test "$installed" = "1.63.0" || { echo "::error::@playwright/test is $installed but the container image is v1.63.0 — update both in .github/workflows/ci.yml"; exit 1; }
+          test "$installed" = "1.64.1" || { echo "::error::@playwright/test is $installed but the container image is v1.64.1 — update both in .github/workflows/ci.yml"; exit 1; }
       # A hosted runner starts empty: restore Next's incremental build cache.
       - name: Cache Next.js build
         uses: actions/cache@v4
@@ -177,7 +177,7 @@ jobs:
     # Chromium and its system packages are preinstalled in the image. The tag must equal the
     # lockfile's @playwright/test version (checked below).
     container:
-      image: mcr.microsoft.com/playwright:v1.63.0-noble
+      image: mcr.microsoft.com/playwright:v1.64.1-noble
       options: --init --ipc=host
     steps:
       - uses: actions/checkout@v4
@@ -195,7 +195,7 @@ jobs:
       - name: Check the Playwright image matches the lockfile
         run: |
           installed=$(node -p "require('@playwright/test/package.json').version")
-          test "$installed" = "1.63.0" || { echo "::error::@playwright/test is $installed but the container image is v1.63.0 — update both in .github/workflows/ci.yml"; exit 1; }
+          test "$installed" = "1.64.1" || { echo "::error::@playwright/test is $installed but the container image is v1.64.1 — update both in .github/workflows/ci.yml"; exit 1; }
       # A hosted runner starts empty: restore Next's incremental build cache.
       - name: Cache Next.js build
         uses: actions/cache@v4
