@@ -35,6 +35,7 @@ export const routes = {
   adminHome: () => '/admin',
   admin: (page: AdminPage) => `/admin/${page}`,
   account: () => '/account',
+  accountPasskeys: () => '/account#passkeys',
   notifications: (query?: Optional<'unread' | 'kind'>) => withQuery('/notifications', query),
   login: () => '/login',
   setup: () => '/setup',

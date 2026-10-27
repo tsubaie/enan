@@ -242,6 +242,10 @@ it('ACCT-B10 the passkeys section appears while the method is on or a passkey re
   state.query.data = { data: account({ passkeys: [passkey] }) };
   mount(<AccountPage />, 'ar');
   expect(screen.getByRole('heading', { name: ar.account.passkeys })).toBeTruthy();
+  // ADMIN-B76: the Sign-in page links here by this anchor.
+  expect(screen.getByRole('heading', { name: ar.account.passkeys }).closest('section')?.id).toBe(
+    'passkeys',
+  );
   expect(screen.getByText(ar.account.passkeyUnnamed)).toBeTruthy();
   expect(screen.getByText(ar.account.passkeySynced)).toBeTruthy();
   // Off for the workspace, a passkey can still be removed but no new one added.
@@ -268,7 +272,9 @@ it('ACCT-B10 ADMIN-B76 adding a passkey asks for the current password only while
   const dialog = within(screen.getByRole('dialog'));
   const submit = dialog.getByRole('button', { name: en.account.passkeyAdd });
   expect(submit).toHaveProperty('disabled', true);
-  fireEvent.change(dialog.getByLabelText(en.account.passkeyName), { target: { value: ' Laptop ' } });
+  fireEvent.change(dialog.getByLabelText(en.account.passkeyName), {
+    target: { value: ' Laptop ' },
+  });
   fireEvent.change(dialog.getByLabelText(en.account.currentPassword), {
     target: { value: 'secret-password' },
   });
