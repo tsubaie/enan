@@ -17,11 +17,10 @@ export function AccountMenu({ user }: { user: { name: string; email: string; rol
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
-        render={
-          <Button variant="ghost" size="icon" aria-label={t('account')} className="rounded-full" />
-        }
+        render={<Button variant="ghost" size="icon" className="rounded-full" />}
       >
-        <Avatar name={user.name} className="size-7" />
+        <Avatar name={user.name} decorative className="size-7" />
+        <span className="sr-only">{t('account')}</span>
       </PopoverTrigger>
       {/* The panel — its positioner, its portal and the three actions inside it — arrives when the
           menu is first opened. Only the avatar and its trigger belong on every route. */}
