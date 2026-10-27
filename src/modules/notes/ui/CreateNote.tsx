@@ -12,6 +12,7 @@ import { NoteCreate, type NoteDetail } from '../schema/validation';
 import { useNoteTypes } from './queries';
 import { CommitteePicker } from '@/modules/committees/ui';
 import { TemplateSelect, TypeSelect } from './NoteSelects';
+import { QuickVoiceNoteBar } from './QuickVoiceNoteBar';
 // Create asks for title, type, date and an optional template whose body becomes the content
 // (notes.md § UI, NOTES-B27); everything else is added on the detail right after, with autosave.
 export function CreateNote({
@@ -23,24 +24,17 @@ export function CreateNote({
 }) {
   const t = useTranslations('notes');
   const c = useTranslations('common');
-  const committees = useTranslations('committees');
-  const today = useToday();
-  const types = useNoteTypes();
   const [error, setError] = useState<Error | null>(null);
-  const [type, setType] = useState('');
-  const [noteDate, setNoteDate] = useState<string | null>(today);
-  const [template, setTemplate] = useState({ id: '', body: '' });
-  const fallback = types.data?.meta.defaultType ?? '';
+  const draft = useNoteDraft(committeeId);
   async function submit(form: FormData) {
-    const fields = Object.fromEntries(form);
     try {
       await api.submit(
         NoteCreate.parse({
-          title: fields.title,
-          committeeId: fields.committeeId || null,
-          type: type || fallback || null,
-          noteDate: noteDate ?? today,
-          content: template.body,
+          title: form.get('title'),
+          committeeId: draft.committee,
+          type: draft.type || null,
+          noteDate: draft.noteDate ?? draft.today,
+          content: draft.template.body,
         }),
       );
     } catch (failure) {
@@ -48,61 +42,83 @@ export function CreateNote({
     }
   }
   return (
-    <EntityCreateForm
-      title={t('newNote')}
-      error={error}
-      pending={api.pending}
-      cancel={api.cancel}
-      onSubmit={submit}
-    >
-      <Field label={t('title')}>
-        {(control) => (
-          <Input {...control} name="title" required pattern=".*\S.*" maxLength={500} />
-        )}
-      </Field>
-      <Property label={committees('committee')}>
-        <CommitteePicker value={committeeId} name="committeeId" />
-      </Property>
-      <CreateProperties
-        type={type || fallback}
-        setType={setType}
-        noteDate={noteDate}
-        setNoteDate={setNoteDate}
-        template={template.id}
-        setTemplate={setTemplate}
+    <>
+      <CreateFromVoice
+        committeeId={draft.committee}
+        type={draft.type || null}
+        onCreated={api.open}
       />
-    </EntityCreateForm>
+      <EntityCreateForm
+        title={t('newNote')}
+        error={error}
+        pending={api.pending}
+        cancel={api.cancel}
+        onSubmit={submit}
+      >
+        <Field label={t('title')}>
+          {(control) => (
+            <Input {...control} name="title" required pattern=".*\S.*" maxLength={500} />
+          )}
+        </Field>
+        <CreateProperties committeeId={committeeId} draft={draft} />
+      </EntityCreateForm>
+    </>
+  );
+}
+// What the form holds besides the title; the type falls back to the workspace default.
+function useNoteDraft(committeeId: string | null) {
+  const today = useToday();
+  const types = useNoteTypes();
+  const [type, setType] = useState('');
+  const [noteDate, setNoteDate] = useState<string | null>(today);
+  const [template, setTemplate] = useState({ id: '', body: '' });
+  const [committee, setCommittee] = useState(committeeId);
+  const fallback = types.data?.meta.defaultType ?? '';
+  return {
+    today,
+    type: type || fallback,
+    setType,
+    noteDate,
+    setNoteDate,
+    template,
+    setTemplate,
+    committee,
+    setCommittee,
+  };
+}
+// NOTES-B36: the recorder is its own form, so it sits before the create form, not inside it.
+function CreateFromVoice(props: Parameters<typeof QuickVoiceNoteBar>[0]) {
+  return (
+    <div className="px-5 pt-5">
+      <QuickVoiceNoteBar {...props} />
+    </div>
   );
 }
 function CreateProperties({
-  type,
-  setType,
-  noteDate,
-  setNoteDate,
-  template,
-  setTemplate,
+  committeeId,
+  draft,
 }: {
-  type: string;
-  setType: (type: string) => void;
-  noteDate: string | null;
-  setNoteDate: (date: string | null) => void;
-  template: string;
-  setTemplate: (template: { id: string; body: string }) => void;
+  committeeId: string | null;
+  draft: ReturnType<typeof useNoteDraft>;
 }) {
   const t = useTranslations('notes');
+  const committees = useTranslations('committees');
   return (
     <div className="grid gap-2">
+      <Property label={committees('committee')}>
+        <CommitteePicker value={committeeId} name="committeeId" onChange={draft.setCommittee} />
+      </Property>
       <Property label={t('type')}>
-        <TypeSelect value={type} onChange={setType} />
+        <TypeSelect value={draft.type} onChange={draft.setType} />
       </Property>
       <Property label={t('date')}>
-        <DatePicker value={noteDate} onChange={setNoteDate} label={t('date')} />
+        <DatePicker value={draft.noteDate} onChange={draft.setNoteDate} label={t('date')} />
       </Property>
       <Property label={t('template')}>
         <TemplateSelect
-          value={template}
+          value={draft.template.id}
           label={t('template')}
-          onPick={(id, body) => setTemplate({ id, body })}
+          onPick={(id, body) => draft.setTemplate({ id, body })}
         />
       </Property>
     </div>

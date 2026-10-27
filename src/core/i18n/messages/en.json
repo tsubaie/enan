@@ -923,6 +923,8 @@
     "templateOneOnOne": "One-on-one",
     "committeeColumn": "Committee",
     "deletedToast": "Note moved to trash",
+    "quickVoiceHint": "Record or upload — the note is created from the recording.",
+    "quickVoiceLabel": "New note from a recording",
     "voiceMemos": "Voice memos",
     "recordVoice": "Record voice memo",
     "uploadAudio": "Upload audio",

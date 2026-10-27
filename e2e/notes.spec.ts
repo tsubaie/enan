@@ -481,3 +481,33 @@ test('NOTES-A15 an uploaded voice memo plays, its typed transcript goes into the
       .map((item) => item.id),
   ).toEqual([]);
 });
+test('NOTES-A16 EP-B48 a WAV uploaded on the notes list becomes a new note that opens, and the strip passes axe', async ({
+  page,
+}) => {
+  await loginAs(page, 'en');
+  await page.goto('/notes?view=all');
+  // Audio is stored by its hash, so bytes of their own keep this file's name on the memo.
+  const buffer = silentWav();
+  buffer.writeUInt32LE(Math.floor(Math.random() * 2 ** 32), buffer.length - 4);
+  const strip = page.getByRole('group', { name: en.notes.quickVoiceLabel });
+  await strip
+    .getByTestId('voice-file')
+    .setInputFiles({ name: 'hallway.wav', mimeType: 'audio/wav', buffer });
+  await expect(page).toHaveURL(/[?&]id=/u);
+  const id = new URL(page.url()).searchParams.get('id') ?? 'missing';
+  const created = (await api(page, 'notes', `/${id}`)).body.data;
+  expect(created.title).toMatch(/^Voice Memo · \d{4}-\d{2}-\d{2}$/u);
+  expect(created.voiceMemos).toHaveLength(1);
+  await expect(
+    detail(page).locator('li').filter({ hasText: 'hallway.wav' })
+      .getByText(en.notes.voiceSkipped, { exact: true }),
+  ).toBeVisible();
+  const scan = await new AxeBuilder({ page })
+    .include(`[aria-label="${en.notes.quickVoiceLabel}"]`)
+    .analyze();
+  expect(
+    scan.violations
+      .filter((item) => item.impact === 'serious' || item.impact === 'critical')
+      .map((item) => item.id),
+  ).toEqual([]);
+});

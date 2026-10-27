@@ -90,6 +90,8 @@ export type DetailApi<P> = {
 };
 export type CreateApi<C, T> = {
   submit: (input: C) => Promise<T | null>;
+  // Opens a record the form made by another route than `submit` (a note made from a recording).
+  open: (id: string) => void;
   cancel: () => void;
   pending: boolean;
 };
@@ -125,6 +127,8 @@ export type EntityPageProps<T extends Entity, P, C> = {
   // tokens (ADR 0030). `danger` for what is late, `accent` for what is today; everything else ink.
   groupTone?: (item: T) => 'accent' | 'danger' | null;
   rowAction?: (item: T) => ReactNode;
+  // EP-B48: a module's own quick-capture strip under the toolbar; `open` selects what it made.
+  lead?: (open: (id: string) => void) => ReactNode;
   // EP-B46: rows the reader puts in their own order with two move buttons on each row. `active`
   // says when the list on screen is in that order (the module's own sort, outside the trash),
   // `commit` writes one group's rows in their new order, and `handle` is the row's name in the

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, screen, within } from '@testing-library/react';
 import { NoteDetail, RefinementOutput } from '../../schema/validation';
 import { NoteVoiceMemos } from '../../ui/NoteVoiceMemos';
+import { QuickVoiceNoteBar } from '../../ui/QuickVoiceNoteBar';
 import { mount } from './harness';
 const spies = vi.hoisted(() => ({
   attach: vi.fn(),
@@ -10,12 +11,18 @@ const spies = vi.hoisted(() => ({
   remove: vi.fn(),
   patch: vi.fn(),
   createTask: vi.fn(),
+  createFromVoice: vi.fn(),
   review: {} as object,
 }));
 vi.mock('@/ui/ai/queries', () => ({ useAiReview: () => spies.review }));
 vi.mock('../../ui/voice-queries', () => ({
   useVoiceUpload: () => ({ saving: false, error: null, attach: spies.attach }),
   useVoiceMutations: () => ({ transcribe: spies.transcribe, remove: spies.remove }),
+  useVoiceCreate: (fields: object) => ({
+    saving: false,
+    error: null,
+    attach: (file: File, seconds: number) => spies.createFromVoice(fields, file, seconds),
+  }),
 }));
 const ownerId = '01a08a9f-1991-760a-b73a-568f6f866540';
 vi.mock('../../ui/queries', () => ({
@@ -137,6 +144,7 @@ class FakeContext {
 beforeEach(() => {
   for (const spy of [spies.attach, spies.transcribe, spies.remove, spies.patch, spies.createTask])
     spy.mockReset().mockResolvedValue({});
+  spies.createFromVoice.mockReset().mockResolvedValue({ id: noteId });
   spies.review = review();
   media.frames = [];
   media.reduced = false;
@@ -203,6 +211,35 @@ describe('voice memo recorder', () => {
     expect(media.frames).toEqual([]);
     fireEvent.click(within(bar).getByRole('button', { name: 'Stop & Attach' }));
     expect(spies.attach).toHaveBeenCalledTimes(1);
+  });
+});
+describe('record-first voice note', () => {
+  it('NOTES-B36 a finished recording becomes a new note, with the committee and type of the form, and it opens', async () => {
+    const onCreated = vi.fn();
+    const committeeId = '01a08a9f-1991-760a-b73a-568f6f866543';
+    mount(<QuickVoiceNoteBar committeeId={committeeId} type="one_on_one" onCreated={onCreated} />);
+    expect(screen.getByRole('group', { name: 'New note from a recording' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Record voice memo' }));
+    const bar = await screen.findByRole('form', { name: 'Voice recorder' });
+    expect(await screen.findByText('WakeLock: Active')).toBeTruthy();
+    fireEvent.keyDown(bar, { key: 'Enter' });
+    expect(spies.createFromVoice).toHaveBeenCalledTimes(1);
+    const [fields, file] = spies.createFromVoice.mock.calls[0] ?? [];
+    expect(fields).toEqual({ committeeId, type: 'one_on_one' });
+    expect(file.name).toBe('Voice memo.webm');
+    await vi.waitFor(() => expect(onCreated).toHaveBeenCalledWith(noteId));
+  });
+  it('NOTES-B36 an uploaded file becomes a new note and opens; a failed save opens nothing', async () => {
+    const onCreated = vi.fn();
+    mount(<QuickVoiceNoteBar onCreated={onCreated} />);
+    const file = new File(['ID3'], 'Call.mp3', { type: 'audio/mpeg' });
+    fireEvent.change(screen.getByTestId('voice-file'), { target: { files: [file] } });
+    expect(spies.createFromVoice).toHaveBeenCalledWith({ committeeId: null, type: null }, file, 0);
+    await vi.waitFor(() => expect(onCreated).toHaveBeenCalledWith(noteId));
+    spies.createFromVoice.mockResolvedValueOnce(undefined);
+    fireEvent.change(screen.getByTestId('voice-file'), { target: { files: [file] } });
+    await vi.waitFor(() => expect(spies.createFromVoice).toHaveBeenCalledTimes(2));
+    expect(onCreated).toHaveBeenCalledTimes(1);
   });
 });
 describe('voice memo player and upload', () => {

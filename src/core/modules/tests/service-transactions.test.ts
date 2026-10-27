@@ -47,7 +47,12 @@ const exempt: Record<string, string[]> = {
     'listManagedTags',
     'manageTags',
   ],
-  'notes/voice/service': ['uploadVoiceMemo', 'voiceMemoAudio'],
+  'notes/voice/service': [
+    'uploadVoiceMemo',
+    'createNoteFromVoice',
+    'voiceNoteTitle',
+    'voiceMemoAudio',
+  ],
   notifications: ['feed'],
   people: [
     'personNameSql',

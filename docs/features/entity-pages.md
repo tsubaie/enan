@@ -267,6 +267,10 @@ Twelve top-level props is the ceiling (`07-coding-guidelines.md`); related optio
   show twenty at a time from the pages they have loaded (fifty each) and fetch a page only when
   the loaded rows run out; changing the view, a filter or the search starts over at twenty. The
   table layout and the other lists keep their page of fifty, without the faded row.
+- EP-B48 A module may put its own quick-capture strip (`lead`) under the list's toolbar, above the
+  rows. It is handed the page's way of opening a record, so what it creates opens as if picked from
+  the list. The create form is handed the same (`open` on its API), for a record it makes by another
+  route than its own submit.
 - EP-B45 Every text field — single-line, multi-line, and the search field inside a picker — runs in the direction of what is typed in it, not of the interface: Arabic right to left, English left to right. A multi-line field takes its direction from its first letter and keeps every line on that side, so the empty line after Enter, a list marker or a row of figures stays where the writer is. An empty field follows the interface, so the caret starts on the Arabic side in Arabic. The primitives own this (`Input`, `Textarea`, `ComboboxSearch`); a field whose script is fixed (a password, an address, a label kept in one language) pins `dir` and keeps it.
 
 ## Auto-save

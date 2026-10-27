@@ -41,7 +41,12 @@ export function EntityContent<T extends Entity, P extends object, C>({
     return (
       <>
         <CreateSheetBar close={c.close} />
-        {config.renderers.create({ cancel: c.close, pending: c.creating, submit: c.submit })}
+        {config.renderers.create({
+          cancel: c.close,
+          pending: c.creating,
+          submit: c.submit,
+          open: (id) => c.navigate({ id, new: null }),
+        })}
       </>
     );
   if (c.detail.pending) return <EntityDetailSkeleton />;

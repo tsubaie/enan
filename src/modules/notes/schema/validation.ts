@@ -118,6 +118,15 @@ export const VoiceUpload = z.strictObject({
   durationSeconds: z.coerce.number().int().min(0).max(900).default(0),
   transcript: Transcript.optional(),
 });
+// NOTES-B36: a recording that becomes a new note. Its transcript, when one is given, is the
+// note's first content, since there is no prose of the reader's to keep apart from it.
+export const VoiceCreate = z.strictObject({
+  file: z.file(),
+  durationSeconds: z.coerce.number().int().min(0).max(900).default(0),
+  transcript: z.string().trim().max(50000).optional(),
+  committeeId: z.uuid().nullable().optional(),
+  type: Type.nullable().optional(),
+});
 // NOTES-B31: the transcript is never put into the note unless `appendToNote` asks for it.
 export const VoiceTranscribe = z.strictObject({
   transcript: Transcript.optional(),

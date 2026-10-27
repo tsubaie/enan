@@ -923,6 +923,8 @@
     "templateOneOnOne": "لقاء فردي",
     "committeeColumn": "اللجنة",
     "deletedToast": "نُقلت الملاحظة إلى المحذوفات",
+    "quickVoiceHint": "سجّل أو ارفع ملفًا صوتيًا، وتُنشأ الملاحظة من التسجيل.",
+    "quickVoiceLabel": "ملاحظة جديدة من تسجيل صوتي",
     "voiceMemos": "المذكرات الصوتية",
     "recordVoice": "تسجيل مذكرة صوتية",
     "uploadAudio": "رفع ملف صوتي",

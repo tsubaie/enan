@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { closeDatabase, db } from '@/core/db/client';
 import { clearDatabase } from '@/core/db/reset';
@@ -9,16 +9,22 @@ import { id } from '@/core/db/ids';
 import { env } from '@/core/config/env';
 import { readStoredFile } from '@/core/files/storage';
 import { User } from '@/core/http/user-schema';
-import { noteVoiceMemos } from '../schema/db';
+import { resetConnection } from '@/core/ai/client';
+import { latestAiJob } from '@/core/db/ai-jobs-repo';
+import { writeSetting } from '@/core/db/settings-repo';
+import { notes, noteVoiceMemos } from '../schema/db';
+import { fixtureModel } from '../../../../tests/fixtures/ai/jobs';
 import * as api from '../api';
+import { voiceNoteTitle } from '../voice/service';
 // NOTES-B29–B32: the voice memo handlers as their routes export them, with real multipart and
 // JSON requests against the real database and the test files directory. The session is the one
-// seam replaced. AI is never configured here, so every upload proves it needs none.
+// seam replaced. AI is off unless a test turns it on, so every upload proves it needs none.
 const session = vi.hoisted(() => ({ user: null as User | null }));
 vi.mock('@/core/auth/session', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/core/auth/session')>()),
   currentUser: async () => session.user,
 }));
+vi.mock('@/core/ai/models', () => ({ loadModels: async () => [fixtureModel] }));
 vi.mock('next-intl/server', () => ({ getTranslations: async () => (key: string) => key }));
 type Handler = (
   request: Request,
@@ -41,12 +47,19 @@ async function respond(handler: Handler, request: Request, params: Record<string
   return { status: response.status, body: response.status === 204 ? null : await response.json() };
 }
 async function upload(noteId: string, bytes: Uint8Array, fields: Record<string, string> = {}) {
+  return respond(api.voiceUpload, await multipart(`/notes/${noteId}/voice`, bytes, fields), {
+    id: noteId,
+  });
+}
+const createFromVoice = async (bytes: Uint8Array, fields: Record<string, string> = {}) =>
+  respond(api.voiceCreate, await multipart('/notes/voice', bytes, fields), {});
+async function multipart(path: string, bytes: Uint8Array, fields: Record<string, string>) {
   const body = new FormData();
   body.set('file', new File([new Uint8Array(bytes)], 'Board debrief.webm', { type: 'text/html' }));
   for (const [key, value] of Object.entries(fields)) body.set(key, value);
   const encoded = new Response(body);
   const raw = new Uint8Array(await encoded.arrayBuffer());
-  const request = new Request(new URL(`/api/v1/notes/${noteId}/voice`, env().APP_URL), {
+  return new Request(new URL(`/api/v1${path}`, env().APP_URL), {
     method: 'POST',
     headers: headers({
       'Content-Type': encoded.headers.get('content-type') ?? '',
@@ -54,7 +67,6 @@ async function upload(noteId: string, bytes: Uint8Array, fields: Record<string, 
     }),
     body: raw,
   });
-  return respond(api.voiceUpload, request, { id: noteId });
 }
 function json(
   handler: Handler,
@@ -106,6 +118,7 @@ beforeEach(async () => {
   );
 });
 afterAll(() => closeDatabase());
+afterEach(() => resetConnection());
 it('NOTES-B29 NOTES-I08 an upload stores the audio by its hash and answers 201 with the memo, AI or not', async () => {
   const note = await createNote({ content: 'Existing prose' });
   const bytes = webm(1);
@@ -277,4 +290,66 @@ it('NOTES-B32 an Arabic file name is served, its header carrying an ASCII stand-
   expect(served.headers.get('content-disposition')).toBe(
     `inline; filename="_____ _____.webm"; filename*=UTF-8''${encodeURIComponent('مذكرة صوتية.webm')}`,
   );
+});
+
+type Created = {
+  id: string;
+  title: string;
+  content: string;
+  committeeId: string | null;
+  type: string | null;
+  voiceMemos: { transcript: string | null; transcriptionStatus: string; durationSeconds: number }[];
+};
+it('NOTES-B36 a recording with no note becomes one, named for the day, AI or not', async () => {
+  const created = await createFromVoice(webm(20), { durationSeconds: '42' });
+  expect(created.status).toBe(201);
+  const note = created.body.data as Created;
+  expect(note.title).toMatch(/^Voice Memo · \d{4}-\d{2}-\d{2}$/u);
+  expect(note.content).toBe('');
+  expect(note.voiceMemos).toMatchObject([
+    { transcript: null, transcriptionStatus: 'skipped', durationSeconds: 42 },
+  ]);
+  const audits = await db().select().from(auditLog);
+  expect(audits.map((row) => row.entityType).sort()).toEqual(['note', 'note_voice_memo']);
+});
+it('NOTES-B36 a transcript names the note, fills it and starts its refinement when AI is on', async () => {
+  globalThis.enanAiConnection = {
+    state: 'enabled',
+    checkedAt: new Date().toISOString(),
+    error: null,
+  };
+  const actor = session.user?.id ?? '';
+  await writeSetting(db(), 'ai.model.default', fixtureModel.id, actor);
+  await writeSetting(db(), 'ai.model.fast', fixtureModel.id, actor);
+  const transcript = '## Ship the pilot on Sunday. Budget review follows.';
+  const created = await createFromVoice(webm(21), { transcript, type: 'one_on_one' });
+  expect(created.status).toBe(201);
+  const note = created.body.data as Created;
+  expect(note).toMatchObject({ title: 'Ship the pilot on Sunday', content: transcript });
+  expect(note.type).toBe('one_on_one');
+  expect(note.voiceMemos[0]).toMatchObject({ transcript, transcriptionStatus: 'done' });
+  expect(await latestAiJob(db(), actor, note.id, 'ai.notes.refine')).toBeDefined();
+});
+it('NOTES-B36 with AI off a transcript still creates the note, and no refinement starts', async () => {
+  const created = await createFromVoice(webm(22), { transcript: 'Hiring plan for next quarter' });
+  expect(created.status).toBe(201);
+  const note = created.body.data as Created;
+  expect(note.title).toBe('Hiring plan for next quarter');
+  expect(
+    await latestAiJob(db(), session.user?.id ?? '', note.id, 'ai.notes.refine'),
+  ).toBeUndefined();
+});
+it('NOTES-B36 a disguised file is refused and no note is created', async () => {
+  const page = new TextEncoder().encode('<!doctype html><script>alert(1)</script>');
+  const refused = await createFromVoice(page, { transcript: 'Should not exist' });
+  expect(refused.status).toBe(422);
+  expect(refused.body.error.details).toMatchObject({ reason: 'unsupported_type' });
+  expect(await db().select().from(notes)).toEqual([]);
+});
+it('NOTES-B36 a title is the first sentence without heading marks, cut at a word to 120', () => {
+  expect(voiceNoteTitle(undefined, '2026-10-27')).toBe('Voice Memo · 2026-10-27');
+  expect(voiceNoteTitle('\n\n- Quarterly risks? Then more', 'x')).toBe('Quarterly risks?');
+  const long = voiceNoteTitle('word '.repeat(60), 'x');
+  expect(long.length).toBeLessThanOrEqual(120);
+  expect(long.endsWith('word…')).toBe(true);
 });

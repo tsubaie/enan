@@ -5,8 +5,9 @@ import { z } from 'zod';
 import { request, upload } from '@/core/http/client';
 import { NoteDetail } from '../schema/validation';
 const response = z.object({ data: NoteDetail });
-// NOTES-B29–B31: a voice memo's upload, removal and transcript, each refreshing the notes. A
-// transcribe that also refines refreshes the AI job, whose result the Brief tab shows.
+// NOTES-B29–B31, B36: a voice memo's upload, removal and transcript, and a recording that becomes
+// a new note, each refreshing the notes. A transcribe that also refines refreshes the AI job,
+// whose result the Brief tab shows.
 export function useVoiceMutations() {
   const client = useQueryClient();
   const refresh = (keys: string[]) =>
@@ -21,6 +22,13 @@ export function useVoiceMutations() {
   return {
     upload: (noteId: string, form: FormData) =>
       write(() => upload(`/notes/${noteId}/voice`, response, form)),
+    // The new note is seeded in the cache, so opening it right after shows it at once.
+    createFromVoice: (form: FormData) =>
+      write(async () => {
+        const created = await upload('/notes/voice', response, form);
+        client.setQueryData(['notes', 'detail', created.data.id, false], created.data);
+        return created;
+      }),
     remove: (noteId: string, memoId: string) =>
       write(() => request(`/notes/${noteId}/voice/${memoId}`, response, { method: 'DELETE' })),
     transcribe: (
@@ -41,6 +49,17 @@ export function useVoiceMutations() {
 // Saving a recording or a chosen file: whether one is on its way, and why the last one failed.
 export function useVoiceUpload(noteId: string, fallback: string) {
   const mutations = useVoiceMutations();
+  return useVoiceSave((form) => mutations.upload(noteId, form), fallback);
+}
+// NOTES-B36: the same, for a recording that becomes a new note; `attach` answers with that note.
+export function useVoiceCreate(fields: Record<string, string | null>, fallback: string) {
+  const mutations = useVoiceMutations();
+  return useVoiceSave((form) => {
+    for (const [key, value] of Object.entries(fields)) if (value) form.set(key, value);
+    return mutations.createFromVoice(form);
+  }, fallback);
+}
+function useVoiceSave(send: (form: FormData) => Promise<NoteDetail>, fallback: string) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   async function attach(file: File, seconds: number) {
@@ -50,7 +69,7 @@ export function useVoiceUpload(noteId: string, fallback: string) {
     form.set('file', file);
     form.set('durationSeconds', String(Math.min(Math.round(seconds), 900)));
     try {
-      await mutations.upload(noteId, form);
+      return await send(form);
     } catch (failure) {
       setError(failure instanceof Error ? failure : new Error(fallback));
     } finally {

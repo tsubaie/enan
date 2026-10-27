@@ -22,6 +22,7 @@ import {
   NoteTypes,
   NoteTemplates,
   VoiceUpload,
+  VoiceCreate,
   VoiceTranscribe,
 } from './schema/validation';
 import * as service from './service';
@@ -178,6 +179,20 @@ export const voiceUpload = defineHandler({
   transaction: false,
   handler: async (input, ctx, params) => ({
     data: await voice.uploadVoiceMemo(authenticated(ctx), noteId(params), input),
+  }),
+});
+// NOTES-B36: a recording that becomes a new note; it may start the note's refinement.
+export const voiceCreate = defineHandler({
+  guard: 'session',
+  input: VoiceCreate,
+  source: 'form',
+  maxBytes: () => voiceAudioLimits.maxBytes + 128 * 1024,
+  status: 201,
+  response,
+  transaction: false,
+  enqueues: true,
+  handler: async (input, ctx) => ({
+    data: await voice.createNoteFromVoice(authenticated(ctx), input),
   }),
 });
 export const voiceRemove = defineHandler({

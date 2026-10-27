@@ -35,6 +35,7 @@ const NoteDetail = dynamic(() => importRecord().then((module) => module.NoteDeta
 // The create form is only ever shown on demand, so it loads that way too — as Tasks does.
 const CreateNote = dynamic(() => import('./CreateNote').then((module) => module.CreateNote));
 import { AddTagDialog } from './AddTagDialog';
+import { QuickVoiceNoteBar } from './QuickVoiceNoteBar';
 import { useNoteColumns } from './NoteColumns';
 import { usePrefetch } from '@/ui/entity/use-prefetch';
 const presentation: Record<string, Partial<ViewDef>> = {
@@ -123,6 +124,7 @@ export function NotesPage() {
       useList={useNotes}
       useDetail={useNote}
       mutations={mutations}
+      lead={(open) => <QuickVoiceNoteBar onCreated={open} />}
       group={(note) => (note.deletedAt || !note.band ? null : t(note.band))}
       bulkActions={[
         {
