@@ -1,4 +1,5 @@
 // ADMIN-B57, ADMIN-B58, ADMIN-B67, ADMIN-B68: what Admin → Updates reads and sends.
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import { request } from '@/core/http/client';
@@ -145,4 +146,49 @@ export function latestIssue(status: Status | null, history: Status[]): Status | 
     if (issue(entry, false)) return entry;
   }
   return null;
+}
+
+// ADMIN-B67: the four stages an install shows. ADMIN-B75: the updater's own step comes first when
+// it is newer, named only as preparing; checking and downloading the release are preparing it too.
+export const steps: readonly ('updater' | 'backup' | 'switch' | 'verify')[] = [
+  'updater',
+  'backup',
+  'switch',
+  'verify',
+];
+export const stepAt = (step: string | undefined) =>
+  steps.findIndex((name) => name === (['check', 'pull'].includes(step ?? '') ? 'updater' : step));
+
+// ADMIN-B67: how long the install has run, as m:ss, or null while the updater has not said when
+// it started.
+export function useElapsed(startedAt: string | undefined) {
+  const start = startedAt ? Date.parse(startedAt) : Number.NaN;
+  const [now, setNow] = useState(() => Date.now());
+  // sync: the elapsed time follows the browser clock, once a second, while the start is known.
+  useEffect(() => {
+    if (Number.isNaN(start)) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [start]);
+  if (Number.isNaN(start)) return null;
+  const seconds = Math.max(0, Math.floor((now - start) / 1000));
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
+// ADMIN-B67: whether this page watched an install through to `updated`; one it only reads about
+// afterwards is history, not news.
+export function useFinished(state: string) {
+  const [seen, setSeen] = useState<'idle' | 'watching' | 'done'>('idle');
+  let next = seen;
+  if (state === 'updating') next = 'watching';
+  else if (seen === 'watching' && state === 'updated') next = 'done';
+  if (next !== seen) setSeen(next);
+  return next === 'done';
+}
+
+// How often the updater checks, in the largest whole unit: a day reads "daily", not 1440 minutes.
+export function intervalOf(seconds: number) {
+  if (seconds >= 86400 && seconds % 86400 === 0) return { unit: 'day', count: seconds / 86400 };
+  if (seconds >= 3600 && seconds % 3600 === 0) return { unit: 'hour', count: seconds / 3600 };
+  return { unit: 'minute', count: Math.max(1, Math.round(seconds / 60)) };
 }
