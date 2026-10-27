@@ -103,7 +103,8 @@ See `03-data-model.md`. Invariants:
   therefore reads its candidates in one statement, ranks them with `computeKpiStatus`, and pages on
   that ranking with the cursor format of `04-api-conventions.md` (`{ v, sort, filtersHash, last }`,
   where `last` is the computed sort tuple). A scorecard is a bounded instrument; the candidate read
-  is capped at `CANDIDATE_LIMIT` rows and `meta.counts` counts that set.
+  is capped at `CANDIDATE_LIMIT` live rows and, apart from them, `CANDIDATE_LIMIT` deleted ones, so
+  a full trash never crowds a live KPI out of the list or Home; `meta.counts` counts that set.
   The values the facets offer come from `GET /kpis/facets` rather than from the page on screen, so a
   filter can name a category no row of the current page happens to carry. The owners it offers are
   the assignable directory, not the people who already hold a KPI, so a measure can be handed to

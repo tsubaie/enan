@@ -1,5 +1,15 @@
 import 'server-only';
-import { and, eq, inArray, isNull, sql, getTableColumns, type SQL } from 'drizzle-orm';
+import {
+  and,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  or,
+  sql,
+  getTableColumns,
+  type SQL,
+} from 'drizzle-orm';
 import type { Database } from '@/core/db/client';
 import { normalize, searchCorpus } from '@/core/search/normalize';
 import { searchMatch, searchRank } from '@/core/db/search';
@@ -104,14 +114,25 @@ function base(query: ListQuery) {
   );
 }
 // Deleted rows come back with the rest: the service partitions them into the trash view and counts
-// every view from the one result, which is what keeps the list to two statements (KPIS-B07).
+// every view from the one result, which is what keeps the list to two statements (KPIS-B07). The
+// live and the deleted rows are bounded apart, so a full trash never crowds a live KPI out.
 export function selectKpis(database: Database, query: ListQuery, window: Window) {
+  const order = [sql`lower(${kpis.name})`, kpis.id];
+  const bounded = (state: SQL) =>
+    inArray(
+      kpis.id,
+      database
+        .select({ id: kpis.id })
+        .from(kpis)
+        .where(and(base(query), state))
+        .orderBy(...order)
+        .limit(CANDIDATE_LIMIT),
+    );
   return database
     .select(columns(window))
     .from(kpis)
-    .where(base(query))
-    .orderBy(sql`lower(${kpis.name})`, kpis.id)
-    .limit(CANDIDATE_LIMIT);
+    .where(or(bounded(isNull(kpis.deletedAt)), bounded(isNotNull(kpis.deletedAt))))
+    .orderBy(...order);
 }
 export async function selectKpi(database: Database, kpiId: string, window: Window) {
   const [row] = await database.select(columns(window)).from(kpis).where(eq(kpis.id, kpiId));
