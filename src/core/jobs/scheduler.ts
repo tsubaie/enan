@@ -4,8 +4,11 @@ import { db, withTransaction } from '@/core/db/client';
 import { dueSchedules, markOccurrence, enqueue } from '@/core/db/jobs-repo';
 import { z } from 'zod';
 import { logger } from '@/core/config/logger';
+import { isRestoring } from '@/core/backup/maintenance';
 import { jobKinds } from './registry';
 export async function scheduleDue(now = new Date()) {
+  // ADMIN-B13: nothing is queued during a restore; the write would hit the database being replaced.
+  if (await isRestoring()) return;
   await withTransaction(db(), async (database) => {
     for (const schedule of await dueSchedules(database)) {
       // ADR 0050: after a rollback the database can hold a schedule a newer release added, for a
@@ -31,7 +34,10 @@ export async function scheduleDue(now = new Date()) {
           await markOccurrence(savepoint, schedule.id, occurrence);
         });
       } catch (error) {
-        logger.error({ err: error, scheduleId: schedule.id, kind: schedule.kind }, 'Schedule skipped');
+        logger.error(
+          { err: error, scheduleId: schedule.id, kind: schedule.kind },
+          'Schedule skipped',
+        );
       }
     }
   });

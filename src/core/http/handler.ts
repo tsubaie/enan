@@ -15,7 +15,7 @@ import { isRestoring } from '@/core/backup/maintenance';
 
 let maintenanceState: { value: boolean; expires: number } | undefined;
 // Both checks hit storage; two seconds of staleness is acceptable for a maintenance banner.
-async function inMaintenance() {
+export async function inMaintenance() {
   if (maintenanceState && maintenanceState.expires > Date.now()) return maintenanceState.value;
   const value = (await isRestoring()) || (await maintenance(db()));
   maintenanceState = { value, expires: Date.now() + 2000 };

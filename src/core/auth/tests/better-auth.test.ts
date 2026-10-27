@@ -12,6 +12,7 @@ import { auditLog, loginAttempts, users } from '@/core/db/system-schema';
 import { authSessions, authVerifications } from '@/core/db/auth-schema';
 import { id } from '@/core/db/ids';
 import { env } from '@/core/config/env';
+import { maintenanceFile } from '@/core/backup/maintenance';
 // The real Better Auth handler on the test database; only Next's request scope and the SMTP
 // client are stood in for. `after` runs its work at once, so a mailed code is observable.
 const io = vi.hoisted(() => ({
@@ -432,4 +433,33 @@ it('ADMIN-B63 an address typed in another case or with spaces gets and uses the 
   expect(
     (await call('/sign-in/email-otp', { email: ' MEMBER@example.test ', otp: code })).status,
   ).toBe(200);
+});
+it('ADMIN-B13 during maintenance sign-in answers 503, and answers again once it ends', async () => {
+  const { POST } = await import('../../../app/api/auth/[...all]/route');
+  const post = () =>
+    POST(
+      new Request(new URL('/api/auth/sign-in/email', env().APP_URL), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Origin: env().APP_URL,
+          'X-Requested-With': 'Enan',
+        },
+        body: JSON.stringify({ email: 'member@example.test', password }),
+      }),
+    );
+  // Each step moves past the two seconds a maintenance check is kept for.
+  vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 3000 });
+  try {
+    await maintenanceFile(true);
+    const refused = await post();
+    expect(refused.status).toBe(503);
+    expect(await refused.json()).toMatchObject({ error: { code: 'maintenance' } });
+    await maintenanceFile(false);
+    vi.setSystemTime(Date.now() + 3000);
+    expect((await post()).status).toBe(200);
+  } finally {
+    vi.useRealTimers();
+    await maintenanceFile(false);
+  }
 });

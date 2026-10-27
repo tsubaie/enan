@@ -2,6 +2,7 @@ import 'server-only';
 import { access, writeFile, readFile, rm, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { env } from '@/core/config/env';
+import { closeDatabase } from '@/core/db/client';
 import { reconcileDatabaseClient } from './database';
 async function markerPresent() {
   try {
@@ -14,10 +15,12 @@ async function markerPresent() {
 }
 // The marker is the restore's own signal; while it is absent the check also makes sure this
 // process's database client is on the file the live path names (a restore in another process may
-// have swapped it), so the first request after a restore reads the restored data.
+// have swapped it), so the first request after a restore reads the restored data. While it is
+// present this process lets go of the file, so a restore does not swap it under open connections.
 export async function isRestoring() {
   const restoring = await markerPresent();
-  if (!restoring) await reconcileDatabaseClient();
+  if (restoring) closeDatabase();
+  else await reconcileDatabaseClient();
   return restoring;
 }
 // ADMIN-B31: clearing is idempotent, so a restore's cleanup can never fail on a file that an
@@ -64,7 +67,8 @@ async function claim(file: string, retry = true): Promise<boolean> {
 export async function releaseStaleLock() {
   const file = join(env().BACKUP_DIR, '.lock');
   const holder = await readFile(file, 'utf8').catch(() => '');
-  if (!globalThis.enanBackupLockHeld && Number(holder) === process.pid) await rm(file, { force: true });
+  if (!globalThis.enanBackupLockHeld && Number(holder) === process.pid)
+    await rm(file, { force: true });
 }
 export async function withBackupLock<T>(
   work: () => Promise<T>,

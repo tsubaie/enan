@@ -324,7 +324,7 @@ func (u *Updater) Check(ctx context.Context) {
 		return
 	}
 	if candidate, ok := u.pull(ctx, ref, running, digest); ok {
-		u.install(ctx, app, ref, running, candidate)
+		u.install(ctx, app, channel, running, candidate)
 	}
 }
 
@@ -528,11 +528,19 @@ func (u *Updater) switchTo(ctx context.Context, app docker.Container, ref regist
 	}
 	u.status.Step = "switch"
 	u.publish()
-	// The name compose uses now means the target, so a later `docker compose up` keeps it.
-	if err := u.Engine.Tag(ctx, target.ID, ref.Repository, ref.Tag); err != nil {
+	// The name compose uses now means the target, so a later `docker compose up` keeps it. The new
+	// container is created from that name, never from the old one, which may be a pinned digest.
+	tag := ref.Tag
+	if tag == "" {
+		tag = u.Config.Channel
+	}
+	if tag == "" {
+		tag = "latest"
+	}
+	if err := u.Engine.Tag(ctx, target.ID, ref.Repository, tag); err != nil {
 		return err
 	}
-	spec := Recreation(app, oldImage, app.Ref())
+	spec := Recreation(app, oldImage, ref.Repository+":"+tag)
 	if labels, ok := spec.Config["Labels"].(map[string]any); ok {
 		if recorded, ok := labels[composeImageLabel].(string); ok {
 			labels[composeImageLabel] = u.composeImage(ctx, recorded, oldImage.ID, target.ID)
@@ -683,6 +691,8 @@ func (u *Updater) recoverFrom(ctx context.Context, cause error) {
 func (u *Updater) rollback(ctx context.Context) error {
 	name, previous := u.state.Name, u.state.PreviousContainer
 	if current, err := u.Engine.InspectContainer(ctx, name); err == nil && current.ID != previous {
+		// Stopped first, so it gets its grace period rather than the kill a forced remove sends.
+		_ = u.Engine.Stop(ctx, current.ID, u.Config.StopTimeout)
 		if err := u.Engine.Remove(ctx, current.ID); err != nil {
 			return err
 		}
@@ -797,7 +807,7 @@ func (u *Updater) checkSelf(ctx context.Context) {
 
 // Rollback goes back to the image the last update replaced, when that is safe.
 func (u *Updater) Rollback(ctx context.Context, force bool) {
-	u.status = Status{Channel: u.status.Channel, Running: u.status.Running, LastCheckAt: u.status.LastCheckAt, StartedAt: u.now(), Step: "rollback"}
+	u.status = Status{Channel: u.status.Channel, Running: u.status.Running, UpdaterUpdate: u.status.UpdaterUpdate, LastCheckAt: u.status.LastCheckAt, StartedAt: u.now(), Step: "rollback"}
 	target := u.state.LastPrevious
 	if target == nil || target.ID == "" {
 		u.fail(ctx, "rollback", errors.New("no previous image to go back to"), "")
@@ -832,6 +842,8 @@ func (u *Updater) Rollback(ctx context.Context, force bool) {
 		} else {
 			u.state.Paused = true
 		}
+		// The image just left was rejected; it is no way back.
+		u.state.LastPrevious = nil
 		_ = u.save()
 	}
 }
