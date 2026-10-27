@@ -10,6 +10,7 @@ import type { NoteDetail as Detail } from '../schema/validation';
 import { NoteFields, type Patch } from './NoteFields';
 import { NoteAi } from './NoteAi';
 import { NoteTasks } from './NoteTasks';
+import { NoteVoiceMemos } from './NoteVoiceMemos';
 import { EntityFooter, EntityUpdated } from '@/ui/entity/EntityFooter';
 import { useNoteMutations } from './queries';
 export function NoteDetail({ note, api }: { note: Detail; api: DetailApi<Patch> }) {
@@ -45,6 +46,7 @@ export function NoteDetail({ note, api }: { note: Detail; api: DetailApi<Patch> 
           <CommitteeBadge id={note.committeeId} />
         </div>
       )}
+      {!note.deletedAt && <NoteVoiceMemos note={note} />}
       <NoteTasks note={note} />
       <NoteFooter note={note} remove={api.remove} />
     </div>

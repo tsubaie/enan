@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 import { test, expect } from './fixtures/test';
 import { loginAs } from './fixtures/auth';
 import { selectView } from './fixtures/views';
@@ -417,4 +418,96 @@ test('NOTES-A14 NOTES-B28 EP-B44 Expand opens the content in the expanded view a
   await expect(dialog).toHaveCount(0);
   await expect(page).not.toHaveURL(/focus=/);
   await expect(page).toHaveURL(new RegExp(`id=${created.id}`));
+});
+// A second of 8 kHz mono 8-bit silence: a real WAV, so the server's magic-byte check accepts it.
+function silentWav() {
+  const samples = 8000;
+  const wav = Buffer.alloc(44 + samples, 0x80);
+  wav.write('RIFF', 0, 'ascii');
+  wav.writeUInt32LE(36 + samples, 4);
+  wav.write('WAVEfmt ', 8, 'ascii');
+  wav.writeUInt32LE(16, 16);
+  wav.writeUInt16LE(1, 20);
+  wav.writeUInt16LE(1, 22);
+  wav.writeUInt32LE(samples, 24);
+  wav.writeUInt32LE(samples, 28);
+  wav.writeUInt16LE(1, 32);
+  wav.writeUInt16LE(8, 34);
+  wav.write('data', 36, 'ascii');
+  wav.writeUInt32LE(samples, 40);
+  return wav;
+}
+test('NOTES-A15 an uploaded voice memo plays, its typed transcript goes into the note on Insert, and the section passes axe', async ({
+  page,
+}) => {
+  await loginAs(page, 'en');
+  const created = await note(page, `Voice ${crypto.randomUUID()}`);
+  await api(page, 'notes', `/${created.id}`, 'PATCH', {
+    revision: created.revision,
+    content: 'Agenda',
+  });
+  await page.goto(`/notes?view=all&id=${created.id}`);
+  await detail(page)
+    .getByTestId('voice-file')
+    .setInputFiles({ name: 'standup.wav', mimeType: 'audio/wav', buffer: silentWav() });
+  const memo = detail(page).locator('li').filter({ hasText: 'standup.wav' });
+  await expect(memo.getByText(en.notes.voiceSkipped, { exact: true })).toBeVisible();
+  const audio = await page.request.get(
+    (await memo.locator('audio').getAttribute('src')) ?? 'missing',
+  );
+  expect(audio.status()).toBe(200);
+  expect(audio.headers()['content-type']).toBe('audio/wav');
+  await memo.getByRole('button', { name: fill(en.notes.playbackSpeed, { rate: 1 }) }).click();
+  await expect(
+    memo.getByRole('button', { name: fill(en.notes.playbackSpeed, { rate: 1.5 }) }),
+  ).toBeVisible();
+  // AI is off here, so the transcript tab is the one shown and nothing has reached the note yet.
+  await expect(memo.getByText(en.notes.noTranscript)).toBeVisible();
+  expect((await api(page, 'notes', `/${created.id}`)).body.data.content).toBe('Agenda');
+  const words = `Ship the budget by Thursday ${crypto.randomUUID()}`;
+  await memo.getByRole('textbox', { name: en.notes.transcriptTab, exact: true }).fill(words);
+  await memo.getByRole('button', { name: en.notes.saveTranscript, exact: true }).click();
+  await expect(memo.getByText(words)).toBeVisible();
+  expect((await api(page, 'notes', `/${created.id}`)).body.data.content).toBe('Agenda');
+  await memo.getByRole('button', { name: en.notes.insertIntoNote, exact: true }).click();
+  await expect(memo.getByRole('button', { name: en.notes.insertedIntoNote })).toBeDisabled();
+  expect((await api(page, 'notes', `/${created.id}`)).body.data.content).toBe(
+    `Agenda\n\n${words}`,
+  );
+  const scan = await new AxeBuilder({ page }).include('aside.entity-detail').analyze();
+  expect(
+    scan.violations
+      .filter((item) => item.impact === 'serious' || item.impact === 'critical')
+      .map((item) => item.id),
+  ).toEqual([]);
+});
+test('NOTES-A16 EP-B48 a WAV uploaded on the notes list becomes a new note that opens, and the strip passes axe', async ({
+  page,
+}) => {
+  await loginAs(page, 'en');
+  await page.goto('/notes?view=all');
+  // Audio is stored by its hash, so bytes of their own keep this file's name on the memo.
+  const buffer = silentWav();
+  buffer.writeUInt32LE(Math.floor(Math.random() * 2 ** 32), buffer.length - 4);
+  const strip = page.getByRole('group', { name: en.notes.quickVoiceLabel });
+  await strip
+    .getByTestId('voice-file')
+    .setInputFiles({ name: 'hallway.wav', mimeType: 'audio/wav', buffer });
+  await expect(page).toHaveURL(/[?&]id=/u);
+  const id = new URL(page.url()).searchParams.get('id') ?? 'missing';
+  const created = (await api(page, 'notes', `/${id}`)).body.data;
+  expect(created.title).toMatch(/^Voice Memo · \d{4}-\d{2}-\d{2}$/u);
+  expect(created.voiceMemos).toHaveLength(1);
+  await expect(
+    detail(page).locator('li').filter({ hasText: 'hallway.wav' })
+      .getByText(en.notes.voiceSkipped, { exact: true }),
+  ).toBeVisible();
+  const scan = await new AxeBuilder({ page })
+    .include(`[aria-label="${en.notes.quickVoiceLabel}"]`)
+    .analyze();
+  expect(
+    scan.violations
+      .filter((item) => item.impact === 'serious' || item.impact === 'critical')
+      .map((item) => item.id),
+  ).toEqual([]);
 });

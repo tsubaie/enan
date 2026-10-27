@@ -80,6 +80,7 @@ function EntitySurface<T extends Entity, P extends object, C>(props: EntityPageP
         {c.railOpen && <EntityRail config={props} controller={c} />}
         <div data-entity-list className="@container min-w-0 flex-1 overflow-y-auto">
           <EntityToolbar config={props} controller={c} />
+          <EntityLead config={props} controller={c} />
           <EntityModeHeader config={props} controller={c} />
           <EntityStats config={props} controller={c} />
           <EntityList config={props} controller={c} />
@@ -115,6 +116,18 @@ function EntitySurface<T extends Entity, P extends object, C>(props: EntityPageP
       </div>
       <EntityFilterSheet config={props} controller={c} />
     </section>
+  );
+}
+// EP-B48: the module's quick-capture strip, opening what it makes as a picked row opens.
+function EntityLead<T extends Entity, P extends object, C>({
+  config,
+  controller: c,
+}: Surface<T, P, C>) {
+  if (!config.lead) return null;
+  return (
+    <div className="px-4 pb-3 min-[32rem]:ps-0">
+      {config.lead((id) => c.navigate({ id, new: null }))}
+    </div>
   );
 }
 // Filters, views and, below 1024 px, the sort, in one sheet.

@@ -2,6 +2,7 @@
 import 'server-only';
 import { transactional } from '@/core/db/transaction';
 import { withTransaction } from '@/core/db/client';
+import { selectVoiceMemos } from './voice/repo';
 import { requireCommittee } from '@/modules/committees';
 import { z } from 'zod';
 import type { Context } from '@/core/auth/session';
@@ -112,7 +113,8 @@ export async function listNotes(ctx: Context, query: NoteListQuery) {
 export async function getNote(ctx: Context, noteId: string, deleted = false) {
   const row = await repo.selectNote(ctx.db, noteId);
   if (!row || (!deleted && row.deletedAt)) throw new AppError('not_found', { entityType: 'note' });
-  return NoteDetail.parse({ ...row, tasks: await repo.selectNoteTasks(ctx.db, noteId) });
+  const tasks = await repo.selectNoteTasks(ctx.db, noteId);
+  return NoteDetail.parse({ ...row, tasks, voiceMemos: await selectVoiceMemos(ctx.db, noteId) });
 }
 export const createNote = transactional(async function createNote(ctx: Context, input: NoteCreate) {
   await requireCommittee(ctx, input.committeeId);
