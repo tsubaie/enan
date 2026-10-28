@@ -62,8 +62,12 @@ Indexes: `(user_id, read_at, created_at desc)` for the feed; a unique partial in
   - `task.assigned` — a task's owner becomes a person with an account, and the actor is someone
     else. Payload: the task title at the time.
   - `task.due_today` — scheduled; a task the reader owns is due today and not completed.
-  - `task.overdue` — scheduled; a task the reader owns passed its due date yesterday and is not
-    completed. Once per task, on the first day it is late, not every morning it stays late.
+  - `task.overdue` — scheduled; a task the reader owns passed its due date and is not completed.
+    Once per task, on the first run after it went late, not every morning it stays late: the run
+    looks back over every late task, so days the app was down are caught up by the next run, and
+    a task already told keeps that line whether or not it was read. It looks back no further than
+    the read-notification retention (NOTIF-B10, 30 days), so a task late for longer, whose line may
+    have been purged, is not told again.
   - `note.mentioned` — the reader's person is added to a note's participants (NOTES/ADR 0014).
   - `kpi.off_target` — a reading lands a KPI the reader owns off target, where it was not before:
     recording, overwriting or editing a reading, compared before and after in its transaction.

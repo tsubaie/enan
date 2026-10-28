@@ -356,10 +356,11 @@ export async function selectTaskSubjects(database: Database, ids: readonly strin
     .from(tasks)
     .where(and(inArray(tasks.id, [...ids]), isNull(tasks.deletedAt)));
 }
-// NOTIF-B04: open tasks due on `day` whose owner is a live person with an account, with that account.
-export function selectOwnedDueOn(database: Database, day: string) {
-  return database.all<{ id: string; userId: string }>(sql`select t.id, p.user_id as userId from tasks t join people p
-    on p.id = t.owner_id and p.deleted_at is null and p.user_id is not null where t.due_date = ${day} and t.deleted_at is null and t.status <> 'completed'`);
+// NOTIF-B04: open tasks due in a span of days, both ends included, owned by a live person with an account.
+export type OwnedDue = { id: string; userId: string };
+export function selectOwnedDueBetween(database: Database, from: string, to: string) {
+  return database.all<OwnedDue>(sql`select t.id, p.user_id as userId from tasks t join people p
+    on p.id = t.owner_id and p.deleted_at is null and p.user_id is not null where t.due_date between ${from} and ${to} and t.deleted_at is null and t.status <> 'completed'`);
 }
 // TASKS-B02 completion operations. Two Undos of the same completion serialize on the immediate
 // transaction (ADR 0029), so the second reads the first's result.
