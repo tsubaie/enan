@@ -92,8 +92,11 @@ it('KPIS-B32 a brief whose job failed reads as failed, with its reason, and can 
   await scorecard();
   const asked = await start();
   const job = await jobOf(asked.narrative?.id ?? '');
-  await db().update(jobs).set({ status: 'failed', lastError: 'budget' }).where(eq(jobs.id, job.id));
-  expect((await read()).narrative).toMatchObject({ status: 'failed', error: 'budget' });
+  await db()
+    .update(jobs)
+    .set({ status: 'failed', lastError: 'billing' })
+    .where(eq(jobs.id, job.id));
+  expect((await read()).narrative).toMatchObject({ status: 'failed', error: 'billing' });
   const again = await start();
   expect(again.narrative?.status).toBe('generating');
   expect(again.narrative?.id).not.toBe(asked.narrative?.id);
