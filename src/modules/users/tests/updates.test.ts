@@ -363,6 +363,28 @@ it('ADMIN-B74 Update the updater is left for an updater that can replace itself,
   expect(audit).toHaveLength(1);
 });
 
+it('ADMIN-B74 a failed replacement of the updater is reported as the updater failing, not the release it kept', async () => {
+  const failed = entry({
+    state: 'failed',
+    step: 'updater',
+    candidate: { version: '2026.10.3', digest },
+    updaterUpdate: `sha256:${'c'.repeat(64)}`,
+    finishedAt: minutes(-1),
+  });
+  await updater(failed, [failed]);
+  await lastRun(new Date(minutes(-5)));
+  await run(now);
+  const [row] = await rows();
+  expect(row?.kind).toBe('update.failed');
+  expect(row?.subjectId).toBe(
+    subjectId(`failed:updater:sha256:${'c'.repeat(64)}:${failed.finishedAt}`),
+  );
+  const resolved = await resolve({ db: db(), user: harness.user as User, requestId: id() }, [
+    row?.subjectId ?? '',
+  ]);
+  expect(resolved.get(row?.subjectId ?? '')?.title).toBe('updater cccccccccccc');
+});
+
 it('ADMIN-B75 Install now with only a newer updater is left for an updater that installs both, and refused otherwise', async () => {
   const send = () => admin.updateCommand(request('POST', { command: 'install' }));
   await updater({ state: 'checked', protocol: 2, updaterUpdate: 'sha256:two' });
