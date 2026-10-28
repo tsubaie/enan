@@ -219,13 +219,18 @@ export const SuggestedTask = z.object({
   owner_name: z.string().nullable(),
   source_snippet: z.string().nullable(),
 });
+// A blank tag from the model is dropped, not a failure of the paid call.
+const ModelTags = z
+  .array(z.string().trim().max(50))
+  .max(5)
+  .transform((tags) => tags.filter(Boolean));
 export const RefinementOutput = z.object({
   refined_content: z.string().max(50000),
   suggested_tasks: z.array(SuggestedTask).max(15),
-  suggested_tags: z.array(z.string().min(1).max(50)).max(5),
+  suggested_tags: ModelTags,
   summary_of_changes: z.string().max(5000),
 });
-export const TagOutput = z.object({ tags: z.array(z.string().min(1).max(50)).max(5) });
+export const TagOutput = z.object({ tags: ModelTags });
 export const NoteAiApply = z
   .strictObject({
     jobId: z.uuid(),

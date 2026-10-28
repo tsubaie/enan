@@ -9,8 +9,6 @@ import { Tags } from './schema/validation';
 import { TAG_PROMPT } from './ai/prompts/refine.v1';
 import { refinePrompt } from './ai/prompts/select';
 import { lockNote, insertRefinement } from './repo';
-// A blank tag from the model is dropped, not a failure of the paid call.
-const modelTags = (list: string[]) => Tags.parse(list.map((tag) => tag.trim()).filter(Boolean));
 export const noteJobs: Record<string, JobHandler> = {
   'ai.notes.refine': {
     concurrency: 2,
@@ -46,7 +44,7 @@ export const noteJobs: Record<string, JobHandler> = {
           return { ...task, owner_name, due_date, source_snippet };
         });
       return {
-        output: { ...output, suggested_tasks, suggested_tags: modelTags(output.suggested_tags) },
+        output: { ...output, suggested_tasks, suggested_tags: Tags.parse(output.suggested_tags) },
         warnings,
       };
     },
@@ -76,7 +74,7 @@ export const noteJobs: Record<string, JobHandler> = {
     schema: AiPayload,
     run: async (job, signal) => {
       const output = await executeAi(job, TAG_PROMPT, TagOutput, signal);
-      return { output: { tags: modelTags(output.tags) }, warnings: [] };
+      return { output: { tags: Tags.parse(output.tags) }, warnings: [] };
     },
     publish: async () => {},
   },

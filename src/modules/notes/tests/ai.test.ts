@@ -12,16 +12,13 @@ import suggestedTags from '../../../../tests/fixtures/ai/notes.tags.v1.en.json';
 import { harness, actorId } from './fixtures';
 import { startNoteAi } from '../ai/service';
 import { refinePrompt } from '../ai/prompts/select';
-import { NoteAiApply } from '../schema/validation';
+import { NoteAiApply, RefinementOutput, TagOutput } from '../schema/validation';
 import { insertRefinement } from '../repo';
 import { id } from '@/core/db/ids';
 import { AiPayload } from '@/core/ai/job-schema';
 import { latestAiJob } from '@/core/db/ai-jobs-repo';
 import { applyNoteAi, discardNoteAi, restoreNoteAi } from '../ai/apply';
 import { getNote, patchNote } from '../service';
-import { noteJobs } from '../jobs';
-const provider = vi.hoisted(() => ({ output: {} as object }));
-vi.mock('@/core/ai/execute', () => ({ executeAi: async () => provider.output }));
 vi.mock('@/core/ai/models', () => ({ loadModels: async () => [fixtureModel] }));
 vi.mock('@/core/ai/client', () => ({ aiConnection: () => ({ state: 'enabled' }) }));
 beforeAll(() => migrateDatabase());
@@ -389,22 +386,11 @@ it('NOTES-B18 restoring a discarded proposal is refused with 409 while a newer o
   );
   expect(rows[0]?.status).toBe('discarded');
 });
-it('NOTES-B17 a blank tag from the model is dropped instead of failing the job', async () => {
-  const note = await harness.note('Plan', { content: 'Review the board draft.' });
-  const signal = new AbortController().signal;
-  provider.output = { tags: [' ', 'board'] };
-  const tagJob = await finishedJob(db(), actorId(), 'notes.suggest_tags', note.id, note.revision, {});
-  expect(await noteJobs['ai.notes.suggest_tags']?.run(tagJob, signal)).toEqual({
-    output: { tags: ['board'] },
-    warnings: [],
-  });
-  provider.output = { ...refinement, suggested_tasks: [], suggested_tags: [' ', 'board'] };
-  const refineJob = await finishedJob(db(), actorId(), 'notes.refine', note.id, note.revision, {}, {
-    assignablePeople: [],
-    content: note.content,
-  });
-  const refined = await noteJobs['ai.notes.refine']?.run(refineJob, signal);
-  expect(refined).toMatchObject({ output: { suggested_tags: ['board'] } });
+it('NOTES-B17 a blank tag from the model is dropped by the output schema instead of failing the job', () => {
+  expect(TagOutput.parse({ tags: ['', ' ', 'board'] })).toEqual({ tags: ['board'] });
+  expect(
+    RefinementOutput.parse({ ...refinement, suggested_tags: ['', ' ', 'board'] }).suggested_tags,
+  ).toEqual(['board']);
 });
 it('ADMIN-B36 a direct note apply that fails after creating a task leaves no task and no change', async () => {
   const note = await harness.note('Plan', { content: 'draft content' });
@@ -434,7 +420,14 @@ it('ADMIN-B36 a direct note apply that fails after creating a task leaves no tas
 });
 it('ADMIN-B12 the nightly prune keeps an old refine job a refinement still names, and still succeeds', async () => {
   const note = await harness.note('Plan', { content: 'Review the draft.' });
-  const kept = await finishedJob(db(), actorId(), 'notes.refine', note.id, note.revision, refinement);
+  const kept = await finishedJob(
+    db(),
+    actorId(),
+    'notes.refine',
+    note.id,
+    note.revision,
+    refinement,
+  );
   await insertRefinement(db(), {
     id: id(),
     noteId: note.id,
@@ -452,9 +445,27 @@ it('ADMIN-B12 the nightly prune keeps an old refine job a refinement still names
   // Past the 30 days: the referenced one is the oldest, so only the reference keeps it; of the
   // two others the newest success stays and the older one goes.
   const old = new Date(Date.now() - 40 * 86400000).getTime();
-  const gone = await finishedJob(db(), actorId(), 'notes.refine', note.id, note.revision, refinement);
-  const newest = await finishedJob(db(), actorId(), 'notes.refine', note.id, note.revision, refinement);
-  for (const [job, age] of [[kept, 3000], [gone, 2000], [newest, 1000]] as const)
+  const gone = await finishedJob(
+    db(),
+    actorId(),
+    'notes.refine',
+    note.id,
+    note.revision,
+    refinement,
+  );
+  const newest = await finishedJob(
+    db(),
+    actorId(),
+    'notes.refine',
+    note.id,
+    note.revision,
+    refinement,
+  );
+  for (const [job, age] of [
+    [kept, 3000],
+    [gone, 2000],
+    [newest, 1000],
+  ] as const)
     await db().run(sql`update jobs set finished_at = ${old - age} where id = ${job.id}`);
   await withTransaction(db(), (database) => prune(database));
   const left = await db().all<{ id: string }>(sql`select id from jobs where kind = ${kept.kind}`);
