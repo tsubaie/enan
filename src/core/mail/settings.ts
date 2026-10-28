@@ -79,10 +79,13 @@ export async function saveMail(database: Database, actor: string, input: unknown
   // A blank password keeps the saved one, which is re-sealed when the host or user it is bound to
   // changes. A saved password that no longer opens is dropped rather than carried forward.
   // With nothing saved yet, the form was filled from the environment and says a password is kept
-  // (ADMIN-B60): that is SMTP_PASSWORD, kept while it is still the same server and user.
+  // (ADMIN-B60): that is SMTP_PASSWORD, kept while it is still the same server and user. The
+  // schema lowercases the server name, so the variable is compared the same way.
   const config = env();
   const fromEnvironment =
-    !previous && value.host === config.SMTP_HOST && value.username === (config.SMTP_USER ?? '')
+    !previous &&
+    value.host === config.SMTP_HOST?.toLowerCase() &&
+    value.username === (config.SMTP_USER ?? '')
       ? (config.SMTP_PASSWORD ?? null)
       : null;
   const kept = value.password
