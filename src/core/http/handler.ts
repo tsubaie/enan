@@ -1,6 +1,12 @@
 import 'server-only';
 import { z } from 'zod';
-import { db, withTransaction, DatabaseBusyError, type Database } from '@/core/db/client';
+import {
+  db,
+  readOnlyDb,
+  withTransaction,
+  DatabaseBusyError,
+  type Database,
+} from '@/core/db/client';
 import { currentUser, type Context } from '@/core/auth/session';
 import { createHmac } from 'node:crypto';
 import { env } from '@/core/config/env';
@@ -44,10 +50,11 @@ type Options<I extends z.ZodType, O extends z.ZodType> = {
   idempotent?: boolean;
   // The route may enqueue a job, so a full queue answers 429 (OpenAPI lists it).
   enqueues?: boolean;
-  // `false` for a handler that only reads but is slow (hashing files, calling a provider): it runs
-  // on the pool without the write lock, so it never holds up every writer (ADR 0045). A handler
-  // marked so must not write.
-  transaction?: false;
+  // ADR 0067: a GET runs on the pool without a transaction, outside the write queue, on a handle
+  // that refuses a write; `true` keeps the request's transaction for a GET that must write (none
+  // today). `false` takes a slow handler of another method (hashing files, calling a provider) out
+  // of the queue too (ADR 0045); it may write only through its service's own transaction (ADR 0054).
+  transaction?: boolean;
   handler: (
     input: z.output<I>,
     ctx: HandlerContext,
@@ -162,10 +169,13 @@ async function execute<I extends z.ZodType, O extends z.ZodType>(
   params: Record<string, string>,
   request: Request,
 ) {
-  if (options.transaction === false)
-    return z
-      .json()
-      .parse(options.response.parse(await options.handler(input, ctx, params, request)));
+  const transactional = options.transaction ?? request.method !== 'GET';
+  if (!transactional)
+    return z.json().parse(
+      options.response.parse(
+        await options.handler(input, { ...ctx, db: readOnlyDb() }, params, request),
+      ),
+    );
   // One immediate transaction per request (ADR 0029): a retry carrying the same Idempotency-Key
   // waits at BEGIN until the first attempt commits, then replays its stored response.
   const outcome = await withTransaction(db(), async (database) => {

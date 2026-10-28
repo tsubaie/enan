@@ -89,7 +89,10 @@ Indexes: `(user_id, read_at, created_at desc)` for the feed; a unique partial in
   the office is in. The system jobs stay on UTC.
 - NOTIF-B06 **The feed resolves subjects at read time** through the owning module. A notification
   whose subject is deleted, trashed or no longer visible to that reader is omitted from the feed
-  and counted in neither total. It is not deleted: the subject may be restored.
+  and never counted as unread. It is not deleted: the subject may be restored. Only the page shown
+  and the unread rows are resolved; read rows are counted in SQL without resolving their subjects
+  (ADR 0067), so a read row whose subject has gone stays in `totalCount` until retention removes
+  it (NOTIF-B10).
 - NOTIF-B07 **Reading.** Opening the centre does not mark anything read. A notification is marked
   read when the reader opens it, or by "Mark all as read" which marks exactly the rows currently
   resolvable in the feed. In the bell that is every unread row the reader has, not only the ten

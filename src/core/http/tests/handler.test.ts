@@ -16,6 +16,7 @@ const transactions = vi.hoisted(() => ({ opened: 0 }));
 vi.mock('@/core/db/client', async (original) => ({
   ...(await original<typeof import('@/core/db/client')>()),
   db: () => ({}),
+  readOnlyDb: () => ({}),
   withTransaction: (_database: object, work: (database: object) => Promise<object>) => {
     transactions.opened++;
     return work({});
@@ -111,18 +112,26 @@ it('ADMIN-B49 every API response says how long the origin spent on it, success a
   expect(response.status).toBe(401);
   expect(response.headers.get('Server-Timing')).toMatch(/^auth;dur=\d+\.\d, total;dur=\d+\.\d$/u);
 });
+const route = (transaction?: boolean) =>
+  defineHandler({
+    guard: 'public',
+    input: z.strictObject({}),
+    response: z.object({ ok: z.boolean() }),
+    ...(transaction === undefined ? {} : { transaction }),
+    handler: async () => ({ ok: true }),
+  });
 it('ADR 0045 a handler marked transaction: false runs without taking the write lock', async () => {
-  const route = (transaction?: false) =>
-    defineHandler({
-      guard: 'public',
-      input: z.strictObject({}),
-      response: z.object({ ok: z.boolean() }),
-      ...(transaction === false ? { transaction } : {}),
-      handler: async () => ({ ok: true }),
-    });
   const before = transactions.opened;
   expect((await route(false)(request())).status).toBe(200);
   expect(transactions.opened).toBe(before);
   expect((await route()(request())).status).toBe(200);
+  expect(transactions.opened).toBe(before + 1);
+});
+it('ADR 0067 a GET runs without the write lock unless it asks for the transaction', async () => {
+  const get = () => new Request('http://localhost/api/v1/example', { method: 'GET' });
+  const before = transactions.opened;
+  expect((await route()(get())).status).toBe(200);
+  expect(transactions.opened).toBe(before);
+  expect((await route(true)(get())).status).toBe(200);
   expect(transactions.opened).toBe(before + 1);
 });
