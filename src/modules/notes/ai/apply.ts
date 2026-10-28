@@ -103,9 +103,10 @@ export const restoreNoteAi = transactional(async function restoreNoteAi(
   if (result.appliedIds) throw new AppError('conflict', { reason: 'state' });
   const note = await getNote(ctx, noteId);
   const current = note.revision === payload.revision;
-  // A note holds one pending proposal: a newer one took the place, so the undo is refused.
-  if (current && (await pendingRefinement(ctx.db, noteId)))
-    throw new AppError('conflict', { reason: 'state' });
+  // A note holds one pending proposal: a newer one took the place, so the undo is refused;
+  // the job's own pending row means the undo already ran, and runs again unchanged.
+  const pending = current ? await pendingRefinement(ctx.db, noteId) : undefined;
+  if (pending && pending.jobId !== jobId) throw new AppError('conflict', { reason: 'state' });
   await updateAiResult(ctx.db, jobId, { ...result, discarded: false });
   await reviewRefinement(ctx.db, jobId, current ? 'pending' : 'stale', ctx.user.id);
   return { ids: [] };

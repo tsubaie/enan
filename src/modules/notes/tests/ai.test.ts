@@ -372,10 +372,32 @@ it('NOTES-B18 restoring a discarded proposal is refused with 409 while a newer o
     status,
     createdBy: actorId(),
   });
-  const first = await finishedJob(db(), actorId(), 'notes.refine', note.id, note.revision, refinement);
+  const first = await finishedJob(
+    db(),
+    actorId(),
+    'notes.refine',
+    note.id,
+    note.revision,
+    refinement,
+  );
   await insertRefinement(db(), row(first.id, 'pending'));
   await harness.run((ctx) => discardNoteAi(ctx, note.id, first.id, 'notes.refine'));
-  const second = await finishedJob(db(), actorId(), 'notes.refine', note.id, note.revision, refinement);
+  // Restoring the same job again is idempotent: its own pending row is no newer proposal.
+  await expect(harness.run((ctx) => restoreNoteAi(ctx, note.id, first.id))).resolves.toEqual({
+    ids: [],
+  });
+  await expect(harness.run((ctx) => restoreNoteAi(ctx, note.id, first.id))).resolves.toEqual({
+    ids: [],
+  });
+  await harness.run((ctx) => discardNoteAi(ctx, note.id, first.id, 'notes.refine'));
+  const second = await finishedJob(
+    db(),
+    actorId(),
+    'notes.refine',
+    note.id,
+    note.revision,
+    refinement,
+  );
   await insertRefinement(db(), row(second.id, 'pending'));
   await expect(harness.run((ctx) => restoreNoteAi(ctx, note.id, first.id))).rejects.toMatchObject({
     code: 'conflict',
