@@ -318,6 +318,7 @@ func TestScenarios(t *testing.T) {
 		{"ADMIN-B67 a paused updater installs nothing on Install now", aPausedUpdaterInstallsNothing},
 		{"ADMIN-B68 automatic installing turned on installs the waiting release, and off stops", automaticOnAndOff},
 		{"ADMIN-B68 automatic installs wait for the window; checks do not", automaticInstallsWaitForTheWindow},
+		{"ADMIN-B68 a release waiting for the window is installed at the window's start, not at the next daily check", automaticInstallsAtTheWindowStart},
 		{"ADMIN-B68 an install from before announce mode stays automatic, once; a new one announces", anExistingInstallStaysAutomatic},
 		{"ADMIN-B56 an update interrupted after the switch is finished", anUpdateInterruptedAfterTheSwitchIsFinished},
 		{"ADMIN-B56 an update interrupted during the switch is reversed", anUpdateInterruptedDuringTheSwitchIsReversed},
@@ -903,6 +904,26 @@ func automaticInstallsWaitForTheWindow(t *testing.T) {
 	u.Check(context.Background())
 	if u.status.State != Updated {
 		t.Fatalf("inside: state %s: %s", u.status.State, u.status.Error)
+	}
+}
+
+func automaticInstallsAtTheWindowStart(t *testing.T) {
+	u, f, _ := setup(t)
+	u.Config.Zone, u.Config.Interval = time.UTC, 24*time.Hour
+	now := time.Date(2026, 10, 23, 10, 0, 0, 0, time.UTC)
+	u.Now = func() time.Time { return now }
+	u.Apply(context.Background(), Command{Command: "settings", Window: ptr("02:00-05:00")})
+	f.image("img-2", "sha256:two", "2026.11.0", 8, 0)
+	f.publish("latest", "sha256:two")
+	// The start check, outside the window: the next wake is the window's start, not 24h later.
+	next, _ := u.cycle(context.Background(), now)
+	start := time.Date(2026, 10, 24, 2, 0, 0, 0, time.UTC)
+	if u.status.State != Available || !next.Equal(start) {
+		t.Fatalf("state %s, next wake %s", u.status.State, next)
+	}
+	now = start
+	if next, _ = u.cycle(context.Background(), next); u.status.State != Updated || !next.Equal(start.Add(24*time.Hour)) {
+		t.Fatalf("at the window's start: state %s: %s, next wake %s", u.status.State, u.status.Error, next)
 	}
 }
 

@@ -116,6 +116,10 @@ func automaticSelfUpdate(t *testing.T) {
 	if u.selfDue() {
 		t.Fatal("replaced outside its window")
 	}
+	// Not left to the next daily check: the loop wakes at the window's start.
+	if next, _ := u.cycle(context.Background(), u.Now().Add(24*time.Hour)); !next.Equal(time.Date(2026, 10, 24, 2, 0, 0, 0, time.UTC)) {
+		t.Fatalf("next wake %s", next)
+	}
 	u.Apply(context.Background(), Command{Command: "settings", Window: ptr("")})
 	u.state.Rejected["updater:sha256:upd-2"] = "updater at an earlier time"
 	if u.selfDue() {

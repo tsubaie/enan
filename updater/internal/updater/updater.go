@@ -947,16 +947,9 @@ func (u *Updater) Run(ctx context.Context) error {
 	}
 	next := u.now()
 	for {
-		due := false
-		for _, command := range u.Commands() {
-			due = u.Apply(ctx, command) || due
-		}
-		if due || !u.now().Before(next) {
-			u.Check(ctx)
-			next = u.now().Add(u.Config.Interval)
-		}
+		var replacing bool
 		// ADR 0062: once the helper is under way this updater takes no more work; the helper stops it.
-		if u.selfDue() && u.SelfUpdate(ctx) {
+		if next, replacing = u.cycle(ctx, next); replacing {
 			<-ctx.Done()
 			return nil
 		}
@@ -974,6 +967,29 @@ func (u *Updater) Run(ctx context.Context) error {
 		}
 		timer.Stop()
 	}
+}
+
+// cycle acts on the commands that arrived, checks when due and replaces the updater when due. It
+// returns when to wake next, and whether the helper replacing this updater is under way.
+func (u *Updater) cycle(ctx context.Context, next time.Time) (time.Time, bool) {
+	due := false
+	for _, command := range u.Commands() {
+		due = u.Apply(ctx, command) || due
+	}
+	if due || !u.now().Before(next) {
+		u.Check(ctx)
+		next = u.now().Add(u.Config.Interval)
+	}
+	if u.selfDue() && u.SelfUpdate(ctx) {
+		return next, true
+	}
+	// ADMIN-B68: what waits for the window is installed at the window's start, not at the next check.
+	if window := u.window(); window != nil && u.automatic() && (u.status.State == Available || u.status.UpdaterUpdate != "") {
+		if at := window.Next(u.now()); at.Before(next) {
+			next = at
+		}
+	}
+	return next, false
 }
 
 func tail(text string, lines int) string {
