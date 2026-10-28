@@ -7,7 +7,7 @@ import { id } from '@/core/db/ids';
 import { writeAudit, toJson } from '@/core/db/audit-repo';
 import { getSetting } from '@/core/db/settings-repo';
 import { dayAt } from '@/core/time/tasks';
-import { periodOf } from '@/core/time/kpis';
+import { periodOf, periodsPerYear } from '@/core/time/kpis';
 import type { StatusThresholds } from '@/core/config/settings';
 import { requireRevision, applyUpdate, restoreByOp, reorderInPlace } from '@/core/entity/service';
 import {
@@ -163,8 +163,8 @@ async function requireOwner(ctx: Context, ownerId: string | null | undefined) {
   if (!ownerId) return;
   if (!(await getPerson(ctx, ownerId)).isAssignable) throw rejected('ownerId', 'not_assignable');
 }
-const rejected = (field: string, reason: string) =>
-  new AppError('rule_violation', { rule: 'KPIS-B06', fieldErrors: { [field]: [reason] } });
+const rejected = (field: string, reason: string, rule = 'KPIS-B06') =>
+  new AppError('rule_violation', { rule, fieldErrors: { [field]: [reason] } });
 async function createKpiInTransaction(ctx: Context, input: KpiCreate) {
   await requireObjective(ctx, input.objectiveId);
   await requireOwner(ctx, input.ownerId);
@@ -361,6 +361,8 @@ export async function listTargets(ctx: Context, kpiId: string) {
 }
 async function putTargetsInTransaction(ctx: Context, kpiId: string, input: TargetsPut) {
   const kpi = await getKpi(ctx, kpiId);
+  if (input.items.some((item) => item.period > periodsPerYear(kpi.frequency)))
+    throw rejected('items', 'period_outside_cadence', 'KPIS-I02');
   await repo.upsertTargets(
     ctx.db,
     kpiId,

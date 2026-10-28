@@ -3,6 +3,7 @@ import {
   periodOf,
   periodRange,
   periodsBehind,
+  periodsPerYear,
   shiftPeriod,
   type Period,
 } from '@/core/time/kpis';
@@ -63,15 +64,18 @@ export function percentChangeOf(current: number | null, previous: number | null)
   if (current === null || previous === null || previous === 0) return null;
   return (current - previous) / Math.abs(previous);
 }
-// KPIS-B02: the current period's target, else the earliest future one, else none.
+// KPIS-B02: the current period's target, else the earliest future one, else none. A period the
+// cadence does not have (left by a cadence change, KPIS-I02) would index as another period's, so
+// it is never read.
 export function resolveEffectiveTarget(
   targets: PeriodTarget[],
   period: Period,
   frequency: Frequency,
 ) {
   const now = periodIndex(period, frequency);
+  const size = periodsPerYear(frequency);
   const chosen = targets
-    .filter((target) => periodIndex(target, frequency) >= now)
+    .filter((target) => target.period <= size && periodIndex(target, frequency) >= now)
     .sort((a, b) => periodIndex(a, frequency) - periodIndex(b, frequency))[0];
   return chosen ? { value: chosen.value, year: chosen.year, period: chosen.period } : null;
 }

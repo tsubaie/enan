@@ -203,6 +203,26 @@ const shiftable = {
     { year: 2026, period: 4, value: 120 },
   ],
 };
+it('KPIS-B02 KPIS-I02 targets for periods the cadence does not have are never read', () => {
+  // A monthly plan for May–December, then the cadence became quarterly: those rows index as
+  // 2027 Q1 onwards and would otherwise be picked over the real plan, or stand in for none.
+  const leftover = [5, 6, 7, 8, 9, 10, 11, 12].map((period) => ({
+    year: 2026,
+    period,
+    value: period * 10,
+  }));
+  const real = { year: 2027, period: 4, value: 999 };
+  expect(
+    resolveEffectiveTarget([...leftover, real], { year: 2026, period: 3 }, 'quarterly'),
+  ).toEqual(real);
+  expect(resolveEffectiveTarget(leftover, { year: 2026, period: 3 }, 'quarterly')).toBeNull();
+  const meta = deriveMeta(
+    { ...shiftable, targets: [...leftover, real] },
+    { today: TODAY, thresholds },
+  );
+  expect(meta.effectiveTargetPeriod).toEqual({ year: 2027, period: 4 });
+  expect(meta.effectiveTarget).toBe(999);
+});
 it('KPIS-B26 a shifted reading is taken against its own period, not the nearest plan', () => {
   const now = deriveMeta(shiftable, { today: TODAY, thresholds });
   const back = deriveMeta(shiftable, { today: TODAY, thresholds, offset: -1 });
