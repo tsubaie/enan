@@ -32,7 +32,10 @@ export async function selectLatestNarrative(database: Database, scope: Scope) {
       headline: kpiNarratives.headline,
       bodyMarkdown: kpiNarratives.bodyMarkdown,
       highlights: kpiNarratives.highlightsJson,
-      error: kpiNarratives.error,
+      // Nothing writes the row's own error yet; the job's last error is the reason a brief failed.
+      error: sql<
+        string | null
+      >`coalesce(${kpiNarratives.error}, (select j.last_error from jobs j where j.id = ${kpiNarratives.jobId}))`,
       createdAt: kpiNarratives.createdAt,
     })
     .from(kpiNarratives)
