@@ -377,13 +377,11 @@ it('ADMIN-B74 a failed replacement of the updater is reported as the updater fai
   await run(now);
   const [row] = await rows();
   expect(row?.kind).toBe('update.failed');
-  expect(row?.subjectId).toBe(
-    subjectId(`failed:updater:sha256:${'c'.repeat(64)}:${finishedAt}`),
-  );
+  expect(row?.subjectId).toBe(subjectId(`failed:updater:sha256:${'c'.repeat(64)}:${finishedAt}`));
   const resolved = await resolve({ db: db(), user: harness.user as User, requestId: id() }, [
     row?.subjectId ?? '',
   ]);
-  expect(resolved.get(row?.subjectId ?? '')?.title).toBe('updater cccccccccccc');
+  expect(resolved.get(row?.subjectId ?? '')?.title).toBe('cccccccccccc');
 });
 
 it('ADMIN-B75 Install now with only a newer updater is left for an updater that installs both, and refused otherwise', async () => {

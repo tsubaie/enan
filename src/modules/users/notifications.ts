@@ -91,7 +91,7 @@ function failedEvent(entry: UpdaterStatus): Event | null {
     return {
       kind: 'update.failed',
       key: `failed:updater:${entry.updaterUpdate ?? ''}:${entry.finishedAt}`,
-      title: `updater ${shortDigest(entry.updaterUpdate) ?? ''}`.trim(),
+      title: shortDigest(entry.updaterUpdate) ?? 'Enan',
     };
   return {
     kind: 'update.failed',
