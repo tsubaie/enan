@@ -364,12 +364,13 @@ it('ADMIN-B74 Update the updater is left for an updater that can replace itself,
 });
 
 it('ADMIN-B74 a failed replacement of the updater is reported as the updater failing, not the release it kept', async () => {
+  const finishedAt = minutes(-1);
   const failed = entry({
     state: 'failed',
     step: 'updater',
     candidate: { version: '2026.10.3', digest },
     updaterUpdate: `sha256:${'c'.repeat(64)}`,
-    finishedAt: minutes(-1),
+    finishedAt,
   });
   await updater(failed, [failed]);
   await lastRun(new Date(minutes(-5)));
@@ -377,7 +378,7 @@ it('ADMIN-B74 a failed replacement of the updater is reported as the updater fai
   const [row] = await rows();
   expect(row?.kind).toBe('update.failed');
   expect(row?.subjectId).toBe(
-    subjectId(`failed:updater:sha256:${'c'.repeat(64)}:${failed.finishedAt}`),
+    subjectId(`failed:updater:sha256:${'c'.repeat(64)}:${finishedAt}`),
   );
   const resolved = await resolve({ db: db(), user: harness.user as User, requestId: id() }, [
     row?.subjectId ?? '',
