@@ -68,14 +68,17 @@ it('PEOPLE-I04 the principal must name a person who exists and is not in the tra
     run(admin, (ctx) => updateSetting(ctx, 'workspace.principal_person_id', id())),
   ).rejects.toMatchObject({ code: 'rule_violation', details: { reason: 'unknown_person' } });
 });
-it('NOTIF-B05 ADMIN-B07 a new workspace time zone moves the reminder schedules with it and leaves the system jobs on UTC', async () => {
+it('NOTIF-B05 ADMIN-B07 a new workspace time zone moves the reminder schedules with it, so the next run is the first in the new zone, and leaves the system jobs on UTC', async () => {
   const zone = midnightBoundaries[1]?.timezone ?? 'UTC';
+  // Every schedule last ran yesterday; only the reminders' clock is reset by the move.
+  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const seed = (kind: string, cron: string) => ({
     id: id(),
     kind,
     cron,
     timezone: 'UTC',
     payload: {},
+    lastOccurrence: yesterday,
   });
   await db()
     .insert(schedules)
@@ -84,15 +87,20 @@ it('NOTIF-B05 ADMIN-B07 a new workspace time zone moves the reminder schedules w
       seed('kpis.reminders', '0 5 * * *'),
       seed('system.backup', '0 2 * * *'),
     ]);
+  const before = Date.now();
   await run(admin, (ctx) => updateSetting(ctx, 'workspace.timezone', zone));
-  const zones = Object.fromEntries(
-    (await db().select({ kind: schedules.kind, timezone: schedules.timezone }).from(schedules)).map(
-      (row) => [row.kind, row.timezone],
-    ),
+  const rows = Object.fromEntries(
+    (await db().select().from(schedules)).map((row) => [row.kind, row]),
   );
-  expect(zones).toEqual({
+  expect(Object.fromEntries(Object.values(rows).map((row) => [row.kind, row.timezone]))).toEqual({
     'tasks.reminders': zone,
     'kpis.reminders': zone,
     'system.backup': 'UTC',
   });
+  for (const kind of ['tasks.reminders', 'kpis.reminders']) {
+    const at = rows[kind]?.lastOccurrence?.getTime() ?? 0;
+    expect(at).toBeGreaterThanOrEqual(before);
+    expect(at).toBeLessThanOrEqual(Date.now());
+  }
+  expect(rows['system.backup']?.lastOccurrence).toEqual(yesterday);
 });

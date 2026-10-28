@@ -74,9 +74,12 @@ export async function clearSetting(database: Database, key: SettingKey, userId: 
 }
 // NOTIF-B05, KPIS-B30: the reminder jobs decide "today" on the workspace day, so their schedules
 // run in the workspace's time zone and move with it when it is written; the system jobs stay on UTC.
+// A westward move would make today's 04:00 in the new zone later than the last run and run the
+// reminders twice in one day, so the next run is the first occurrence in the new zone.
 export async function followWorkspaceTimezone(database: Database, timezone: string) {
+  const now = new Date();
   await database
     .update(schedules)
-    .set({ timezone, updatedAt: new Date() })
+    .set({ timezone, lastOccurrence: now, updatedAt: now })
     .where(inArray(schedules.kind, ['tasks.reminders', 'kpis.reminders']));
 }
