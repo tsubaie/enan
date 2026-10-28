@@ -19,8 +19,11 @@ import {
   TargetList,
   Revision,
   Reorder,
+  NarrativeScope,
+  NarrativeView,
 } from './schema/validation';
 import * as service from './service';
+import { readNarrative, startNarrative } from './ai/service';
 const uuid = (params: Record<string, string>, key = 'id') => z.uuid().parse(params[key]);
 const kpi = z.object({ data: KpiDetail });
 const objective = z.object({ data: Objective });
@@ -217,4 +220,19 @@ export const reorder = defineHandler({
   response: z.object({ data: z.object({ updatedIds: z.array(z.uuid()) }) }),
   idempotent: true,
   handler: (input, ctx) => service.reorderKpis(authenticated(ctx), input.items),
+});
+// KPIS-B32: the latest executive brief for a scope, with whether its figures have moved since.
+export const narrative = defineHandler({
+  guard: 'session',
+  input: NarrativeScope,
+  response: NarrativeView,
+  handler: async (input, ctx) => ({ data: await readNarrative(authenticated(ctx), input) }),
+});
+export const startNarrativeBrief = defineHandler({
+  guard: 'session',
+  input: NarrativeScope,
+  response: NarrativeView,
+  status: 202,
+  enqueues: true,
+  handler: async (input, ctx) => ({ data: await startNarrative(authenticated(ctx), input) }),
 });

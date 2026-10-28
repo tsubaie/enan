@@ -47,6 +47,8 @@ const exempt: Record<string, string[]> = {
     'listManagedTags',
     'manageTags',
   ],
+  // KPIS-B32: reading the latest brief writes nothing.
+  'kpis/ai/service': ['readNarrative'],
   'notes/voice/service': [
     'uploadVoiceMemo',
     'createNoteFromVoice',
@@ -73,18 +75,19 @@ const exempt: Record<string, string[]> = {
     'uploadWallpaper',
     'deleteWallpaper',
   ],
-  tasks: ['listTasks', 'getTask', 'peopleForAi'],
+  tasks: ['listTasks', 'getTask'],
   users: ['setup', 'listUsers'],
 };
 // Every service surface is discovered, so a new module or a new AI file cannot be left out: each
 // module's service.ts (keyed by the module name) and every file under its ai/ except the route
-// handlers in api.ts (keyed by path).
+// handlers in api.ts and a capability's own SQL in repo.ts (keyed by path).
 const discovered = import.meta.glob(
   [
     '../../../modules/*/service.ts',
     '../../../modules/*/voice/service.ts',
     '../../../modules/*/ai/*.ts',
     '!../../../modules/*/ai/api.ts',
+    '!../../../modules/*/ai/repo.ts',
   ],
   { eager: true },
 );

@@ -1,5 +1,5 @@
 import 'server-only';
-import { and, eq, isNull, isNotNull, lt, or, sql, desc, inArray } from 'drizzle-orm';
+import { and, eq, gte, isNull, isNotNull, lt, or, sql, desc, inArray, count } from 'drizzle-orm';
 import { notifications } from './system-schema';
 import { type Database } from './client';
 import { id } from './ids';
@@ -67,11 +67,33 @@ export async function selectFeed(
     .orderBy(desc(notifications.createdAt), desc(notifications.id))
     .limit(limit);
 }
-// NOTIF-B08/B15: every row the reader has, so the badge, the totals and "mark all as read" can
-// resolve them all; the rows whose subject has gone are left out by the service, which alone can
-// tell. Retention (NOTIF-B10) bounds how many there are.
-export async function selectOwn(database: Database, userId: string) {
-  return database.select().from(notifications).where(eq(notifications.userId, userId));
+// NOTIF-B08/B15: every unread row the reader has, so the badge and "mark all as read" can resolve
+// them all; the rows whose subject has gone are left out by the service, which alone can tell.
+// The unread index (NOTIF-I02) and retention (NOTIF-B10) bound how many there are.
+export async function selectUnread(database: Database, userId: string) {
+  return database
+    .select()
+    .from(notifications)
+    .where(and(eq(notifications.userId, userId), isNull(notifications.readAt)));
+}
+// NOTIF-B06/B15: the read rows of the kinds asked for, counted rather than resolved, so a poll
+// never loads the whole feed to show a total.
+export async function countRead(
+  database: Database,
+  userId: string,
+  kinds: readonly string[] | null = null,
+) {
+  const [row] = await database
+    .select({ count: count() })
+    .from(notifications)
+    .where(
+      and(
+        eq(notifications.userId, userId),
+        isNotNull(notifications.readAt),
+        kinds ? inArray(notifications.kind, [...kinds]) : undefined,
+      ),
+    );
+  return row?.count ?? 0;
 }
 export async function markRead(database: Database, userId: string, notificationId: string) {
   const [row] = await database
@@ -103,6 +125,47 @@ export async function markManyRead(database: Database, userId: string, ids: read
     )
     .returning({ id: notifications.id });
   return rows.length;
+}
+// NOTIF-B17: the event a notification reported has been dealt with — a reading was recorded — so
+// every reader's unread line about it is cleared, not only the actor's.
+export async function markSubjectRead(
+  database: Database,
+  kinds: readonly string[],
+  subjectId: string,
+) {
+  const rows = await database
+    .update(notifications)
+    .set({ readAt: new Date() })
+    .where(
+      and(
+        eq(notifications.subjectId, subjectId),
+        inArray(notifications.kind, [...kinds]),
+        isNull(notifications.readAt),
+      ),
+    )
+    .returning({ id: notifications.id });
+  return rows.length;
+}
+// NOTIF-B05: the subjects already told of `kind` since a moment, read or not, so a reminder that
+// is once per period stays once per period after its reader has dismissed it.
+export async function selectNotifiedSince(
+  database: Database,
+  kind: string,
+  subjectIds: readonly string[],
+  since: Date,
+) {
+  if (!subjectIds.length) return new Set<string>();
+  const rows = await database
+    .select({ subjectId: notifications.subjectId })
+    .from(notifications)
+    .where(
+      and(
+        eq(notifications.kind, kind),
+        inArray(notifications.subjectId, [...subjectIds]),
+        gte(notifications.createdAt, since),
+      ),
+    );
+  return new Set(rows.map((row) => row.subjectId));
 }
 // NOTIF-B10: retention. Read rows go after one window, unread after a longer one.
 export async function deleteExpired(database: Database, readBefore: Date, unreadBefore: Date) {

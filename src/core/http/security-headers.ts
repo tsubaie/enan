@@ -39,8 +39,9 @@ export function securityHeaders(input: HeaderPolicyInput): Record<string, string
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'DENY',
     'Referrer-Policy': 'same-origin',
+      // NOTES-B34: the app itself records voice memos; `()` would refuse getUserMedia to the document.
     'Permissions-Policy':
-      'camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()',
+      'camera=(), microphone=(self), geolocation=(), payment=(), usb=(), interest-cohort=()',
     'Cross-Origin-Opener-Policy': 'same-origin',
     // API responses carry private workspace data; downloads are API responses too.
     ...(input.nonce === null && !input.ownCache ? { 'Cache-Control': 'no-store' } : {}),

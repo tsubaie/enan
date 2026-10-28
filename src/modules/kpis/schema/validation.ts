@@ -1,6 +1,4 @@
 import { z } from 'zod';
-import { periodIndex, periodOf, periodsBehind, shiftPeriod, type Period } from '@/core/time/kpis';
-import type { StatusThresholds } from '@/core/config/settings';
 export const Direction = z.enum(['higher', 'lower']);
 export type Direction = z.infer<typeof Direction>;
 // The cadence a KPI is reported on. It decides what a period is everywhere: the target a reading is
@@ -84,6 +82,8 @@ export const KpiCreate = z.strictObject({
   ownerId: z.uuid().nullable().default(null),
   notes: z.string().max(50000).default(''),
   frequency: Frequency.default('quarterly'),
+  // KPIS-B30: the owner is told when a period closes in on them without a reading.
+  remindersEnabled: z.boolean().default(true),
 });
 export type KpiCreate = z.infer<typeof KpiCreate>;
 export const KpiPatch = z.strictObject({
@@ -95,6 +95,7 @@ export const KpiPatch = z.strictObject({
   ownerId: z.uuid().nullable().optional(),
   notes: z.string().max(50000).optional(),
   frequency: Frequency.optional(),
+  remindersEnabled: z.boolean().optional(),
   revision: z.number().int().positive(),
 });
 export type KpiPatch = z.infer<typeof KpiPatch>;
@@ -155,6 +156,8 @@ export const PeriodComparison = PeriodRef.extend({
 // against the period before it and the one after it without another request. The middle entry is
 // the effective period, and it repeats the row's own answer exactly.
 export const PeriodView = PeriodRef.extend({
+  // KPIS-B31: the reading that period holds of its own, never one borrowed from another period.
+  value: z.number().nullable().optional(),
   target: z.number().nullable(),
   achievement: z.number().nullable(),
   status: KpiStatus,
@@ -189,7 +192,8 @@ export const KpiList = z.object({
 const Named = z.object({ id: z.uuid(), name: z.string() });
 export const KpiFacets = z.object({
   categories: z.array(z.string()),
-  owners: z.array(Named),
+  // KPIS-B30: `hasLogin` says whether a reminder can reach the owner at all.
+  owners: z.array(Named.extend({ hasLogin: z.boolean().default(false) })),
   objectives: z.array(Named),
 });
 export const ReadingCreate = z.strictObject({
@@ -236,164 +240,55 @@ export const Reorder = z.strictObject({
     .refine((items) => new Set(items.map((item) => item.id)).size === items.length),
 });
 export const KpiReference = z.object({ id: z.uuid(), name: z.string(), deleted: z.boolean() });
-// ── The scorecard's arithmetic ────────────────────────────────────────────────────────────────
-// KPIS-B01–B04 are pure functions of facts the repo reads, so they live beside the schemas that
-// name those facts: one definition shared by the list, the detail, Home and the tests, with no
-// database or request in scope. Statuses are never stored; every read recomputes them.
-export type PeriodTarget = { year: number; period: number; value: number };
-export type StatusInput = {
-  current: number | null;
-  currentDate: string | null;
-  target: number | null;
-  direction: Direction;
-  frequency: Frequency;
-  thresholds: StatusThresholds;
-  today: string;
-};
-const meets = (current: number, target: number, direction: Direction) =>
-  direction === 'higher' ? current >= target : current <= target;
-// The ratio bands, read in the direction the KPI is meant to move.
-function banded(
-  ratio: number,
-  direction: Direction,
-  band: { on: number; near: number },
-): KpiStatus {
-  const inside = direction === 'higher' ? ratio >= band.on : ratio <= band.on;
-  const close = direction === 'higher' ? ratio >= band.near : ratio <= band.near;
-  return inside ? 'on_target' : close ? 'near_target' : 'off_target';
-}
-export function computeKpiStatus(input: StatusInput): KpiStatus {
-  const { current, currentDate, target, direction, thresholds } = input;
-  if (current === null || currentDate === null) return 'no_data';
-  // One missed report is lag; more than one is nobody maintaining the measure (KPIS-B01).
-  if (periodsBehind(currentDate, input.today, input.frequency) > 1) return 'stale';
-  if (target === null) return 'no_target';
-  // No "near" band without a ratio of same-signed values; both negative, the ratio is inverted.
-  if (target === 0 || Math.sign(current) !== Math.sign(target))
-    return meets(current, target, direction) ? 'on_target' : 'off_target';
-  const ratio = target < 0 ? target / current : current / target;
-  return banded(ratio, direction, thresholds[direction]);
-}
-// KPIS-B03: 100 percent means on target in both directions, so the ratio inverts with the
-// direction. It is undefined where a ratio would be meaningless, and the gauge then shows the
-// status badge alone.
-export function achievementOf(current: number | null, target: number | null, direction: Direction) {
-  if (current === null || target === null || target <= 0 || current <= 0) return null;
-  return Math.min(direction === 'higher' ? current / target : target / current, 9.99);
-}
-export function percentChangeOf(current: number | null, previous: number | null) {
-  if (current === null || previous === null || previous === 0) return null;
-  return (current - previous) / Math.abs(previous);
-}
-// KPIS-B02: the current period's target, else the earliest future one, else none.
-export function resolveEffectiveTarget(
-  targets: PeriodTarget[],
-  period: Period,
-  frequency: Frequency,
-) {
-  const now = periodIndex(period, frequency);
-  const chosen = targets
-    .filter((target) => periodIndex(target, frequency) >= now)
-    .sort((a, b) => periodIndex(a, frequency) - periodIndex(b, frequency))[0];
-  return chosen ? { value: chosen.value, year: chosen.year, period: chosen.period } : null;
-}
-// Everything the row, the gauge and Home read, derived in one place from the facts the repository
-// reads (KPIS-B01–B05). Statuses are never stored: a threshold change or a new period changes
-// every answer, so each read recomputes them (KPIS-B10, KPIS-B11).
-export type KpiFacts = {
-  direction: string;
-  frequency: string;
-  current: Point | null;
-  previousPeriodValue: number | null;
-  sparkline: Point[];
-  targets: PeriodTarget[];
-};
-// The period is not part of the measurement context: each KPI is on its own cadence, so it is
-// derived from the day and that KPI's frequency wherever it is needed.
-export type MeasuredAt = { today: string; thresholds: StatusThresholds; offset?: number };
-export function deriveMeta(facts: KpiFacts, at: MeasuredAt): KpiMeta {
-  const current = facts.current?.value ?? null;
-  const currentDate = facts.current?.date ?? null;
-  const direction = Direction.parse(facts.direction);
-  const frequency = Frequency.parse(facts.frequency);
-  // KPIS-B26: `at.offset` reads the whole scorecard against a neighbouring period, named exactly
-  // and without freshness, for the reasons the spec gives.
-  const period = shiftPeriod(periodOf(at.today, frequency), at.offset ?? 0, frequency);
-  const target = at.offset
-    ? (facts.targets.find((row) => row.year === period.year && row.period === period.period) ?? null)
-    : resolveEffectiveTarget(facts.targets, period, frequency);
-  const value = target?.value ?? null;
-  return {
-    current,
-    currentDate,
-    previous: facts.previousPeriodValue,
-    percentChange: percentChangeOf(current, facts.previousPeriodValue),
-    effectiveTarget: value,
-    effectiveTargetPeriod: target ? { year: target.year, period: target.period } : null,
-    status: computeKpiStatus({
-      current,
-      currentDate: at.offset ? at.today : currentDate,
-      target: value,
-      direction,
-      frequency,
-      thresholds: at.thresholds,
-      today: at.today,
-    }),
-    achievement: achievementOf(current, value, direction),
-    sparkline: facts.sparkline,
-  };
-}
-// KPIS-B08: what the record would read as against the period before the effective one and the one
-// after it. Freshness is deliberately not applied to the neighbours: the question they answer is
-// "was this target met", which does not go stale, and the middle entry carries the KPI's own status
-// so the record and the row never disagree.
-export function derivePeriods(
-  facts: KpiFacts,
-  at: MeasuredAt,
-  base: Period,
+// ── KPIS-B32: the executive brief ──────────────────────────────────────────────────────────────
+export const NarrativeLocale = z.enum(['en', 'ar']);
+export const NarrativePeriod = z.enum(['previous', 'current', 'next']);
+export const NarrativeStatus = z.enum(['generating', 'ready', 'failed']);
+// The scope a brief is written over: the whole scorecard, one objective, or one KPI.
+export const NarrativeScope = z.strictObject({
+  kpiId: z.uuid().optional(),
+  objectiveId: z.uuid().optional(),
+  locale: NarrativeLocale.default('en'),
+  period: NarrativePeriod.default('current'),
+});
+export type NarrativeScope = z.infer<typeof NarrativeScope>;
+// What the model returns. It cites a measure by the short code the input gave it, never by id,
+// so a citation can only ever point at a measure that was in the brief's own figures.
+export const NarrativeAiOutput = z.object({
+  headline: z.string().trim().min(1).max(300),
+  bodyMarkdown: z.string().trim().min(1).max(8000),
+  highlights: z
+    .array(z.object({ code: z.string().max(10), summary: z.string().trim().min(1).max(600) }))
+    .max(12),
+});
+export const NarrativeHighlight = z.object({
+  kpiId: z.uuid(),
+  code: z.string(),
+  name: z.string(),
   status: KpiStatus,
-  previousReading: number | null,
-) {
-  const direction = Direction.parse(facts.direction);
-  const frequency = Frequency.parse(facts.frequency);
-  const current = facts.current?.value ?? null;
-  const targetIn = ({ year, period }: Period) =>
-    facts.targets.find((row) => row.year === year && row.period === period)?.value ?? null;
-  const before = shiftPeriod(periodOf(at.today, frequency), -1, frequency);
-  return {
-    periods: [-1, 0, 1].map((offset) => {
-      const at_ = shiftPeriod(base, offset, frequency);
-      const target = targetIn(at_);
-      return {
-        ...at_,
-        target,
-        achievement: achievementOf(current, target, direction),
-        status:
-          offset === 0
-            ? status
-            : computeKpiStatus({
-                current,
-                currentDate: at.today,
-                target,
-                direction,
-                frequency,
-                thresholds: at.thresholds,
-                today: at.today,
-              }),
-      };
-    }),
-    // KPIS-B04: the period before this one, read at its own last reading rather than at today's.
-    previousPeriod: { ...before, value: previousReading, target: targetIn(before) },
-  };
-}
-// KPIS-B07: the default sort puts what needs attention first. "No target" outranks "on target"
-// because a KPI nobody has set a target for is unanswered, not healthy.
-export const severityRank: Record<KpiStatus, number> = {
-  off_target: 0,
-  stale: 1,
-  no_data: 2,
-  near_target: 3,
-  no_target: 4,
-  on_target: 5,
-};
-export const attentionStatuses: readonly KpiStatus[] = ['off_target', 'stale', 'no_data'];
+  summary: z.string(),
+});
+export type NarrativeHighlight = z.infer<typeof NarrativeHighlight>;
+export const Narrative = z.object({
+  id: z.uuid(),
+  kpiId: z.uuid().nullable(),
+  objectiveId: z.uuid().nullable(),
+  locale: NarrativeLocale,
+  periodMode: NarrativePeriod,
+  dataHash: z.string(),
+  status: NarrativeStatus,
+  headline: z.string().nullable(),
+  bodyMarkdown: z.string().nullable(),
+  highlights: z.array(NarrativeHighlight),
+  error: z.string().nullable(),
+  createdAt: timestamp,
+});
+export type Narrative = z.infer<typeof Narrative>;
+export const NarrativeView = z.object({
+  data: z.object({
+    narrative: Narrative.nullable(),
+    currentDataHash: z.string(),
+    isStale: z.boolean(),
+  }),
+});
+export type NarrativeView = z.infer<typeof NarrativeView>;

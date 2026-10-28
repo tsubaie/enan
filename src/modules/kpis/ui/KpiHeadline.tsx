@@ -18,10 +18,10 @@ export function KpiSummary({ kpi }: { kpi: KpiDetail }) {
   const view = kpi.periods[1];
   if (!view) return null;
   const period = labels.period(view, kpi.frequency);
-  const value = kpi.meta.current;
+  const value = view.value === undefined ? kpi.meta.current : view.value;
   const age = kpi.meta.currentDate;
   const sentence =
-    value === null || age === null
+    value === null || age === null || kpi.meta.status === 'no_data'
       ? t('summaryNoReading', { period })
       : view.target === null
         ? t('summaryNoTarget', { value: labels.value(value, kpi.unit), period, age: ago(age) })
@@ -68,6 +68,8 @@ export function KpiHeadline({ kpi }: { kpi: KpiDetail }) {
 function PeriodReading({ kpi, view }: { kpi: KpiDetail; view: PeriodView }) {
   const t = useTranslations('kpis');
   const labels = useKpiLabels();
+  // KPIS-B31: the figure this period holds of its own, so an older reading never stands in for it.
+  const periodValue = view.value === undefined ? kpi.meta.current : view.value;
   const spoken =
     view.achievement === null
       ? labels.status(view.status)
@@ -84,8 +86,8 @@ function PeriodReading({ kpi, view }: { kpi: KpiDetail; view: PeriodView }) {
         start={
           <Foot
             label={t('currentReading')}
-            value={kpi.meta.current === null ? null : labels.value(kpi.meta.current, kpi.unit)}
-            empty={t('noReading')}
+            value={periodValue === null ? null : labels.value(periodValue, kpi.unit)}
+            empty={t('notAvailable')}
           />
         }
         end={
@@ -96,7 +98,11 @@ function PeriodReading({ kpi, view }: { kpi: KpiDetail; view: PeriodView }) {
           />
         }
       >
-        {view.achievement !== null && (
+        {view.achievement === null ? (
+          <span className="font-mono text-2xl font-medium tracking-tight text-text-muted tabular-nums">
+            <bdi dir="ltr">{t('notAvailable')}</bdi>
+          </span>
+        ) : (
           <>
             <span className="text-3xl leading-none font-semibold">
               {labels.percent(view.achievement)}

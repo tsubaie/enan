@@ -30,6 +30,8 @@ describe('security headers', () => {
       expect(headers['X-Frame-Options']).toBe('DENY');
       expect(headers['Referrer-Policy']).toBe('same-origin');
       expect(headers['Permissions-Policy']).toContain('camera=()');
+      // NOTES-B34: the microphone is allowed to the app's own origin, for voice memos.
+      expect(headers['Permissions-Policy']).toContain('microphone=(self)');
       expect(headers['Cross-Origin-Opener-Policy']).toBe('same-origin');
     }
   });

@@ -293,3 +293,37 @@ export function queuedWrites(client: Client): Client {
     },
   });
 }
+/**
+ * ADR 0067: the pool for a request that only reads. Its statements run outside the write queue on
+ * whichever connection is free, and a write on it is refused, so a handler that runs without a
+ * transaction cannot write on the pool unnoticed. A service's own withTransaction on this handle
+ * still works: the transaction is the real client's, taken through the queue (ADR 0054).
+ */
+export function readOnlyDb(): Database {
+  const refuse = (statement: InStatement) => {
+    if (writing(statement))
+      throw new Error('Write outside a transaction on a read-only request (ADR 0067)');
+  };
+  return databaseFor(
+    new Proxy(pool(), {
+      get(target, key) {
+        if (key === 'execute')
+          return (statement: InStatement) => {
+            refuse(statement);
+            return target.execute(statement);
+          };
+        if (key === 'batch')
+          return (statements: InStatement[], mode?: Parameters<Client['batch']>[1]) => {
+            statements.forEach(refuse);
+            return target.batch(statements, mode);
+          };
+        // drizzle's own transaction() would open a BEGIN outside the queue with nothing refused.
+        if (key === 'transaction' && !shared().holding.getStore())
+          throw new Error(
+            'a read-only handler cannot open a transaction: use withTransaction / a transactional service',
+          );
+        return bound(target, Reflect.get(target, key));
+      },
+    }),
+  );
+}

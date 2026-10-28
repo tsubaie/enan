@@ -4,6 +4,7 @@ import { migrateDatabase } from '@/core/db/migrate';
 import { clearDatabase } from '@/core/db/reset';
 import { writeSetting } from '@/core/db/settings-repo';
 import { readJob } from '@/core/db/admin-repo';
+import { AiPayload } from '@/core/ai/job-schema';
 import { harness, actorId } from '@/modules/notes/tests/fixtures';
 import { fixtureModel, finishedJob } from '../../../../tests/fixtures/ai/jobs';
 import breakdown from '../../../../tests/fixtures/ai/tasks.breakdown.v1.en.json';
@@ -18,12 +19,17 @@ beforeEach(async () => {
   await writeSetting(db(), 'ai.model.default', fixtureModel.id, actorId());
 });
 afterAll(() => closeDatabase());
-it('TASKS-B13 snapshots eligible tasks, deduplicates requests and excludes user emails', async () => {
+it('TASKS-B13 snapshots eligible tasks, deduplicates requests and sends the task alone, no directory', async () => {
   const task = await harness.task('Prepare launch');
   const first = await harness.run((ctx) => startBreakdown(ctx, task.id, task.revision));
   expect(await harness.run((ctx) => startBreakdown(ctx, task.id, task.revision))).toEqual(first);
   const job = await readJob(db(), first.id);
-  expect(JSON.stringify(job?.payload)).not.toContain('@example.test');
+  // The prompt forbids assigning work, so the people directory (names, emails) never leaves the box.
+  expect(AiPayload.parse(job?.payload).input).toEqual({
+    title: 'Prepare launch',
+    description: null,
+    dueDate: null,
+  });
   await harness.task('Child', { parentId: task.id });
   await expect(
     harness.run((ctx) => startBreakdown(ctx, task.id, task.revision)),

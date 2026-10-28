@@ -43,8 +43,7 @@ const shortDigest = (digest: string | undefined) => digest?.replace('sha256:', '
 const named = (image: UpdaterStatus['running']) =>
   image?.version ?? shortDigest(image?.digest) ?? 'Enan';
 
-// The notification an outcome raises, if any. A check that could not reach the registry is shown
-// on the page but raises nothing: it repeats every interval until the network is back.
+// The notification an outcome raises, if any.
 export function eventOf(entry: UpdaterStatus): Event | null {
   // ADMIN-B67: once per release; the updater records an announcement once, too.
   if (entry.state === 'available')
@@ -67,12 +66,7 @@ function outcomeEvent(entry: UpdaterStatus): Event | null {
       };
     case 'rolled_back':
     case 'failed':
-      if (entry.step === 'check') return null;
-      return {
-        kind: 'update.failed',
-        key: `failed:${candidate}:${entry.finishedAt}`,
-        title: named(entry.candidate),
-      };
+      return failedEvent(entry);
     case 'rollback_failed':
       return {
         kind: 'update.rollback_failed',
@@ -86,6 +80,24 @@ function outcomeEvent(entry: UpdaterStatus): Event | null {
       return { kind: 'update.blocked', key: `blocked:${candidate}`, title: named(entry.candidate) };
   }
   return null;
+}
+
+// A check that could not reach the registry is shown on the page but raises nothing: it repeats
+// every interval until the network is back. ADMIN-B74: a replacement of the updater that failed
+// names the updater, not the release it keeps as the candidate.
+function failedEvent(entry: UpdaterStatus): Event | null {
+  if (entry.step === 'check') return null;
+  if (entry.step === 'updater')
+    return {
+      kind: 'update.failed',
+      key: `failed:updater:${entry.updaterUpdate ?? ''}:${entry.finishedAt}`,
+      title: shortDigest(entry.updaterUpdate) ?? 'Enan',
+    };
+  return {
+    kind: 'update.failed',
+    key: `failed:${entry.candidate?.digest ?? ''}:${entry.finishedAt}`,
+    title: named(entry.candidate),
+  };
 }
 
 function stalledEvent(status: UpdaterStatus): Event {

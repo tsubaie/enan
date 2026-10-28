@@ -92,6 +92,7 @@ const badge: Record<Notification['kind'], [LucideIcon, Tone]> = {
   'update.stalled': [CircleAlert, 'danger'],
   'task.due_today': [Clock, 'warning'],
   'kpi.off_target': [Target, 'warning'],
+  'kpi.reading_due': [Target, 'info'],
   'update.blocked': [CircleAlert, 'warning'],
   'update.updater_outdated': [CircleAlert, 'warning'],
   'update.installed': [CircleCheck, 'success'],
@@ -113,6 +114,7 @@ const aboutKey: Record<
   | 'taskDueToday'
   | 'taskOverdue'
   | 'kpiOffTarget'
+  | 'kpiReadingDue'
   | 'jobFinished'
   | 'updateAvailable'
   | 'updateInstalled'
@@ -125,6 +127,7 @@ const aboutKey: Record<
   'task.due_today': 'taskDueToday',
   'task.overdue': 'taskOverdue',
   'kpi.off_target': 'kpiOffTarget',
+  'kpi.reading_due': 'kpiReadingDue',
   'job.finished': 'jobFinished',
   // ADMIN-B59: the title is the version the update is about.
   'update.available': 'updateAvailable',

@@ -1,5 +1,10 @@
 import { z } from 'zod';
-export const AiCapability = z.enum(['tasks.breakdown', 'notes.refine', 'notes.suggest_tags']);
+export const AiCapability = z.enum([
+  'tasks.breakdown',
+  'notes.refine',
+  'notes.suggest_tags',
+  'kpis.narrative',
+]);
 // `canConfigure` is whether this reader can turn the missing capability on, so the interface can
 // offer the way to do it to the person who can and stay quiet for everyone else. It belongs here
 // rather than on the account: ACCT-I02 keeps role out of every schema Account owns, and this is

@@ -7,7 +7,7 @@ import { id } from '@/core/db/ids';
 import { writeAudit, toJson } from '@/core/db/audit-repo';
 import { getSetting } from '@/core/db/settings-repo';
 import { dayAt } from '@/core/time/tasks';
-import { periodOf } from '@/core/time/kpis';
+import { periodOf, periodsPerYear } from '@/core/time/kpis';
 import type { StatusThresholds } from '@/core/config/settings';
 import { requireRevision, applyUpdate, restoreByOp, reorderInPlace } from '@/core/entity/service';
 import {
@@ -19,16 +19,13 @@ import {
 } from '@/core/db/keyset';
 import { AppError } from '@/core/http/errors';
 import { assignablePeople, getPerson } from '@/modules/people';
-import { notifyOffTarget } from './notifications';
+import { clearReadingNotices, notifyOffTarget } from './notifications';
+import { attentionStatuses, severityRank, deriveMeta, derivePeriods } from './scorecard';
 import {
   Kpi,
   KpiDetail,
   KpiStatus,
   Objective,
-  attentionStatuses,
-  severityRank,
-  deriveMeta,
-  derivePeriods,
   Frequency,
   type KpiCreate,
   type KpiPatch,
@@ -144,26 +141,31 @@ export async function getKpi(ctx: Context, kpiId: string, includeDeleted = false
 export async function getKpiDetail(ctx: Context, kpiId: string, includeDeleted = false) {
   const { row, at } = await requireRow(ctx, kpiId, includeDeleted);
   const readings = await repo.selectReadings(ctx.db, kpiId);
-  const targets = await repo.selectTargets(ctx.db, kpiId);
-  const meta = deriveMeta(row, at);
+  const frequency = Frequency.parse(row.frequency);
+  const max = periodsPerYear(frequency); // KPIS-I02: a period the cadence cannot name is hidden
+  const targets = (await repo.selectTargets(ctx.db, kpiId)).filter((item) => item.period <= max);
+  const facts = {
+    ...row,
+    readings: readings.map((reading) => ({ date: reading.readingDate, value: reading.value })),
+  };
+  const meta = deriveMeta(facts, at);
   // The comparisons are centred on the period the KPI is actually measured against, so the middle
   // one repeats the row's answer and the reader starts where the list left them.
-  const frequency = Frequency.parse(row.frequency);
   const base = meta.effectiveTargetPeriod ?? periodOf(at.today, frequency);
   return KpiDetail.parse({
     ...row,
     meta,
     readings: readings.map((reading) => ({ ...reading, future: reading.readingDate > at.today })),
     targets,
-    ...derivePeriods(row, at, base, meta.status, row.previousPeriodValue),
+    ...derivePeriods(facts, at, base, meta),
   });
 }
 async function requireOwner(ctx: Context, ownerId: string | null | undefined) {
   if (!ownerId) return;
   if (!(await getPerson(ctx, ownerId)).isAssignable) throw rejected('ownerId', 'not_assignable');
 }
-const rejected = (field: string, reason: string) =>
-  new AppError('rule_violation', { rule: 'KPIS-B06', fieldErrors: { [field]: [reason] } });
+const rejected = (field: string, reason: string, rule = 'KPIS-B06') =>
+  new AppError('rule_violation', { rule, fieldErrors: { [field]: [reason] } });
 async function createKpiInTransaction(ctx: Context, input: KpiCreate) {
   await requireObjective(ctx, input.objectiveId);
   await requireOwner(ctx, input.ownerId);
@@ -299,6 +301,7 @@ async function addReadingInTransaction(ctx: Context, kpiId: string, input: Readi
     updatedBy: ctx.user.id,
   });
   await writeAudit(ctx.db, ctx.user.id, 'create', 'kpi_reading', row.id, ofKpi(before, input));
+  await clearReadingNotices(ctx, kpiId);
   return notifyOffTarget(ctx, before, await getKpiDetail(ctx, kpiId));
 }
 async function overwriteReadingInTransaction(
@@ -314,6 +317,7 @@ async function overwriteReadingInTransaction(
   const row = await repo.updateReading(ctx.db, existing.id, existing.revision, input, ctx.user.id);
   if (!row) throw new AppError('conflict', { reason: 'state' });
   await writeAudit(ctx.db, ctx.user.id, 'update', 'kpi_reading', existing.id, ofKpi(before, input));
+  await clearReadingNotices(ctx, kpiId);
   return notifyOffTarget(ctx, before, await getKpiDetail(ctx, kpiId));
 }
 async function requireReading(ctx: Context, kpiId: string, readingId: string) {
@@ -353,11 +357,12 @@ async function removeReadingInTransaction(ctx: Context, kpiId: string, readingId
   return { opId };
 }
 export async function listTargets(ctx: Context, kpiId: string) {
-  await getKpi(ctx, kpiId, true);
-  return { data: await repo.selectTargets(ctx.db, kpiId) };
+  return { data: (await getKpiDetail(ctx, kpiId, true)).targets };
 }
 async function putTargetsInTransaction(ctx: Context, kpiId: string, input: TargetsPut) {
   const kpi = await getKpi(ctx, kpiId);
+  if (input.items.some((item) => item.period > periodsPerYear(kpi.frequency)))
+    throw rejected('items', 'period_outside_cadence', 'KPIS-I02');
   await repo.upsertTargets(
     ctx.db,
     kpiId,

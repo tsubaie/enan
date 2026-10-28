@@ -10,7 +10,12 @@ import 'server-only';
 import { transactional } from '@/core/db/transaction';
 import { z } from 'zod';
 import { settingsRegistry, isSettingKey, type SettingKey } from '@/core/config/settings';
-import { getSetting, readSettings, writeSetting } from '@/core/db/settings-repo';
+import {
+  followWorkspaceTimezone,
+  getSetting,
+  readSettings,
+  writeSetting,
+} from '@/core/db/settings-repo';
 import { db, withTransaction } from '@/core/db/client';
 import { getPerson } from '@/modules/people';
 import { createHash } from 'node:crypto';
@@ -80,6 +85,8 @@ export const updateSetting = transactional(async function updateSetting(
   if (key === 'workspace.principal_person_id' && typeof parsed === 'string')
     await requirePerson(ctx, parsed);
   await writeWorkspaceSetting(ctx, key, parsed);
+  if (key === 'workspace.timezone' && typeof parsed === 'string')
+    await followWorkspaceTimezone(ctx.db, parsed);
   await writeAudit(ctx.db, ctx.user.id, 'update', 'setting', null, { key, value: parsed });
   return { key, value: parsed, default: z.json().parse(item.default), type: item.schema.def.type };
 });

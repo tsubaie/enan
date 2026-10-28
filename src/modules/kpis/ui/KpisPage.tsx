@@ -24,6 +24,8 @@ import { usePrefetch } from '@/ui/entity/use-prefetch';
 import { useKpiLabels } from './use-kpi-labels';
 const importRecord = () => import('./KpiRecord');
 const KpiRecord = dynamic(() => importRecord().then((module) => module.KpiRecord));
+// KPIS-B32: the brief is asked for rather than read every time, so its code waits until it is shown.
+const KpiNarrative = dynamic(() => import('./KpiNarrative').then((module) => module.KpiNarrative));
 export function KpisPage() {
   const t = useTranslations('kpis');
   const mutations = useKpiMutations();
@@ -44,6 +46,7 @@ export function KpisPage() {
       mutations={mutations}
       emptyState={{ title: t('emptyTitle'), description: t('emptyDescription'), icon: Target }}
       group={labels.objective}
+      lead={() => <KpiNarrative />}
       // KPIS-B27: in the scorecard's own order (the default sort) a tile moves one place at a
       // time with its two buttons, within its objective. The trash has no order to keep.
       reorder={{

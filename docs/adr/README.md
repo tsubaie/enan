@@ -48,7 +48,7 @@ One decision per file. Format: **Status**, **Context**, **Decision**, **Conseque
 | 0042 | Oxlint replaces ESLint | accepted |
 | 0043 | TypeScript 7, and dependency-cruiser parses with swc | accepted |
 | 0044 | The runtime image is the standalone output | accepted |
-| 0045 | Slow read-only handlers run outside the write lock | accepted |
+| 0045 | Slow read-only handlers run outside the write lock | accepted, extended by 0067 |
 | 0046 | The ع-horse mark | accepted |
 | 0047 | The ع-horse mark, redrawn | accepted |
 | 0048 | The product is named Enan | accepted |
@@ -69,5 +69,7 @@ One decision per file. Format: **Status**, **Context**, **Decision**, **Conseque
 | 0063 | One Install now for the updater and the app | accepted |
 | 0064 | Passkeys through Better Auth | accepted |
 | 0065 | Voice memos save their audio first and take their transcripts from the reader | accepted |
+| 0066 | Internal people link to workspace logins by their address | accepted |
+| 0067 | Reads run outside the write lock | accepted |
 
 Open decisions awaiting an ADR: license (see roadmap); chart library confirmation (`recharts`).

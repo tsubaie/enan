@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
@@ -413,6 +414,8 @@ func (u *Updater) readable(ctx context.Context, running, candidate *Image, diges
 	return true
 }
 
+var digestPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+
 // Install installs exactly digest, the release Admin → Updates announced, not whatever the
 // channel names by now (ADMIN-B67). A release the running one cannot go back from needs confirm.
 func (u *Updater) Install(ctx context.Context, digest string, confirm bool) {
@@ -434,8 +437,9 @@ func (u *Updater) Install(ctx context.Context, digest string, confirm bool) {
 	}
 	u.status = Status{Channel: u.status.Channel, Running: u.status.Running, UpdaterUpdate: u.status.UpdaterUpdate, LastCheckAt: u.status.LastCheckAt, StartedAt: u.now(), State: Updating, Step: "check"}
 	u.publish()
-	if !strings.HasPrefix(digest, "sha256:") {
-		u.fail(ctx, "check", fmt.Errorf("%q is not an image digest", digest), "")
+	// The digest goes into a registry URL path: only a full sha256 digest, as Enan validates it.
+	if !digestPattern.MatchString(digest) {
+		u.fail(ctx, "check", fmt.Errorf("%q is not a sha256 image digest", digest), "")
 		return
 	}
 	app, ref, running, err := u.current(ctx)
@@ -947,16 +951,9 @@ func (u *Updater) Run(ctx context.Context) error {
 	}
 	next := u.now()
 	for {
-		due := false
-		for _, command := range u.Commands() {
-			due = u.Apply(ctx, command) || due
-		}
-		if due || !u.now().Before(next) {
-			u.Check(ctx)
-			next = u.now().Add(u.Config.Interval)
-		}
+		var replacing bool
 		// ADR 0062: once the helper is under way this updater takes no more work; the helper stops it.
-		if u.selfDue() && u.SelfUpdate(ctx) {
+		if next, replacing = u.cycle(ctx, next); replacing {
 			<-ctx.Done()
 			return nil
 		}
@@ -974,6 +971,30 @@ func (u *Updater) Run(ctx context.Context) error {
 		}
 		timer.Stop()
 	}
+}
+
+// cycle acts on the commands that arrived, checks when due and replaces the updater when due. It
+// returns when to wake next, and whether the helper replacing this updater is under way.
+func (u *Updater) cycle(ctx context.Context, next time.Time) (time.Time, bool) {
+	due := false
+	for _, command := range u.Commands() {
+		due = u.Apply(ctx, command) || due
+	}
+	if due || !u.now().Before(next) {
+		u.Check(ctx)
+		next = u.now().Add(u.Config.Interval)
+	}
+	if u.selfDue() && u.SelfUpdate(ctx) {
+		return next, true
+	}
+	// ADMIN-B68: what waits for the window is installed at the window's start, not at the next check.
+	selfWaits := u.status.UpdaterUpdate != "" && u.Self != "" && u.state.Rejected["updater:"+u.status.UpdaterUpdate] == ""
+	if window := u.window(); window != nil && u.automatic() && (u.status.State == Available || selfWaits) {
+		if at := window.Next(u.now()); at.Before(next) {
+			next = at
+		}
+	}
+	return next, false
 }
 
 func tail(text string, lines int) string {

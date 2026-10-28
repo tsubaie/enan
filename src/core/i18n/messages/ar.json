@@ -155,7 +155,9 @@
     "directoryDescription": "الأشخاص المرتبطون بمكتبك.",
     "showName": "عرض {name}",
     "deletedToast": "نُقل الشخص إلى المحذوفات",
-    "cardNotes": "{count, plural, zero {لا ملاحظات} one {ملاحظة واحدة} two {ملاحظتان} few {{count, number, integer} ملاحظات} many {{count, number, integer} ملاحظة} other {{count, number, integer} ملاحظة}}"
+    "cardNotes": "{count, plural, zero {لا ملاحظات} one {ملاحظة واحدة} two {ملاحظتان} few {{count, number, integer} ملاحظات} many {{count, number, integer} ملاحظة} other {{count, number, integer} ملاحظة}}",
+    "linkedLogin": "مرتبط بحساب في مساحة العمل",
+    "noLogin": "لا يستخدم أي حساب في مساحة العمل هذا البريد بعد"
   },
   "auth": {
     "setupTitle": "إعداد مساحة العمل",
@@ -778,7 +780,9 @@
     "updateAutomaticSave": "احفظ",
     "updateCommand_install": "التثبيت",
     "updateCommand_settings": "حفظ الإعداد",
-    "updateState_available": "متوفر"
+    "updateState_available": "متوفر",
+    "jobKind_ai_kpis_narrative": "موجز تنفيذي بالذكاء الاصطناعي",
+    "aiFeature_kpis_narrative": "كتابة موجزات بطاقة الأداء"
   },
   "errors": {
     "validation_failed": "تحقّق من القيم المدخلة.",
@@ -1062,7 +1066,8 @@
     "turnOn": "تفعيل الذكاء الاصطناعي",
     "unavailableRefine": "يمكن للذكاء الاصطناعي اقتراح صياغة أوضح لهذه الملاحظة. لا يتغير شيء قبل أن تطّلع على الاقتراح وتقبله.",
     "unavailableTags": "يمكن للذكاء الاصطناعي اقتراح وسوم لهذه الملاحظة من محتواها. أنت تختار ما تبقيه.",
-    "unavailableBreakdown": "يمكن للذكاء الاصطناعي اقتراح المهام الفرعية التي تتفرع عن هذه المهمة. أنت تختار ما يُنشأ."
+    "unavailableBreakdown": "يمكن للذكاء الاصطناعي اقتراح المهام الفرعية التي تتفرع عن هذه المهمة. أنت تختار ما يُنشأ.",
+    "unavailableNarrative": "يستطيع الذكاء الاصطناعي كتابة موجز تنفيذي قصير من أرقام بطاقة الأداء، مع الإشارة إلى كل مؤشر يذكره."
   },
   "tagAdmin": {
     "title": "إدارة وسوم الملاحظات",
@@ -1247,7 +1252,30 @@
     "changeColumn": "التغير",
     "status": "الأسوأ حالة أولاً",
     "deletedToast": "نُقل المؤشر إلى المحذوفات",
-    "attentionFirst": "ما يحتاج اهتمامًا أولًا"
+    "attentionFirst": "ما يحتاج اهتمامًا أولًا",
+    "notAvailable": "غ/م",
+    "reminders": "التذكيرات",
+    "remindersEnabled": "ذكّر المسؤول عندما تخلو فترة من قراءة",
+    "reminderNoOwner": "عيّن مسؤولًا عن المؤشر لتصل التذكيرات إلى أحد.",
+    "reminderReaches": "تصل التذكيرات إلى {name} في إشعاراته.",
+    "reminderNoLogin": "لا يملك {name} حسابًا في مساحة العمل، فلن يصله أي تذكير.",
+    "trailingPeriods": "الفترات الثلاث السابقة لهذه الفترة",
+    "targetDelta": "{delta} مقابل المستهدف {target}",
+    "briefOpen": "الموجز التنفيذي",
+    "briefLanguage": "لغة الموجز",
+    "briefEnglish": "English",
+    "briefArabic": "العربية",
+    "briefWrite": "اكتب الموجز",
+    "briefRewrite": "أعد الكتابة",
+    "briefWriting": "تجري كتابة الموجز…",
+    "briefEmpty": "لم يُكتب موجز لهذه الأرقام بعد.",
+    "briefGrounded": "مستند إلى الأرقام الحالية",
+    "briefStale": "تغيّرت الأرقام منذ كتابته",
+    "briefCitations": "المؤشرات المذكورة",
+    "briefCopy": "نسخ",
+    "briefCopied": "نُسخ",
+    "briefSave": "احفظه ملاحظة",
+    "briefSaved": "حُفظ ملاحظةً"
   },
   "account": {
     "title": "الحساب",
@@ -1331,7 +1359,8 @@
     "kindNotes": "الملاحظات",
     "kindKpis": "المؤشرات",
     "kindAi": "الذكاء الاصطناعي",
-    "kindUpdates": "التحديثات"
+    "kindUpdates": "التحديثات",
+    "kpiReadingDue": "قراءة مستحقة: {title}"
   },
   "mail": {
     "testSubject": "رسالة تجريبية من {workspace}",

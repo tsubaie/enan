@@ -6,6 +6,7 @@ import { clearDatabase } from '../reset';
 import { jobs, jobAttempts } from '../system-schema';
 import { busyTimeoutMs } from '../client';
 import { claim, enqueue, fail, prune, renew } from '../jobs-repo';
+import { activeKinds } from '../jobs-queue-repo';
 beforeAll(() => migrateDatabase());
 beforeEach(() => clearDatabase());
 afterAll(() => closeDatabase());
@@ -36,6 +37,24 @@ const attemptRow = async (jobId: string, attempt: number) =>
       .from(jobAttempts)
       .where(and(eq(jobAttempts.jobId, jobId), eq(jobAttempts.attempt, attempt)))
   )[0];
+it('ADR 0067 activeKinds names the kinds with a queued or running job, expired leases included, and nothing once they end', async () => {
+  expect(await activeKinds()).toEqual([]);
+  const jobId = await abandoned('backup', 1);
+  await withTransaction(db(), (database) => enqueue(database, 'system.other', {}, null));
+  expect((await activeKinds()).sort()).toEqual([kind, 'system.other']);
+  const claimed = await claim('runner', kind, 1, 4);
+  if (claimed?.id !== jobId) throw new Error('the abandoned job was not reclaimed');
+  await fail(claimed, 'provider', false);
+  expect(await activeKinds()).toEqual(['system.other']);
+});
+it('ADR 0067 a claim refused by the concurrency limit still sweeps a queued job whose cancel was requested', async () => {
+  const running = await enqueueWith('first');
+  expect((await claim('runner', kind, 1, 4))?.id).toBe(running.id);
+  const waiting = await enqueueWith('second');
+  await db().update(jobs).set({ cancelRequested: true }).where(eq(jobs.id, waiting.id));
+  expect(await claim('runner', kind, 1, 4)).toBeNull();
+  expect((await stored(waiting.id))?.status).toBe('cancelled');
+});
 it('ADMIN-B46 enqueue on the key of a running job whose lease expired requeues it while attempts remain and returns it', async () => {
   const jobId = await abandoned('backup', 1);
   const returned = await enqueueWith('backup');
@@ -111,7 +130,10 @@ it('NOTIF-B04 a failure effect runs once, when the job has failed for good, not 
 it('ADMIN-B33 a job stopped by a shutdown on its last attempt is queued again with that attempt given back', async () => {
   const job = await enqueueWith('last-try');
   const maxAttempts = (await stored(job.id))?.maxAttempts ?? 1;
-  await db().update(jobs).set({ attempt: maxAttempts - 1 }).where(eq(jobs.id, job.id));
+  await db()
+    .update(jobs)
+    .set({ attempt: maxAttempts - 1 })
+    .where(eq(jobs.id, job.id));
   const claimed = await claim('runner', kind, 1, 4);
   if (!claimed) throw new Error('not claimed');
   expect(claimed.attempt).toBe(maxAttempts);

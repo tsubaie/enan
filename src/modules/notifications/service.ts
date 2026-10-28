@@ -3,7 +3,14 @@ import { transactional } from '@/core/db/transaction';
 import type { Context } from '@/core/auth/session';
 import { AppError } from '@/core/http/errors';
 import { notificationContributors } from '@/core/modules/registry';
-import { selectFeed, selectOwn, markRead, markManyRead } from '@/core/db/notifications-repo';
+import type { NotificationSubject } from '@/core/modules/server-manifest';
+import {
+  selectFeed,
+  selectUnread,
+  countRead,
+  markRead,
+  markManyRead,
+} from '@/core/db/notifications-repo';
 import { z } from 'zod';
 import type { FeedFilter, FeedRow } from '@/core/db/notifications-repo';
 import { NotificationKind, type Notification } from './schema/validation';
@@ -23,7 +30,7 @@ async function resolveSubjects(
   const byType = new Map<string, string[]>();
   for (const row of page)
     byType.set(row.subjectType, [...(byType.get(row.subjectType) ?? []), row.subjectId]);
-  const subjects = new Map<string, { title: string; href: string }>();
+  const subjects = new Map<string, NotificationSubject>();
   for (const [type, ids] of byType) {
     const resolve = resolvers.get(type);
     if (!resolve) continue;
@@ -34,10 +41,7 @@ async function resolveSubjects(
 // NOTIF-B06: a row becomes a line only if its subject still resolves. A kind the database holds
 // but this build no longer declares is treated the same way -- dropped rather than rendered as
 // something the reader cannot act on.
-function draw(
-  row: FeedRow,
-  subjects: Map<string, { title: string; href: string }>,
-): Notification | null {
+function draw(row: FeedRow, subjects: Map<string, NotificationSubject>): Notification | null {
   const subject = subjects.get(`${row.subjectType}:${row.subjectId}`);
   const kind = NotificationKind.safeParse(row.kind);
   if (!subject || !kind.success) return null;
@@ -47,7 +51,7 @@ function draw(
     subjectType: row.subjectType,
     subjectId: row.subjectId,
     title: subject.title,
-    href: subject.href,
+    href: subject.hrefs?.[kind.data] ?? subject.href,
     actorName: actorName(row.payload),
     createdAt: row.createdAt.toISOString(),
     readAt: row.readAt?.toISOString() ?? null,
@@ -59,9 +63,10 @@ const Cursor = z
   .regex(/^[^_]+_[^_]+$/u)
   .transform((value) => value.split('_'))
   .pipe(z.tuple([z.iso.datetime().transform((at) => new Date(at)), z.uuid()]));
-// NOTIF-B08/B15: the rows the reader can see, all of them rather than one page's worth.
-async function visible(ctx: Context) {
-  const rows = await selectOwn(ctx.db, ctx.user.id);
+// NOTIF-B08/B15: the unread rows the reader can see, all of them rather than one page's worth.
+// Only unread rows are resolved here (NOTIF-B06): read rows are counted in SQL, never loaded.
+async function visibleUnread(ctx: Context) {
+  const rows = await selectUnread(ctx.db, ctx.user.id);
   const subjects = await resolveSubjects(ctx, rows);
   return rows.filter((row) => draw(row, subjects));
 }
@@ -81,12 +86,14 @@ export async function feed(
   const subjects = await resolveSubjects(ctx, page);
   const items = page.flatMap((row) => draw(row, subjects) ?? []);
   const last = page.at(-1);
-  const all = await visible(ctx);
+  const unread = await visibleUnread(ctx);
+  // NOTIF-B06/B15: the read rows are counted in SQL, whether or not their subject still resolves.
+  const read = filter.unread ? 0 : await countRead(ctx.db, ctx.user.id, filter.kinds ?? null);
   return {
     items,
     // NOTIF-B08: the badge counts every unread row, whatever the page is filtered to.
-    unread: all.filter((row) => !row.readAt).length,
-    totalCount: all.filter((row) => matches(row, filter)).length,
+    unread: unread.length,
+    totalCount: unread.filter((row) => matches(row, filter)).length + read,
     nextCursor: rows.length > limit && last ? `${last.createdAt.toISOString()}_${last.id}` : null,
   };
 }
@@ -109,8 +116,8 @@ export const readAll = transactional(async function readAll(
   ctx: Context,
   kinds: readonly string[] | null = null,
 ) {
-  const unread = (await visible(ctx))
-    .filter((row) => matches(row, { unread: true, kinds }))
+  const unread = (await visibleUnread(ctx))
+    .filter((row) => matches(row, { kinds }))
     .map((row) => row.id);
   return { marked: await markManyRead(ctx.db, ctx.user.id, unread) };
 });

@@ -32,7 +32,11 @@ const ops: EntityOps<Person, PersonRow, Parameters<typeof repo.updatePerson>[3]>
 // this". Other modules ask for the list rather than reassembling the query themselves.
 export async function assignablePeople(ctx: Context) {
   const listed = await listPeople(ctx, PersonListQuery.parse({ view: 'assignable', limit: 200 }));
-  return listed.data.map((row) => ({ id: row.id, name: row.fullName }));
+  return listed.data.map((row) => ({
+    id: row.id,
+    name: row.fullName,
+    hasLogin: row.userId !== null,
+  }));
 }
 export async function listPeople(ctx: Context, query: PersonListQuery) {
   const { view, q, tag, organization, withTotal } = query;
@@ -86,6 +90,25 @@ async function linkChecked<T>(work: () => Promise<T>) {
     throw error;
   }
 }
+// PEOPLE-B13: an internal record whose address is a workspace login's, where neither is linked
+// yet, is that login's record. An explicit `userId` (admin only) always wins.
+async function matchedLogin(
+  ctx: Context,
+  kind: string | undefined,
+  email: string | null | undefined,
+  linked: string | null,
+) {
+  if (linked || kind !== 'internal' || !email) return null;
+  return repo.selectUnlinkedUserByEmail(ctx.db, email);
+}
+// PEOPLE-B13: exposed for Users, so a login created after its directory record finds it.
+export const linkPersonForUser = transactional(async function linkPersonForUser(
+  ctx: Context,
+  userId: string,
+  email: string,
+) {
+  return repo.linkUnlinkedPerson(ctx.db, userId, email);
+});
 export const createPerson = transactional(async function createPerson(
   ctx: Context,
   input: PersonCreate,
@@ -98,8 +121,12 @@ export const createPerson = transactional(async function createPerson(
   );
   if (duplicates.length && !input.confirmDuplicate)
     return { data: null, meta: { possibleDuplicates: duplicates } };
-  const { confirmDuplicate, ...fields } = input;
+  const { confirmDuplicate, ...given } = input;
   void confirmDuplicate;
+  const fields = {
+    ...given,
+    userId: given.userId ?? (await matchedLogin(ctx, given.kind, given.email, null)),
+  };
   const person = Person.parse(
     await linkChecked(() =>
       repo.insertPerson(ctx.db, {
@@ -119,8 +146,18 @@ export const patchPerson = transactional(async function patchPerson(
   input: PersonPatch,
 ) {
   memberLink(ctx, input.userId);
-  const { revision, ...fields } = input;
+  const { revision, ...given } = input;
   const current = await requireRevision(ctx, ops, personId, revision);
+  const login =
+    given.userId === undefined
+      ? await matchedLogin(
+          ctx,
+          given.kind ?? current.kind,
+          given.email === undefined ? current.email : given.email,
+          current.userId,
+        )
+      : null;
+  const fields = login ? { ...given, userId: login } : given;
   return Person.parse(await linkChecked(() => applyUpdate(ctx, ops, current, fields)));
 });
 export const removePerson = transactional(async function removePerson(

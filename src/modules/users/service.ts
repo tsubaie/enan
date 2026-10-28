@@ -17,11 +17,11 @@ import {
   finishSetup,
   userByEmail,
 } from '@/core/db/auth-repo';
-import { writeSetting } from '@/core/db/settings-repo';
+import { followWorkspaceTimezone, writeSetting } from '@/core/db/settings-repo';
 import { writeAudit } from '@/core/db/audit-repo';
 import { id } from '@/core/db/ids';
 import { AppError } from '@/core/http/errors';
-import { createPerson } from '@/modules/people';
+import { createPerson, linkPersonForUser } from '@/modules/people';
 import { selectUsers, updateUser, countAdmins } from './repo';
 import type { UserPatch } from './schema/validation';
 import { UserCreate } from './schema/validation';
@@ -90,6 +90,7 @@ async function firstSetup(
   await writeSetting(database, 'workspace.name', input.workspaceName, user.id);
   await writeSetting(database, 'workspace.default_locale', input.locale, user.id);
   await writeSetting(database, 'workspace.timezone', input.timezone, user.id);
+  await followWorkspaceTimezone(database, input.timezone);
   await writeSetting(database, 'workspace.principal_person_id', principal.data.id, user.id);
   await finishSetup(database, digest(setupFingerprint(input)));
   return { user };
@@ -132,6 +133,7 @@ export const createUser = transactional(async function createUser(ctx: Context, 
     email: user.email,
     role: user.role,
   });
+  await linkPersonForUser(ctx, user.id, user.email);
   return { user, temporaryPassword };
 });
 export async function listUsers(ctx: Context) {

@@ -52,7 +52,12 @@ export type ServerManifest = {
 };
 // NOTIF-B06: the feed resolves subjects at read time, and a subject the reader can no longer see
 // resolves to null so the line is dropped rather than rendered as a dead link.
-export type NotificationSubject = { title: string; href: string };
+// `hrefs` names a kind whose line opens somewhere more specific than the subject itself.
+export type NotificationSubject = {
+  title: string;
+  href: string;
+  hrefs?: Partial<Record<string, string>>;
+};
 export type NotificationContribution = {
   kinds: readonly string[];
   resolve: (ctx: Context, ids: readonly string[]) => Promise<Map<string, NotificationSubject>>;

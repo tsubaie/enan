@@ -9,6 +9,7 @@ import { Frequency, Unit, type KpiCreate, type KpiPatch } from '../schema/valida
 import { useKpiLabels } from './use-kpi-labels';
 import { DirectionToggle, UnitOption } from './KpiPickers';
 import { useKpiFacets, useObjectives } from './queries';
+import { KpiReminder } from './KpiReminder';
 const MarkdownField = lazy(() =>
   import('@/ui/markdown/MarkdownField').then((m) => ({ default: m.MarkdownField })),
 );
@@ -27,6 +28,7 @@ export function KpiOwnership({ initial, save }: Part) {
   const fields = (
     <>
       <Owner initial={initial} save={save} />
+      <KpiReminder initial={initial} save={save} />
       <Objective initial={initial} save={save} />
     </>
   );

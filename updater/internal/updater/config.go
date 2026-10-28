@@ -128,5 +128,15 @@ func (w *Window) Contains(t time.Time) bool {
 	return minute >= w.From || minute < w.To
 }
 
+// Next is the first start of the window after t, in the window's zone (ADMIN-B68).
+func (w *Window) Next(t time.Time) time.Time {
+	local := t.In(w.Zone)
+	start := time.Date(local.Year(), local.Month(), local.Day(), w.From/60, w.From%60, 0, 0, w.Zone)
+	if !start.After(local) {
+		start = start.AddDate(0, 0, 1)
+	}
+	return start
+}
+
 // Getenv adapts os.Getenv for Load.
 func Getenv(key string) string { return os.Getenv(key) }

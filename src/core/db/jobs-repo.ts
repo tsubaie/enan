@@ -71,8 +71,8 @@ export async function claim(owner: string, kind: string, concurrency: number, gl
   // admission count, the sweep and the candidate read see one consistent queue (ADR 0029).
   return withTransaction(db(), async (database) => {
     const now = new Date();
-    if (!(await admits(database, kind, concurrency, globalLimit, now))) return null;
     await sweepQueue(database, now);
+    if (!(await admits(database, kind, concurrency, globalLimit, now))) return null;
     const candidate = await selectCandidate(database, kind, now);
     if (!candidate) return null;
     return writeClaim(database, candidate, owner, now);

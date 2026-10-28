@@ -5,6 +5,7 @@ import { env } from '@/core/config/env';
 import { logger } from '@/core/config/logger';
 import { id } from '@/core/db/ids';
 import { DatabaseBusyError } from '@/core/db/client';
+import { activeKinds } from '@/core/db/jobs-queue-repo';
 import {
   claim,
   renew,
@@ -109,6 +110,11 @@ async function settledWithin(pending: Set<Promise<void>>, ms: number) {
 }
 // Grace given to handlers after the forced abort, so each can record its failed attempt.
 const abortGraceMs = 5000;
+// ADR 0067: one read outside the lock says which kinds have work; an idle tick claims nothing.
+async function claimable() {
+  const pending = await activeKinds();
+  return jobKinds.filter((kind) => pending.includes(kind));
+}
 /**
  * ADMIN-B33 stopping the runner stops claiming, lets running handlers finish for up to
  * JOBS_DRAIN_SECONDS, then aborts the rest through their signals and waits for them to record
@@ -133,7 +139,7 @@ export function startRunner() {
       if (await isRestoring()) return;
       for (const cancelled of await requestedCancellations([...active.keys()]))
         active.get(cancelled.id)?.abort();
-      for (const kind of jobKinds) {
+      for (const kind of await claimable()) {
         if (stopped) return;
         const job = await claim(owner, kind, handlerFor(kind).concurrency, env().JOBS_CONCURRENCY);
         if (job) launch(job);

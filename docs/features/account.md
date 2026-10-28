@@ -58,7 +58,8 @@ No new tables. The account is a view over two that exist:
   signs in to this one until it is linked again.
 - ACCT-B02 **Password.** Changing it requires the current password, and the new one is validated by
   the same `Password` schema registration uses. On success every **other** session is revoked and
-  the current one is kept, and `password_changed_at` is set. A reader changing their password
+  the current one is kept, and `password_changed_at` is set; the count reported is of live
+  sessions only, the same ones the list shows (ACCT-B03), never expired rows awaiting the prune. A reader changing their password
   should not be signed out of the tab they changed it in, and should be signed out everywhere else.
   A wrong current password, here or for an email change (ACCT-B01), counts as a failed login on the
   account's email (ADMIN-B20): after five in fifteen minutes both checks answer 429, so a stolen

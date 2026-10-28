@@ -5,30 +5,44 @@ import { executeAi } from '@/core/ai/execute';
 import { AiPayload } from '@/core/ai/job-schema';
 import { BreakdownOutput } from './schema/validation';
 import { BREAKDOWN_PROMPT } from './ai/prompts/breakdown.v1';
+import { retention } from '@/core/config/notifications';
 import { getSetting } from '@/core/db/settings-repo';
+import { selectNotifiedSince } from '@/core/db/notifications-repo';
 import { emitUnattended } from '@/core/notifications/emit';
+import { dayValue } from '@/core/time/days';
 import { addDays, dayAt } from '@/core/time/tasks';
-import { selectOwnedDueOn } from './repo';
+import { selectOwnedDueBetween, type OwnedDue } from './repo';
+const notice = (kind: string, task: OwnedDue) => ({
+  kind,
+  subjectType: 'tasks',
+  subjectId: task.id,
+  to: [task.userId],
+});
 export const taskJobs: Record<string, JobHandler> = {
-  // NOTIF-B04/B05: once a day, the owner hears of a task due today and, the day after its date, that
-  // it is overdue: once, not again every morning it stays late. The scheduler's per-occurrence key
-  // runs it once a day, and the upsert keeps a re-run from adding rows.
+  // NOTIF-B04/B05: once a day, the owner hears of a task due today and, once it is past its date,
+  // that it is overdue: once, not again every morning it stays late. The scheduler's per-occurrence
+  // key runs it once a day, and the upsert keeps a re-run from adding rows. The overdue pass looks
+  // back over every late task, not only yesterday's, so a run the box missed is caught up by the
+  // next; it stops at the read-notification retention (NOTIF-B10), inside which a task already
+  // told still has its line, so none is told twice and a purged line never comes back as news.
   'tasks.reminders': {
     concurrency: 1,
     schema: z.strictObject({}),
     run: async () => ({ completed: true }),
     publish: async (database) => {
       const today = dayAt(await getSetting(database, 'workspace.timezone'));
-      const remind = async (kind: string, day: string) =>
-        (await selectOwnedDueOn(database, day)).map((task) => ({
-          kind,
-          subjectType: 'tasks',
-          subjectId: task.id,
-          to: [task.userId],
-        }));
+      const from = addDays(today, -retention.readDays);
+      const dueToday = await selectOwnedDueBetween(database, today, today);
+      const late = await selectOwnedDueBetween(database, from, addDays(today, -1));
+      const told = await selectNotifiedSince(
+        database,
+        'task.overdue',
+        late.map((task) => task.id),
+        new Date(dayValue(from)),
+      );
       await emitUnattended(database, [
-        ...(await remind('task.due_today', today)),
-        ...(await remind('task.overdue', addDays(today, -1))),
+        ...dueToday.map((task) => notice('task.due_today', task)),
+        ...late.filter((task) => !told.has(task.id)).map((task) => notice('task.overdue', task)),
       ]);
     },
   },

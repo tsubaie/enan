@@ -12,6 +12,7 @@ beforeAll(() => migrateDatabase());
 beforeEach(() => harness.reset());
 afterAll(() => closeDatabase());
 const noFacets = { q: '', tag: '', organization: '' };
+const today = new Date().toISOString().slice(0, 10);
 const names = (rows: { fullName: string }[]) => rows.map((row) => row.fullName);
 const list = (query: object) =>
   harness.run((ctx) => service.listPeople(ctx, PersonListQuery.parse({ view: 'all', ...query })));
@@ -36,22 +37,34 @@ it('PEOPLE-B02 PEOPLE-B08 every view returns exactly the rows its count reports,
   ]) {
     const counts = await repo.countPeople(db(), facets, View.options);
     for (const view of View.options) {
-      const rows = await repo.selectPeople(db(), { view, ...facets }, 100, null);
+      const rows = await repo.selectPeople(db(), { view, ...facets }, 100, null, today);
       expect(rows, `${view} with ${JSON.stringify(facets)}`).toHaveLength(counts?.[view] ?? -1);
     }
   }
   // Membership is the view's own predicate: trash is the deleted rows and nothing else, the other
   // views carry no deleted row (07 § deleted_at is null unless includeDeleted).
-  const all = await repo.selectPeople(db(), { view: 'all', ...noFacets }, 100, null);
+  const all = await repo.selectPeople(db(), { view: 'all', ...noFacets }, 100, null, today);
   expect(all.every((row) => row.deletedAt === null)).toBe(true);
   expect(names(all)).not.toContain('Maya Faris');
-  const trash = await repo.selectPeople(db(), { view: 'trash', ...noFacets }, 100, null);
+  const trash = await repo.selectPeople(db(), { view: 'trash', ...noFacets }, 100, null, today);
   expect(names(trash)).toEqual(['Maya Faris']);
   expect(trash.every((row) => row.deletedAt !== null)).toBe(true);
-  const assignable = await repo.selectPeople(db(), { view: 'assignable', ...noFacets }, 100, null);
+  const assignable = await repo.selectPeople(
+    db(),
+    { view: 'assignable', ...noFacets },
+    100,
+    null,
+    today,
+  );
   expect(assignable).toHaveLength(3);
   expect(assignable.every((row) => row.isAssignable && row.deletedAt === null)).toBe(true);
-  const external = await repo.selectPeople(db(), { view: 'external', ...noFacets }, 100, null);
+  const external = await repo.selectPeople(
+    db(),
+    { view: 'external', ...noFacets },
+    100,
+    null,
+    today,
+  );
   expect(names(external).sort()).toEqual(['Daniel Rowan', 'ريم الخطيب']);
   const internal = await repo.countPeople(db(), noFacets, ['internal']);
   expect(internal?.internal).toBe(3);
@@ -63,7 +76,7 @@ it('PEOPLE-B02 the directory sorts by case-folded name and breaks ties on id', a
   const alphaUpper = await harness.person('Alpha');
   const alphaLower = await harness.person('alpha');
   const charlie = await harness.person('Charlie');
-  const rows = await repo.selectPeople(db(), { view: 'all', ...noFacets }, 10, null);
+  const rows = await repo.selectPeople(db(), { view: 'all', ...noFacets }, 10, null, today);
   const alphas = [alphaUpper, alphaLower].sort((a, b) => (a.id < b.id ? -1 : 1));
   expect(rows.map((row) => row.id)).toEqual([...alphas.map((p) => p.id), bravo.id, charlie.id]);
 });
@@ -99,7 +112,7 @@ it('PEOPLE-B02 SEARCH-B01 the search folds Arabic forms and case on the query an
     email: 'leila@example.test',
   });
   const search = async (q: string) =>
-    names(await repo.selectPeople(db(), { view: 'all', ...noFacets, q }, 10, null));
+    names(await repo.selectPeople(db(), { view: 'all', ...noFacets, q }, 10, null, today));
   // Hamza alef on the record, bare alef in the query.
   expect(await search('الافق')).toEqual(['سامر منصور']);
   // Tashkeel in the query, none on the record.
@@ -119,7 +132,7 @@ it('PEOPLE-B02 the tag facet matches a whole tag and the organization facet an e
   await harness.person('Tagged', { tags: ['Board', 'Finance'], organization: 'Cedar Advisory' });
   await harness.person('Untagged', { tags: [], organization: 'Cedar' });
   const facet = async (facets: Partial<typeof noFacets>) =>
-    names(await repo.selectPeople(db(), { view: 'all', ...noFacets, ...facets }, 10, null));
+    names(await repo.selectPeople(db(), { view: 'all', ...noFacets, ...facets }, 10, null, today));
   expect(await facet({ tag: 'Finance' })).toEqual(['Tagged']);
   expect(await facet({ tag: 'Fin' })).toEqual([]);
   expect(await facet({ organization: 'Cedar' })).toEqual(['Untagged']);

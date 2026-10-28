@@ -1,6 +1,6 @@
 # ADR 0045 — Slow read-only handlers run outside the write lock
 
-**Status:** accepted (2026-10-21)
+**Status:** accepted (2026-10-21); extended by ADR 0067 (every GET runs outside the lock, and the write ban is enforced in code)
 
 ## Context
 

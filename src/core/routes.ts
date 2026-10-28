@@ -24,8 +24,9 @@ export const routes = {
   committees: (query?: Optional<'view' | 'id' | 'scope'>) => withQuery('/committees', query),
   root: () => '/',
   home: () => '/home',
-  kpis: (query?: Optional<'view' | 'id' | 'objectiveId' | 'category' | 'team' | 'sort'>) =>
-    withQuery('/kpis', query),
+  kpis: (
+    query?: Optional<'view' | 'id' | 'objectiveId' | 'category' | 'team' | 'sort' | 'action'>,
+  ) => withQuery('/kpis', query),
   tasks: (query?: Optional<'view' | 'id' | 'ownerId' | 'sort' | 'committeeId' | 'due' | 'new'>) =>
     withQuery('/tasks', query),
   people: (query?: Optional<'view' | 'id'>) => withQuery('/people', query),

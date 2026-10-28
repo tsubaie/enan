@@ -18,7 +18,7 @@ const line = {
   createdAt: '2026-09-10T09:00:00.000Z',
   readAt: null,
 };
-it('NOTIF-I03 NOTIF-B04 ADMIN-B59 ADMIN-B69 the kinds are the six of v1 and the seven update kinds, nothing else', () => {
+it('NOTIF-I03 NOTIF-B04 ADMIN-B59 ADMIN-B69 KPIS-B30 the kinds are the six of v1, the reading reminder and the seven update kinds, nothing else', () => {
   expect([...NotificationKind.options].sort()).toEqual(
     [
       'task.assigned',
@@ -26,6 +26,7 @@ it('NOTIF-I03 NOTIF-B04 ADMIN-B59 ADMIN-B69 the kinds are the six of v1 and the 
       'task.overdue',
       'note.mentioned',
       'kpi.off_target',
+      'kpi.reading_due',
       'job.finished',
       'update.available',
       'update.installed',

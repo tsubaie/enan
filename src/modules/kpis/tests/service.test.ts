@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { db, closeDatabase } from '@/core/db/client';
 import { migrateDatabase } from '@/core/db/migrate';
 import { writeSetting } from '@/core/db/settings-repo';
+import { statuses } from '@/core/http/errors';
 import { addDays } from '@/core/time/days';
 import { periodOf, periodRange, shiftPeriod } from '@/core/time/kpis';
 import { KpiListQuery } from '../schema/validation';
@@ -85,6 +86,30 @@ it('KPIS-I02 KPIS-A05 setting a year writes four quarters and replaces the ones 
   if (!first) throw new Error('expected a target');
   await run((ctx) => service.removeTarget(ctx, kpi.id, first.id));
   expect((await run((ctx) => service.getKpiDetail(ctx, kpi.id))).targets).toHaveLength(3);
+});
+it('KPIS-I02 a target for a period the cadence does not have is refused', async () => {
+  const kpi = await harness.kpi('Churn', { frequency: 'quarterly' });
+  const { year } = await periodOfToday();
+  const refused = harness.targets(kpi.id, [{ year, period: 7, targetValue: 1 }]);
+  await expect(refused).rejects.toMatchObject({
+    code: 'rule_violation',
+    details: { rule: 'KPIS-I02' },
+  });
+  expect(statuses.rule_violation).toBe(422);
+  expect((await run((ctx) => service.listTargets(ctx, kpi.id))).data).toHaveLength(0);
+});
+it('KPIS-I02 a cadence change hides the targets the new cadence cannot name', async () => {
+  const kpi = await harness.kpi('Leads', { frequency: 'monthly' });
+  const { year } = await periodOfToday();
+  const months = Array.from({ length: 12 }, (_, i) => ({ year, period: i + 1, targetValue: i }));
+  expect((await harness.targets(kpi.id, months)).targets).toHaveLength(12);
+  const detail = await run((ctx) =>
+    service.patchKpi(ctx, kpi.id, { frequency: 'quarterly', revision: kpi.revision }),
+  );
+  const periods = (targets: { period: number }[]) => targets.map((target) => target.period);
+  expect(periods(detail.targets)).toEqual([1, 2, 3, 4]);
+  const listed = await run((ctx) => service.listTargets(ctx, kpi.id));
+  expect(periods(listed.data)).toEqual([1, 2, 3, 4]);
 });
 it('KPIS-B11 KPIS-A05 a target changes the status on the next read without touching the KPI row', async () => {
   const today = await workspaceToday();

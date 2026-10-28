@@ -70,6 +70,13 @@ func TestWindow(t *testing.T) {
 			t.Fatalf("%02d:30 in 23:00-05:00: want %v", hour, want)
 		}
 	}
+	// The next start, strictly after t: at 02:30 it is 23:00 that day; at 23:30 it is tomorrow's.
+	start := time.Date(2026, 10, 22, 23, 0, 0, 0, riyadh)
+	for hour, want := range map[int]time.Time{2: start, 23: start.AddDate(0, 0, 1)} {
+		if got := night.Next(at(hour)); !got.Equal(want) {
+			t.Fatalf("%02d:30 next start of 23:00-05:00: got %s", hour, got)
+		}
+	}
 	for _, bad := range []string{"2-5", "02:00", "05:00-05:00", "25:00-01:00"} {
 		if _, err := ParseWindow(bad, time.UTC); err == nil {
 			t.Fatalf("%q accepted", bad)

@@ -198,7 +198,8 @@
             "enum": [
               "tasks.breakdown",
               "notes.refine",
-              "notes.suggest_tags"
+              "notes.suggest_tags",
+              "kpis.narrative"
             ],
             "type": "string"
           }
@@ -213,7 +214,7 @@
                 "items": {
                   "$ref": "#/$defs/__schema0"
                 },
-                "maxItems": 3,
+                "maxItems": 4,
                 "type": "array"
               },
               "monthlyBudgetMicros": {
@@ -1409,7 +1410,8 @@
                   "enum": [
                     "tasks.breakdown",
                     "notes.refine",
-                    "notes.suggest_tags"
+                    "notes.suggest_tags",
+                    "kpis.narrative"
                   ],
                   "type": "string"
                 },
@@ -2160,22 +2162,12 @@
       "getKpisFacetsResponse": {
         "$defs": {
           "__schema0": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "format": "uuid",
-                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                "type": "string"
-              },
-              "name": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "id",
-              "name"
-            ],
-            "type": "object"
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string"
+          },
+          "__schema1": {
+            "type": "string"
           }
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -2189,13 +2181,44 @@
           },
           "objectives": {
             "items": {
-              "$ref": "#/$defs/__schema0"
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "$ref": "#/$defs/__schema0"
+                },
+                "name": {
+                  "$ref": "#/$defs/__schema1"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ],
+              "type": "object"
             },
             "type": "array"
           },
           "owners": {
             "items": {
-              "$ref": "#/$defs/__schema0"
+              "additionalProperties": false,
+              "properties": {
+                "hasLogin": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "id": {
+                  "$ref": "#/$defs/__schema0"
+                },
+                "name": {
+                  "$ref": "#/$defs/__schema1"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "hasLogin"
+              ],
+              "type": "object"
             },
             "type": "array"
           }
@@ -2300,6 +2323,179 @@
               "type": "object"
             },
             "type": "array"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "getKpisNarrativeResponse": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "additionalProperties": false,
+            "properties": {
+              "currentDataHash": {
+                "type": "string"
+              },
+              "isStale": {
+                "type": "boolean"
+              },
+              "narrative": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "bodyMarkdown": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "createdAt": {
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+                        "type": "string"
+                      },
+                      "dataHash": {
+                        "type": "string"
+                      },
+                      "error": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "headline": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "highlights": {
+                        "items": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "kpiId": {
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "status": {
+                              "enum": [
+                                "on_target",
+                                "near_target",
+                                "off_target",
+                                "no_data",
+                                "stale",
+                                "no_target"
+                              ],
+                              "type": "string"
+                            },
+                            "summary": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "kpiId",
+                            "code",
+                            "name",
+                            "status",
+                            "summary"
+                          ],
+                          "type": "object"
+                        },
+                        "type": "array"
+                      },
+                      "id": {
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "type": "string"
+                      },
+                      "kpiId": {
+                        "anyOf": [
+                          {
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "locale": {
+                        "enum": [
+                          "en",
+                          "ar"
+                        ],
+                        "type": "string"
+                      },
+                      "objectiveId": {
+                        "anyOf": [
+                          {
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "periodMode": {
+                        "enum": [
+                          "previous",
+                          "current",
+                          "next"
+                        ],
+                        "type": "string"
+                      },
+                      "status": {
+                        "enum": [
+                          "generating",
+                          "ready",
+                          "failed"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "kpiId",
+                      "objectiveId",
+                      "locale",
+                      "periodMode",
+                      "dataHash",
+                      "status",
+                      "headline",
+                      "bodyMarkdown",
+                      "highlights",
+                      "error",
+                      "createdAt"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "narrative",
+              "currentDataHash",
+              "isStale"
+            ],
+            "type": "object"
           }
         },
         "required": [
@@ -2568,6 +2764,10 @@
                     "null"
                   ]
                 },
+                "remindersEnabled": {
+                  "default": true,
+                  "type": "boolean"
+                },
                 "revision": {
                   "maximum": 9007199254740991,
                   "minimum": -9007199254740991,
@@ -2614,6 +2814,7 @@
                 "ownerId",
                 "notes",
                 "frequency",
+                "remindersEnabled",
                 "id",
                 "revision",
                 "sortOrder",
@@ -3334,6 +3535,7 @@
                         "task.overdue",
                         "note.mentioned",
                         "kpi.off_target",
+                        "kpi.reading_due",
                         "job.finished",
                         "update.available",
                         "update.installed",
@@ -5208,6 +5410,9 @@
               }
             ]
           },
+          "remindersEnabled": {
+            "type": "boolean"
+          },
           "revision": {
             "exclusiveMinimum": 0,
             "maximum": 9007199254740991,
@@ -5544,6 +5749,12 @@
                         "null"
                       ]
                     },
+                    "value": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
                     "year": {
                       "$ref": "#/$defs/__schema1"
                     }
@@ -5641,6 +5852,10 @@
                 },
                 "type": "array"
               },
+              "remindersEnabled": {
+                "default": true,
+                "type": "boolean"
+              },
               "revision": {
                 "maximum": 9007199254740991,
                 "minimum": -9007199254740991,
@@ -5720,6 +5935,7 @@
               "ownerId",
               "notes",
               "frequency",
+              "remindersEnabled",
               "id",
               "revision",
               "sortOrder",
@@ -7571,6 +7787,10 @@
             ],
             "default": null
           },
+          "remindersEnabled": {
+            "default": true,
+            "type": "boolean"
+          },
           "unit": {
             "default": "count",
             "enum": [
@@ -7627,6 +7847,40 @@
         "required": [
           "opId"
         ],
+        "type": "object"
+      },
+      "postKpisNarrativeBody": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "kpiId": {
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string"
+          },
+          "locale": {
+            "default": "en",
+            "enum": [
+              "en",
+              "ar"
+            ],
+            "type": "string"
+          },
+          "objectiveId": {
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string"
+          },
+          "period": {
+            "default": "current",
+            "enum": [
+              "previous",
+              "current",
+              "next"
+            ],
+            "type": "string"
+          }
+        },
         "type": "object"
       },
       "postNotesBody": {
@@ -8672,6 +8926,7 @@
                   "task.overdue",
                   "note.mentioned",
                   "kpi.off_target",
+                  "kpi.reading_due",
                   "job.finished",
                   "update.available",
                   "update.installed",
@@ -11070,7 +11325,8 @@
             "enum": [
               "tasks.breakdown",
               "notes.refine",
-              "notes.suggest_tags"
+              "notes.suggest_tags",
+              "kpis.narrative"
             ],
             "type": "string"
           }
@@ -11082,7 +11338,7 @@
             "items": {
               "$ref": "#/$defs/__schema0"
             },
-            "maxItems": 3,
+            "maxItems": 4,
             "type": "array"
           },
           "monthlyBudgetMicros": {
@@ -15518,7 +15774,8 @@
               "enum": [
                 "tasks.breakdown",
                 "notes.refine",
-                "notes.suggest_tags"
+                "notes.suggest_tags",
+                "kpis.narrative"
               ],
               "type": "string"
             }
@@ -18838,6 +19095,228 @@
         ]
       }
     },
+    "/api/v1/kpis/narrative": {
+      "get": {
+        "operationId": "getKpisNarrative",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "kpiId",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "objectiveId",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "locale",
+            "required": false,
+            "schema": {
+              "default": "en",
+              "enum": [
+                "en",
+                "ar"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "period",
+            "required": false,
+            "schema": {
+              "default": "current",
+              "enum": [
+                "previous",
+                "current",
+                "next"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/getKpisNarrativeResponse"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "validation_failed"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "internal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "ai_unavailable"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "postKpisNarrative",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/postKpisNarrativeBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/getKpisNarrativeResponse"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "validation_failed"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "rule_violation"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "rate_limited"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "internal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "ai_unavailable"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
     "/api/v1/kpis/reorder": {
       "patch": {
         "operationId": "patchKpisReorder",
@@ -21847,6 +22326,7 @@
                     "task.overdue",
                     "note.mentioned",
                     "kpi.off_target",
+                    "kpi.reading_due",
                     "job.finished",
                     "update.available",
                     "update.installed",
