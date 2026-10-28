@@ -356,6 +356,36 @@ it('NOTES-B18 a discarded proposal can be restored until it is applied, and come
   );
   expect(rows[0]?.status).toBe('stale');
 });
+it('NOTES-B18 restoring a discarded proposal is refused with 409 while a newer one is pending', async () => {
+  const note = await harness.note('Plan', { content: 'Review the draft.' });
+  const row = (jobId: string, status: string) => ({
+    id: id(),
+    noteId: note.id,
+    jobId,
+    noteRevision: note.revision,
+    contentHash: 'fixture',
+    capabilityVersion: 1,
+    refinedContent: refinement.refined_content,
+    suggestedTasks: refinement.suggested_tasks,
+    suggestedTags: refinement.suggested_tags,
+    summaryOfChanges: refinement.summary_of_changes,
+    status,
+    createdBy: actorId(),
+  });
+  const first = await finishedJob(db(), actorId(), 'notes.refine', note.id, note.revision, refinement);
+  await insertRefinement(db(), row(first.id, 'pending'));
+  await harness.run((ctx) => discardNoteAi(ctx, note.id, first.id, 'notes.refine'));
+  const second = await finishedJob(db(), actorId(), 'notes.refine', note.id, note.revision, refinement);
+  await insertRefinement(db(), row(second.id, 'pending'));
+  await expect(harness.run((ctx) => restoreNoteAi(ctx, note.id, first.id))).rejects.toMatchObject({
+    code: 'conflict',
+    details: { reason: 'state' },
+  });
+  const rows = await db().all<{ status: string }>(
+    sql`select status from note_refinements where job_id = ${first.id}`,
+  );
+  expect(rows[0]?.status).toBe('discarded');
+});
 it('ADMIN-B36 a direct note apply that fails after creating a task leaves no task and no change', async () => {
   const note = await harness.note('Plan', { content: 'draft content' });
   const job = await finishedJob(

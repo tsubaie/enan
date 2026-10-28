@@ -12,7 +12,7 @@ import { getNote, patchNote } from '../service';
 import { Tags } from '../schema/validation';
 import { NoteAiApply, RefinementOutput, TagOutput, SuggestedTask } from '../schema/validation';
 import { derivedParticipants } from '../schema/validation';
-import { reviewRefinement } from '../repo';
+import { pendingRefinement, reviewRefinement } from '../repo';
 // Receives the apply's own context, so the tasks it creates share the apply's transaction.
 type CreateTask = (
   ctx: Context,
@@ -102,13 +102,12 @@ export const restoreNoteAi = transactional(async function restoreNoteAi(
   const result = AiOutput.parse(job.result);
   if (result.appliedIds) throw new AppError('conflict', { reason: 'state' });
   const note = await getNote(ctx, noteId);
+  const current = note.revision === payload.revision;
+  // A note holds one pending proposal: a newer one took the place, so the undo is refused.
+  if (current && (await pendingRefinement(ctx.db, noteId)))
+    throw new AppError('conflict', { reason: 'state' });
   await updateAiResult(ctx.db, jobId, { ...result, discarded: false });
-  await reviewRefinement(
-    ctx.db,
-    jobId,
-    note.revision === payload.revision ? 'pending' : 'stale',
-    ctx.user.id,
-  );
+  await reviewRefinement(ctx.db, jobId, current ? 'pending' : 'stale', ctx.user.id);
   return { ids: [] };
 });
 
