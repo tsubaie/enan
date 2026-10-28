@@ -7,9 +7,11 @@ import { users } from '@/core/db/system-schema';
 import { people } from '@/modules/people/schema/db';
 import { User } from '@/core/http/user-schema';
 import { id } from '@/core/db/ids';
-import { getSetting } from '@/core/db/settings-repo';
+import { getSetting, writeSetting } from '@/core/db/settings-repo';
 import { addDays, dayAt } from '@/core/time/tasks';
 import { dayValue } from '@/core/time/days';
+import { dayStart } from '@/core/time/ai';
+import { midnightBoundaries } from '../../../../tests/fixtures/timezones';
 import { tasks } from '../schema/db';
 import { TaskCreate, TaskListQuery, TaskPatch } from '../schema/validation';
 import * as service from '../service';
@@ -459,4 +461,13 @@ it('TASKS-B04 the completed view holds ninety days of work, from the local midni
   await completedAt('Just before', new Date(cutoff - 1));
   await completedAt('Stale', new Date(dayValue(addDays(today, -91))));
   expect((await completedIds()).sort()).toEqual(kept.sort());
+});
+it('TASKS-B04 the ninety-day window opens at the workspace midnight: 01:00 in Riyadh on the cut-off day is inside it', async () => {
+  const zone = midnightBoundaries[0]?.timezone ?? 'UTC';
+  await writeSetting(db(), 'workspace.timezone', zone, actorId);
+  const opens = dayStart(zone, addDays(dayAt(zone), -90)).getTime();
+  const hour = 3_600_000;
+  const kept = await completedAt('Small hours', new Date(opens + hour));
+  await completedAt('Night before', new Date(opens - hour));
+  expect(await completedIds()).toEqual([kept]);
 });

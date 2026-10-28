@@ -13,6 +13,7 @@ import { applyUpdate, requireRevision, type EntityOps } from '@/core/entity/serv
 import { AppError } from '@/core/http/errors';
 import { emit } from '@/core/notifications/emit';
 import { dayAt, addDays, bandOf } from '@/core/time/tasks';
+import { dayStart } from '@/core/time/ai';
 import { getPerson, personNameSql, userIdsForPeople } from '@/modules/people';
 import { getNote } from '@/modules/notes';
 import {
@@ -49,7 +50,9 @@ export async function listTasks(ctx: Context, query: TaskListQuery) {
   const timezone = await getSetting(ctx.db, 'workspace.timezone');
   const today = dayAt(timezone);
   const week = addDays(today, 7);
-  const dates = [today, week, addDays(today, -90)];
+  // TASKS-B04: the Completed window opens at the workspace's own midnight ninety days back, not
+  // UTC's, so a task finished in the small hours of that day is still inside it.
+  const dates = [today, week, dayStart(timezone, addDays(today, -90)).toISOString()];
   // The counts do not depend on the view, so they come first: `view=default` (TASKS-B18) resolves
   // to the default view they decide, and the rows are that view's.
   const counts = z
