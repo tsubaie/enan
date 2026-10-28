@@ -17,7 +17,7 @@ ADR 0029 put every request in one immediate transaction behind the process-wide 
 
 - Two statements of one GET may run on different pooled connections and see different commits (WAL). A list shown beside its count tolerates that; no read-only handler needs one snapshot across statements. `BEGIN DEFERRED` is the upgrade if one ever does.
 - A write on the pool outside a transaction is a 500 logged as an error, caught by the first test that runs the handler.
-- The sweep that cancels and deadlines queued or running jobs runs on every claim of a kind that has such jobs, before the admission check, so a kind at its concurrency limit still sweeps; it has nothing to do when none exist.
+- The sweep that cancels and deadlines queued or running jobs runs whenever such jobs exist, as before; it has nothing to do when none do.
 
 ## Alternatives considered
 
