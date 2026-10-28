@@ -12,7 +12,7 @@ import suggestedTags from '../../../../tests/fixtures/ai/notes.tags.v1.en.json';
 import { harness, actorId } from './fixtures';
 import { startNoteAi } from '../ai/service';
 import { refinePrompt } from '../ai/prompts/select';
-import { NoteAiApply } from '../schema/validation';
+import { NoteAiApply, RefinementOutput, TagOutput } from '../schema/validation';
 import { insertRefinement } from '../repo';
 import { id } from '@/core/db/ids';
 import { AiPayload } from '@/core/ai/job-schema';
@@ -356,6 +356,64 @@ it('NOTES-B18 a discarded proposal can be restored until it is applied, and come
   );
   expect(rows[0]?.status).toBe('stale');
 });
+it('NOTES-B18 restoring a discarded proposal is refused with 409 while a newer one is pending', async () => {
+  const note = await harness.note('Plan', { content: 'Review the draft.' });
+  const row = (jobId: string, status: string) => ({
+    id: id(),
+    noteId: note.id,
+    jobId,
+    noteRevision: note.revision,
+    contentHash: 'fixture',
+    capabilityVersion: 1,
+    refinedContent: refinement.refined_content,
+    suggestedTasks: refinement.suggested_tasks,
+    suggestedTags: refinement.suggested_tags,
+    summaryOfChanges: refinement.summary_of_changes,
+    status,
+    createdBy: actorId(),
+  });
+  const first = await finishedJob(
+    db(),
+    actorId(),
+    'notes.refine',
+    note.id,
+    note.revision,
+    refinement,
+  );
+  await insertRefinement(db(), row(first.id, 'pending'));
+  await harness.run((ctx) => discardNoteAi(ctx, note.id, first.id, 'notes.refine'));
+  // Restoring the same job again is idempotent: its own pending row is no newer proposal.
+  await expect(harness.run((ctx) => restoreNoteAi(ctx, note.id, first.id))).resolves.toEqual({
+    ids: [],
+  });
+  await expect(harness.run((ctx) => restoreNoteAi(ctx, note.id, first.id))).resolves.toEqual({
+    ids: [],
+  });
+  await harness.run((ctx) => discardNoteAi(ctx, note.id, first.id, 'notes.refine'));
+  const second = await finishedJob(
+    db(),
+    actorId(),
+    'notes.refine',
+    note.id,
+    note.revision,
+    refinement,
+  );
+  await insertRefinement(db(), row(second.id, 'pending'));
+  await expect(harness.run((ctx) => restoreNoteAi(ctx, note.id, first.id))).rejects.toMatchObject({
+    code: 'conflict',
+    details: { reason: 'state' },
+  });
+  const rows = await db().all<{ status: string }>(
+    sql`select status from note_refinements where job_id = ${first.id}`,
+  );
+  expect(rows[0]?.status).toBe('discarded');
+});
+it('NOTES-B17 a blank tag from the model is dropped by the output schema instead of failing the job', () => {
+  expect(TagOutput.parse({ tags: ['', ' ', 'board'] })).toEqual({ tags: ['board'] });
+  expect(
+    RefinementOutput.parse({ ...refinement, suggested_tags: ['', ' ', 'board'] }).suggested_tags,
+  ).toEqual(['board']);
+});
 it('ADMIN-B36 a direct note apply that fails after creating a task leaves no task and no change', async () => {
   const note = await harness.note('Plan', { content: 'draft content' });
   const job = await finishedJob(
@@ -384,7 +442,14 @@ it('ADMIN-B36 a direct note apply that fails after creating a task leaves no tas
 });
 it('ADMIN-B12 the nightly prune keeps an old refine job a refinement still names, and still succeeds', async () => {
   const note = await harness.note('Plan', { content: 'Review the draft.' });
-  const kept = await finishedJob(db(), actorId(), 'notes.refine', note.id, note.revision, refinement);
+  const kept = await finishedJob(
+    db(),
+    actorId(),
+    'notes.refine',
+    note.id,
+    note.revision,
+    refinement,
+  );
   await insertRefinement(db(), {
     id: id(),
     noteId: note.id,
@@ -402,9 +467,27 @@ it('ADMIN-B12 the nightly prune keeps an old refine job a refinement still names
   // Past the 30 days: the referenced one is the oldest, so only the reference keeps it; of the
   // two others the newest success stays and the older one goes.
   const old = new Date(Date.now() - 40 * 86400000).getTime();
-  const gone = await finishedJob(db(), actorId(), 'notes.refine', note.id, note.revision, refinement);
-  const newest = await finishedJob(db(), actorId(), 'notes.refine', note.id, note.revision, refinement);
-  for (const [job, age] of [[kept, 3000], [gone, 2000], [newest, 1000]] as const)
+  const gone = await finishedJob(
+    db(),
+    actorId(),
+    'notes.refine',
+    note.id,
+    note.revision,
+    refinement,
+  );
+  const newest = await finishedJob(
+    db(),
+    actorId(),
+    'notes.refine',
+    note.id,
+    note.revision,
+    refinement,
+  );
+  for (const [job, age] of [
+    [kept, 3000],
+    [gone, 2000],
+    [newest, 1000],
+  ] as const)
     await db().run(sql`update jobs set finished_at = ${old - age} where id = ${job.id}`);
   await withTransaction(db(), (database) => prune(database));
   const left = await db().all<{ id: string }>(sql`select id from jobs where kind = ${kept.kind}`);
