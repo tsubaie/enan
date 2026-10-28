@@ -9,3 +9,7 @@ updates:
         update-types:
           - minor
           - patch
+    ignore:
+      - dependency-name: "@types/node"
+        versions:
+          - ">= 23.0.0"
