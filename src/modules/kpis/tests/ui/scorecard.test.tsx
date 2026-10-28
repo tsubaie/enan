@@ -158,7 +158,27 @@ it('KPIS-B07 a KPI with no reading says so instead of showing a number', () => {
       kpi={kpi({}, { current: null, currentDate: null, percentChange: null, sparkline: [] })}
     />,
   );
-  expect(screen.getByText(en.kpis.noReading)).toBeTruthy();
+  // KPIS-B31: both the dial and the figure say N/A rather than a zero.
+  expect(screen.getAllByText(en.kpis.notAvailable)).toHaveLength(2);
+});
+it('KPIS-B31 a period with no reading of its own draws the empty track with N/A inside it', () => {
+  const detail = kpi({}, { achievement: null, status: 'stale' });
+  const empty = {
+    ...detail,
+    periods: detail.periods.map((row, index) =>
+      index === 1 ? { ...row, value: null, achievement: null, status: 'no_data' as const } : row,
+    ),
+  };
+  const { container } = mount(<KpiHeadline kpi={empty} />);
+  expect(container.querySelector('.recharts-radial-bar-sector')).toBeNull();
+  expect(container.querySelector('svg path')?.getAttribute('d')).toBe(
+    'M 21 100 A 83 83 0 0 1 187 100',
+  );
+  // One N/A inside the arc and one under the reading's foot, never the older 42.5.
+  expect(screen.getAllByText(en.kpis.notAvailable)).toHaveLength(2);
+  expect(screen.queryByText('42.5 pts')).toBeNull();
+  mount(<KpiSummary kpi={empty} />);
+  expect(screen.getByText(/No reading recorded/u)).toBeTruthy();
 });
 it('KPIS-B03 the gauge shows the achievement as its headline and names both figures it spans', () => {
   const { container } = mount(<KpiHeadline kpi={kpi({}, { achievement: 3.4 })} />);

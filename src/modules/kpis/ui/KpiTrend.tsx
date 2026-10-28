@@ -39,10 +39,12 @@ export function KpiTrend({ kpi }: { kpi: KpiDetail }) {
   });
   if (!series.some((point) => point.value !== null))
     return <p className="text-sm text-text-muted">{t('notEnoughReadings')}</p>;
+  // KPIS-B31: a status with no verdict (no data, stale) must not grey out the periods that were read.
+  const tone = labels.tone(kpi.meta.status);
   return (
     <TrendChart
       series={series}
-      tone={labels.tone(kpi.meta.status)}
+      tone={tone === 'neutral' ? 'series' : tone}
       rtl={locale === Locale.options[1]}
       labels={{
         period: t('period'),

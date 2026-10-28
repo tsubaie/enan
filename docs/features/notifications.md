@@ -67,6 +67,9 @@ Indexes: `(user_id, read_at, created_at desc)` for the feed; a unique partial in
   - `note.mentioned` — the reader's person is added to a note's participants (NOTES/ADR 0014).
   - `kpi.off_target` — a reading lands a KPI the reader owns off target, where it was not before:
     recording, overwriting or editing a reading, compared before and after in its transaction.
+  - `kpi.reading_due` — scheduled; a KPI the reader owns, with reminders on, has no reading dated
+    inside the period it is in now. Once per KPI per period, read or not (KPIS-B30). Payload:
+    `{ periodLabel, frequency }`. Its line opens the record with the reading dialog open.
   - `job.finished` — an AI job the reader asked for reached `succeeded` or, its attempts spent,
     `failed` (ADR 0010). Its subject is the note or task the job ran on. System and scheduled jobs
     have nobody waiting and emit nothing.
@@ -76,7 +79,8 @@ Indexes: `(user_id, read_at, created_at desc)` for the feed; a unique partial in
     queued by the updater's status and daily, with no actor.
 - NOTIF-B05 **Time-derived kinds come from the scheduler**, never from a request, and are keyed so
   a re-run on the same day writes nothing new (ADR 0010 dedup keys). `task.due_today` and
-  `task.overdue` are the two, from the `tasks.reminders` job at 04:00 UTC each day.
+  `task.overdue` come from the `tasks.reminders` job at 04:00 UTC each day, and `kpi.reading_due`
+  from the `kpis.reminders` job at 05:00 UTC.
 - NOTIF-B06 **The feed resolves subjects at read time** through the owning module. A notification
   whose subject is deleted, trashed or no longer visible to that reader is omitted from the feed
   and counted in neither total. It is not deleted: the subject may be restored.
@@ -113,6 +117,11 @@ Indexes: `(user_id, read_at, created_at desc)` for the feed; a unique partial in
   and shows them twenty at a time with the next row fading beneath (EP-B47). It uses the bell's
   row, with the absolute date beside the relative time. Its "Mark all as read" is disabled when
   nothing shown is unread.
+- NOTIF-B17 **An answered reminder clears itself.** When the event a notification asked for has
+  happened — a reading recorded or overwritten on a KPI — every reader's unread `kpi.reading_due`
+  and `kpi.off_target` line about that KPI is marked read in the same transaction. A subject
+  contributes, per kind, a more specific link than its own (`hrefs`), which the feed uses for that
+  kind's line.
 
 ## API
 

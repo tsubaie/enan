@@ -7,7 +7,7 @@ Source of truth for schema is `src/modules/*/schema/db.ts` (Drizzle) plus custom
 | Class | Tables | Required columns |
 |---|---|---|
 | **Entity** | tasks, notes, committees, objectives, kpis, initiatives, meetings, people, users | `id uuid pk`, `revision int not null default 1`, `created_at`, `updated_at`, `created_by`, `updated_by`, `deleted_at`, `deleted_op_id` |
-| **Child** (owned rows edited by users) | kpi_readings, kpi_targets, initiative_deliverables, initiative_updates, initiative_progress, meeting_agenda_items, meeting_documents, meeting_briefs, note_refinements, note_voice_memos, brief_feedback, comments, meeting_private_notes | `id`, `created_at`, `updated_at`, `created_by`, `deleted_at`, `deleted_op_id`; `revision` only where the spec says the row is inline-editable |
+| **Child** (owned rows edited by users) | kpi_readings, kpi_targets, initiative_deliverables, initiative_updates, initiative_progress, meeting_agenda_items, meeting_documents, meeting_briefs, note_refinements, note_voice_memos, kpi_narratives, brief_feedback, comments, meeting_private_notes | `id`, `created_at`, `updated_at`, `created_by`, `deleted_at`, `deleted_op_id`; `revision` only where the spec says the row is inline-editable |
 | **Junction** | meeting_attendees, note_people, entity_links | `created_at`, `created_by`, `deleted_at`, `deleted_op_id` |
 | **History / system** | sessions, login_attempts, jobs, job_attempts, schedules, ai_invocations, ai_credentials, audit_log, files, wallpapers, prep_learnings, idempotency_keys, settings, workspace | as specified per table |
 
@@ -108,7 +108,7 @@ Indexes: `(status, run_after, priority desc)`, `(kind, status)`, `(entity_type, 
 `id, job_id fk cascade, attempt int, lease_owner, started_at, finished_at, status (running|succeeded|failed|abandoned), error text`. Unique `(job_id, attempt)`.
 
 ### schedules
-`id, kind, cron text, timezone text, payload jsonb, enabled boolean, last_occurrence timestamptz null, created_at, updated_at`. Seeded rows (migration `0004_seed_schedules`, times in UTC): `system.backup` (daily 02:00), `system.prune` (daily 03:00), `system.trash_purge` (daily 03:30, migration 0013), `system.notifications_purge` (daily 03:15), and (migration `0006`) `tasks.reminders` (daily 04:00).
+`id, kind, cron text, timezone text, payload jsonb, enabled boolean, last_occurrence timestamptz null, created_at, updated_at`. Seeded rows (migration `0004_seed_schedules`, times in UTC): `system.backup` (daily 02:00), `system.prune` (daily 03:00), `system.trash_purge` (daily 03:30, migration 0013), `system.notifications_purge` (daily 03:15), and (migration `0006`) `tasks.reminders` (daily 04:00), and (migration `0019`) `kpis.reminders` (daily 05:00).
 
 ### ai_credentials
 
@@ -171,13 +171,16 @@ Indexes: `(note_date, created_at, id) where deleted_at is null`, `(type)`, `(arc
 `name, description, sort_order` + entity columns.
 
 ### kpis
-`name, unit (count|percent|sar|usd|points), direction (higher|lower), frequency (monthly|quarterly|annual), category, objective_id fk set null, owner_id fk people set null, notes, sort_order, search_text` + entity columns. The frequency is the cadence the KPI is reported on: it decides what a period is for its targets, its axis and its staleness. There are no team names — a KPI is held by an assignable person, the same owner identity a task uses (ADR 0011).
+`name, unit (count|percent|sar|usd|points), direction (higher|lower), frequency (monthly|quarterly|annual), category, objective_id fk set null, owner_id fk people set null, notes, sort_order, reminders_enabled boolean default true, search_text` + entity columns. `reminders_enabled` says whether the owner is told of a period with no reading (KPIS-B30). The frequency is the cadence the KPI is reported on: it decides what a period is for its targets, its axis and its staleness. There are no team names — a KPI is held by an assignable person, the same owner identity a task uses (ADR 0011).
 
 ### kpi_readings
 `kpi_id fk cascade, reading_date date, value numeric(14,4), note` + child columns, `revision` and `updated_by`: KPIS-B08 edits a reading's note in place, so the row goes through the shared revision-checked update helper and records who last wrote it.  Unique `(kpi_id, reading_date) where deleted_at is null`. The magnitude CHECK restates the limit `numeric(14,4)` already imposes; a value past it is refused by the type before the constraint is reached.
 
 ### kpi_targets
 `kpi_id fk cascade, year int, period int check 1..12, target_value numeric(14,4)` + child columns. Unique `(kpi_id, year, period) where deleted_at is null`. A period is read at the owning KPI's frequency: 1..12 monthly, 1..4 quarterly, 1 annually. Zero and negative targets allowed; status rules handle them (`features/kpis.md`).
+
+### kpi_narratives
+`objective_id fk objectives cascade null, kpi_id fk kpis cascade null, locale (en|ar), period_mode (previous|current|next) default current, data_hash text, job_id fk jobs set null null, status (generating|ready|failed) default generating, headline text null, body_markdown text null, highlights_json jsonb null, error text null` + child columns (no `revision`, no `updated_by`: a brief is written by its job and never edited). An executive brief over a scope of the scorecard — the whole of it when both foreign keys are null, one objective, or one KPI — in one language and against one comparison period (KPIS-B32). `data_hash` is the SHA-256 of the figures it was written from, so a brief whose figures have moved reads as stale; a `generating` row whose job failed or was cancelled reads as `failed`. Indexes: `(kpi_id, locale, created_at)`, `(objective_id)`, `(job_id)`, `(created_by)`.
 
 ### initiatives
 `name, description, status (planning|in_progress|on_hold|completed|cancelled), objective_id fk set null, teams, start_date, target_date, notes, sort_order, search_text` + entity columns. Health and progress are computed from children (no denormalized columns).
@@ -237,6 +240,7 @@ Indexes: `(note_date, created_at, id) where deleted_at is null`, `(type)`, `(arc
 | meeting ↔ person | `meeting_attendees` | N:M with role | `attendee` |
 | meeting → agenda-linked entity | `meeting_agenda_items.linked_*` | N:M | `discussed_in` |
 | kpi / initiative → objective | `*.objective_id` | N:1 | `belongs_to` |
+| kpi brief → kpi / objective | `kpi_narratives.kpi_id`, `kpi_narratives.objective_id` | N:1 | not projected |
 | person ↔ user | `people.user_id` | 1:1 | not projected |
 | anything ↔ anything else | `entity_links` | N:M | `related`, `requested_by`, `agreed_in`, `measures`, `about` |
 

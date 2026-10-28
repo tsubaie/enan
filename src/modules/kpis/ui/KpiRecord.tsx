@@ -10,6 +10,7 @@ import { EntityFooter, EntityUpdated } from '@/ui/entity/EntityFooter';
 import type { DetailApi } from '@/ui/entity/types';
 import { KpiHeadline, KpiSummary, LatestNote } from './KpiHeadline';
 import { KpiTrend } from './KpiTrend';
+import { KpiNarrative } from './KpiNarrative';
 import { KpiMaintenance } from './KpiMaintain';
 import { KpiDefinition, KpiOwnership } from './KpiFields';
 import { useKpi } from './queries';
@@ -61,6 +62,7 @@ export function KpiRecord({ kpi, api }: { kpi: Kpi; api: DetailApi<Omit<KpiPatch
             <KpiSummary kpi={data} />
             <KpiHeadline kpi={data} />
             <LatestNote kpi={data} />
+            {editable && <KpiNarrative kpiId={kpi.id} />}
             <KpiOwnership initial={data} save={save} />
           </div>
           <RecordSection title={t('trend')}>

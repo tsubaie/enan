@@ -3,6 +3,7 @@ import { and, eq, isNull, isNotNull, sql, inArray, getTableColumns, type SQL } f
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 import { people } from './schema/db';
 import { type Database } from '@/core/db/client';
+import { users } from '@/core/db/system-schema';
 import { normalize, searchCorpus } from '@/core/search/normalize';
 import { searchMatch, searchRank } from '@/core/db/search';
 import { restoreEntity, updateEntity, type EntityPatch } from '@/core/db/entity';
@@ -226,4 +227,38 @@ export async function selectUserIdsForPeople(database: Database, personIds: read
     .from(people)
     .where(and(inArray(people.id, [...personIds]), isNull(people.deletedAt)));
   return rows.flatMap((row) => (row.userId ? [row.userId] : []));
+}
+// PEOPLE-B13: the active login whose address an internal record carries and that no directory
+// record holds yet, live or trashed (`people.user_id` is unique across both).
+export async function selectUnlinkedUserByEmail(database: Database, email: string) {
+  const rows = await database
+    .select({ id: users.id })
+    .from(users)
+    .where(
+      and(
+        eq(users.email, email.trim().toLowerCase()),
+        eq(users.isActive, true),
+        isNull(users.deletedAt),
+        sql`not exists (select 1 from people p where p.user_id = ${users.id})`,
+      ),
+    );
+  return rows[0]?.id ?? null;
+}
+// PEOPLE-B13: a new login takes the one live internal record that carries its address and is not
+// linked yet. Two such records is an ambiguity a person resolves, so nothing is linked.
+export async function linkUnlinkedPerson(database: Database, userId: string, email: string) {
+  const match = and(
+    sql`lower(${people.email}) = ${email.trim().toLowerCase()}`,
+    eq(people.kind, 'internal'),
+    isNull(people.userId),
+    isNull(people.deletedAt),
+  );
+  const candidates = await database.select({ id: people.id }).from(people).where(match).limit(2);
+  const [only] = candidates;
+  if (candidates.length !== 1 || !only) return null;
+  await database
+    .update(people)
+    .set({ userId })
+    .where(and(eq(people.id, only.id), match));
+  return only.id;
 }

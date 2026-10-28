@@ -7,6 +7,7 @@ export const NotificationKind = z.enum([
   'task.overdue',
   'note.mentioned',
   'kpi.off_target',
+  'kpi.reading_due',
   'job.finished',
   // ADMIN-B59: owned by the users module, which owns the administration area.
   'update.available',

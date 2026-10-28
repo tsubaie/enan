@@ -375,7 +375,7 @@ export const notifications = sqliteTable(
       .where(sql`${t.readAt} is null`),
     check(
       'notifications_kind_check',
-      sql`${t.kind} in ('task.assigned','task.due_today','task.overdue','note.mentioned','kpi.off_target','job.finished','update.available','update.installed','update.failed','update.rollback_failed','update.blocked','update.stalled','update.updater_outdated')`,
+      sql`${t.kind} in ('task.assigned','task.due_today','task.overdue','note.mentioned','kpi.off_target','kpi.reading_due','job.finished','update.available','update.installed','update.failed','update.rollback_failed','update.blocked','update.stalled','update.updater_outdated')`,
     ),
   ],
 );

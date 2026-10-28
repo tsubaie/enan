@@ -11,6 +11,8 @@ import { ErrorPanel } from '@/ui/layout/ErrorPanel';
 import { ApiError } from '@/core/http/client';
 import { usePlainDate, useToday } from '@/ui/format';
 import { useReadingMutations } from './queries';
+import { useRecordReadingAction } from './use-record-reading';
+import { TargetDelta, TrailingStrip } from './KpiReadingHints';
 import type { KpiDetail, Unit } from '../schema/validation';
 import { AmountInput } from './KpiPickers';
 import { ReadingsTable } from './KpiReadingsTable';
@@ -21,7 +23,9 @@ import { ReadingsTable } from './KpiReadingsTable';
 export function KpiReadings({ kpi, editable }: { kpi: KpiDetail; editable: boolean }) {
   const t = useTranslations('kpis');
   const mutations = useReadingMutations(kpi.id);
-  const [adding, setAdding] = useState(false);
+  // KPIS-B30: a reading-due notification opens the record with the form already unfolded.
+  const action = useRecordReadingAction();
+  const [adding, setAdding] = useState(editable && action.requested);
   const remove = useMutation({ mutationFn: (readingId: string) => mutations.remove(readingId) });
   return (
     <div className="grid gap-4">
@@ -97,6 +101,8 @@ function ReadingForm({ kpi, close }: { kpi: KpiDetail; close: () => void }) {
         )}
         {add.error && !clash && <ErrorPanel error={add.error} />}
       </div>
+      <TargetDelta kpi={kpi} day={draft.day} value={draft.value} />
+      <TrailingStrip kpi={kpi} day={draft.day} />
     </div>
   );
 }

@@ -17,11 +17,15 @@ type Capability = z.infer<typeof AiCapability>;
 // Each feature by what it does for the reader, never by its internal name.
 const featureKey: Record<
   Capability,
-  'aiFeature_tasks_breakdown' | 'aiFeature_notes_refine' | 'aiFeature_notes_suggest_tags'
+  | 'aiFeature_tasks_breakdown'
+  | 'aiFeature_notes_refine'
+  | 'aiFeature_notes_suggest_tags'
+  | 'aiFeature_kpis_narrative'
 > = {
   'tasks.breakdown': 'aiFeature_tasks_breakdown',
   'notes.refine': 'aiFeature_notes_refine',
   'notes.suggest_tags': 'aiFeature_notes_suggest_tags',
+  'kpis.narrative': 'aiFeature_kpis_narrative',
 };
 // ADMIN-B45: which AI features are on, each one switch that saves at once, the monthly limit in
 // dollars, and what this month has cost, feature by feature, in words and money.

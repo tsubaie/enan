@@ -53,3 +53,14 @@ it('KPIS-B07 the list query rejects an unknown parameter and clamps its page siz
   expect(input.safeParse({ limit: '500' }).success).toBe(false);
   expect(KpiListQuery.parse({})).toMatchObject({ view: 'all', limit: 50, sort: 'default' });
 });
+it('KPIS-B32 the brief is read and asked for by any member, the request answering 202', () => {
+  expect(meta(api.narrative)).toEqual({ guard: 'session', status: 200, idempotent: false });
+  expect(meta(api.startNarrativeBrief)).toEqual({
+    guard: 'session',
+    status: 202,
+    idempotent: false,
+  });
+  expect(api.narrative.meta.input.parse({})).toEqual({ locale: 'en', period: 'current' });
+  expect(api.narrative.meta.input.safeParse({ locale: 'fr' }).success).toBe(false);
+  expect(api.startNarrativeBrief.meta.enqueues).toBe(true);
+});

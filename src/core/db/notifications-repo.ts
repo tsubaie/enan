@@ -1,5 +1,5 @@
 import 'server-only';
-import { and, eq, isNull, isNotNull, lt, or, sql, desc, inArray } from 'drizzle-orm';
+import { and, eq, gte, isNull, isNotNull, lt, or, sql, desc, inArray } from 'drizzle-orm';
 import { notifications } from './system-schema';
 import { type Database } from './client';
 import { id } from './ids';
@@ -103,6 +103,47 @@ export async function markManyRead(database: Database, userId: string, ids: read
     )
     .returning({ id: notifications.id });
   return rows.length;
+}
+// NOTIF-B17: the event a notification reported has been dealt with — a reading was recorded — so
+// every reader's unread line about it is cleared, not only the actor's.
+export async function markSubjectRead(
+  database: Database,
+  kinds: readonly string[],
+  subjectId: string,
+) {
+  const rows = await database
+    .update(notifications)
+    .set({ readAt: new Date() })
+    .where(
+      and(
+        eq(notifications.subjectId, subjectId),
+        inArray(notifications.kind, [...kinds]),
+        isNull(notifications.readAt),
+      ),
+    )
+    .returning({ id: notifications.id });
+  return rows.length;
+}
+// NOTIF-B05: the subjects already told of `kind` since a moment, read or not, so a reminder that
+// is once per period stays once per period after its reader has dismissed it.
+export async function selectNotifiedSince(
+  database: Database,
+  kind: string,
+  subjectIds: readonly string[],
+  since: Date,
+) {
+  if (!subjectIds.length) return new Set<string>();
+  const rows = await database
+    .select({ subjectId: notifications.subjectId })
+    .from(notifications)
+    .where(
+      and(
+        eq(notifications.kind, kind),
+        inArray(notifications.subjectId, [...subjectIds]),
+        gte(notifications.createdAt, since),
+      ),
+    );
+  return new Set(rows.map((row) => row.subjectId));
 }
 // NOTIF-B10: retention. Read rows go after one window, unread after a longer one.
 export async function deleteExpired(database: Database, readBefore: Date, unreadBefore: Date) {

@@ -134,16 +134,25 @@ function PersonKind({ editor }: { editor: Editor }) {
   const c = useTranslations('common');
   const { form, save } = editor;
   const kind = useWatch({ control: form.control, name: 'kind' });
+  // PEOPLE-B13: an internal record says whether it reaches a workspace login, which is what lets
+  // its reminders and assignments arrive at all.
   const control = (
-    <Segmented
-      label={t('kind')}
-      value={kind}
-      segments={Kind.options.map((value) => ({ value, label: c(value) }))}
-      onChange={(next) => {
-        form.setValue('kind', next);
-        save?.({ kind: next });
-      }}
-    />
+    <span className="grid gap-1">
+      <Segmented
+        label={t('kind')}
+        value={kind}
+        segments={Kind.options.map((value) => ({ value, label: c(value) }))}
+        onChange={(next) => {
+          form.setValue('kind', next);
+          save?.({ kind: next });
+        }}
+      />
+      {kind === 'internal' && (
+        <span className="text-xs text-text-muted">
+          {t(editor.initial.userId ? 'linkedLogin' : 'noLogin')}
+        </span>
+      )}
+    </span>
   );
   if (save)
     return (

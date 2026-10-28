@@ -11,7 +11,7 @@ import {
   ResponsiveContainer,
   type TooltipContentProps,
 } from 'recharts';
-import { chartColor, chartMark, toneColor, type ChartTone } from './tokens';
+import { chartColor, chartMark, fillOf, type TrendTone } from './tokens';
 import { ChartTable } from './ChartTable';
 import { useChartMotion } from './motion';
 // `key` identifies the period, `label` is what the axis calls it. A period nobody reported carries
@@ -44,7 +44,7 @@ type PlotProps = {
   series: TrendPoint[];
   labels: TrendLabels;
   format: TrendFormat;
-  tone: ChartTone;
+  tone: TrendTone;
   rtl: boolean;
   hasTarget: boolean;
   width: number | undefined;
@@ -68,7 +68,7 @@ export function TrendChart({
   series: TrendPoint[];
   labels: TrendLabels;
   format: TrendFormat;
-  tone?: ChartTone;
+  tone?: TrendTone;
   rtl?: boolean;
   width?: number;
 }) {
@@ -169,7 +169,7 @@ function Plot({ series, labels, format, tone, rtl, hasTarget, width }: PlotProps
       <Bar
         dataKey="value"
         name={labels.value}
-        fill={toneColor[tone]}
+        fill={fillOf(tone)}
         maxBarSize={series.length < FEW ? chartMark.barWide : chartMark.bar}
         radius={[chartMark.cap, chartMark.cap, 0, 0]}
         isAnimationActive={motion.active}
@@ -197,13 +197,13 @@ function Legend({
 }: {
   value: string;
   target: string | null;
-  tone: ChartTone;
+  tone: TrendTone;
 }) {
   return (
     <figcaption className="flex flex-wrap items-center gap-4 text-xs text-text-muted">
       <Key label={value}>
         <svg width={14} height={10} aria-hidden={true}>
-          <rect x={0} y={0} width={14} height={10} rx={2} fill={toneColor[tone]} />
+          <rect x={0} y={0} width={14} height={10} rx={2} fill={fillOf(tone)} />
         </svg>
       </Key>
       {target && (

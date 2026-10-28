@@ -31,6 +31,7 @@ const JobKind = z.enum([
   'ai_notes_refine',
   'ai_notes_suggest_tags',
   'ai_tasks_breakdown',
+  'ai_kpis_narrative',
   'users_updates',
 ]);
 const stateTone: Record<z.infer<typeof JobState>, string> = {

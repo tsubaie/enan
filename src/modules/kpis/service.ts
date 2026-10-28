@@ -19,16 +19,13 @@ import {
 } from '@/core/db/keyset';
 import { AppError } from '@/core/http/errors';
 import { assignablePeople, getPerson } from '@/modules/people';
-import { notifyOffTarget } from './notifications';
+import { clearReadingNotices, notifyOffTarget } from './notifications';
+import { attentionStatuses, severityRank, deriveMeta, derivePeriods } from './scorecard';
 import {
   Kpi,
   KpiDetail,
   KpiStatus,
   Objective,
-  attentionStatuses,
-  severityRank,
-  deriveMeta,
-  derivePeriods,
   Frequency,
   type KpiCreate,
   type KpiPatch,
@@ -145,7 +142,11 @@ export async function getKpiDetail(ctx: Context, kpiId: string, includeDeleted =
   const { row, at } = await requireRow(ctx, kpiId, includeDeleted);
   const readings = await repo.selectReadings(ctx.db, kpiId);
   const targets = await repo.selectTargets(ctx.db, kpiId);
-  const meta = deriveMeta(row, at);
+  const facts = {
+    ...row,
+    readings: readings.map((reading) => ({ date: reading.readingDate, value: reading.value })),
+  };
+  const meta = deriveMeta(facts, at);
   // The comparisons are centred on the period the KPI is actually measured against, so the middle
   // one repeats the row's answer and the reader starts where the list left them.
   const frequency = Frequency.parse(row.frequency);
@@ -155,7 +156,7 @@ export async function getKpiDetail(ctx: Context, kpiId: string, includeDeleted =
     meta,
     readings: readings.map((reading) => ({ ...reading, future: reading.readingDate > at.today })),
     targets,
-    ...derivePeriods(row, at, base, meta.status, row.previousPeriodValue),
+    ...derivePeriods(facts, at, base, meta),
   });
 }
 async function requireOwner(ctx: Context, ownerId: string | null | undefined) {
@@ -299,6 +300,7 @@ async function addReadingInTransaction(ctx: Context, kpiId: string, input: Readi
     updatedBy: ctx.user.id,
   });
   await writeAudit(ctx.db, ctx.user.id, 'create', 'kpi_reading', row.id, ofKpi(before, input));
+  await clearReadingNotices(ctx, kpiId);
   return notifyOffTarget(ctx, before, await getKpiDetail(ctx, kpiId));
 }
 async function overwriteReadingInTransaction(
@@ -314,6 +316,7 @@ async function overwriteReadingInTransaction(
   const row = await repo.updateReading(ctx.db, existing.id, existing.revision, input, ctx.user.id);
   if (!row) throw new AppError('conflict', { reason: 'state' });
   await writeAudit(ctx.db, ctx.user.id, 'update', 'kpi_reading', existing.id, ofKpi(before, input));
+  await clearReadingNotices(ctx, kpiId);
   return notifyOffTarget(ctx, before, await getKpiDetail(ctx, kpiId));
 }
 async function requireReading(ctx: Context, kpiId: string, readingId: string) {

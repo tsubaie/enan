@@ -4,7 +4,8 @@ import { getSetting } from '@/core/db/settings-repo';
 import { compareTuples } from '@/core/db/keyset';
 import { routes } from '@/core/routes';
 import type { HomeSection } from '@/core/modules/server-manifest';
-import { attentionStatuses, KpiListQuery } from './schema/validation';
+import { KpiListQuery } from './schema/validation';
+import { attentionStatuses } from './scorecard';
 import { keyOf, toKpi, type Scope } from './service';
 import * as repo from './repo';
 // HOME-B01 § Attention KPIs: the page consumes this through the module's server manifest.

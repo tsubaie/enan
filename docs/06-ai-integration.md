@@ -50,6 +50,7 @@ The admin disclosure lists the task/note content, existing tags and assignable p
 | `notes.refine` | default | `notes.refine:<noteId>` | note + context → `NoteRefineOutput` (`features/notes.md`) |
 | `notes.suggest_tags` | fast | `notes.suggest_tags:<noteId>` | content, existing tags → `{ tags }` |
 | `tasks.breakdown` | default | `tasks.breakdown:<taskId>` | task → `{ subtasks[] }` |
+| `kpis.narrative` | default | `kpis.narrative:<narrativeId>` | scoped KPI figures, targets, statuses and recent reading notes → `{ headline, bodyMarkdown, highlights[{ code, summary }] }` (`features/kpis.md` KPIS-B32) |
 | `initiatives.update_draft` | default | `initiatives.draft:<id>` | initiative context → `{ health, body }` |
 | `meetings.brief` | default, effort high, 32 000 output | `meetings.brief:<docId>:<locale>` | document + context + active learnings → `BriefSections` |
 | `meetings.brief_translate` | fast | `meetings.translate:<briefId>:<locale>` | `BriefSections` → `BriefSections` |
@@ -61,7 +62,7 @@ Output follows the language of the input content unless `targetLocale` is given.
 
 ## Cost and admission
 
-Task/note admission reserves two attempts using framed UTF-8 input bytes plus 8192 tokens of schema/prompt allowance and the capped output limit. Monthly usage and active reservations count against the configured budget in workspace timezone months. This conservative policy can reject inputs a tokenizer would admit. Admission runs inside the enqueue transaction, which is the only writer while it runs (ADR 0029), so reservations never interleave. Per-user hourly limits are 30 for refinement/breakdown and 60 for tags.
+Task/note admission reserves two attempts using framed UTF-8 input bytes plus 8192 tokens of schema/prompt allowance and the capped output limit. Monthly usage and active reservations count against the configured budget in workspace timezone months. This conservative policy can reject inputs a tokenizer would admit. Admission runs inside the enqueue transaction, which is the only writer while it runs (ADR 0029), so reservations never interleave. Per-user hourly limits are 30 for refinement/breakdown/scorecard briefs and 60 for tags.
 
 Every attempt records usage and estimated cost using the snapshotted catalog prices. Unknown failed-response usage retains an estimated per-attempt reservation. Active jobs retain their reservation until termination, including while an invocation has been recorded, so admission can temporarily count extra consumption. The admin page shows usage, reservations, an 80-percent warning and thirty-day per-capability estimates. Estimates do not apply provider cache discounts and are not an invoice.
 

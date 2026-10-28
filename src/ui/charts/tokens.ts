@@ -17,6 +17,10 @@ export const toneColor: Record<ChartTone, string> = {
   negative: 'var(--status-bad)',
   neutral: 'var(--muted-text)',
 };
+// `series` is the plain series colour, for marks that carry no verdict of their own (KPIS-B31).
+export type TrendTone = ChartTone | 'series';
+export const fillOf = (tone: TrendTone) =>
+  tone === 'series' ? chartColor.series : toneColor[tone];
 // Marks are thin and the chrome is recessive (dataviz § Mark specs). A column is capped well under
 // its slot so the band's leftover reads as air, and rounds only at the end away from the baseline.
 // `bar` is the column a full history draws; `barWide` is what a short one draws, so a measure with

@@ -14,6 +14,7 @@ const blank: KpiCreate = {
   objectiveId: null,
   ownerId: null,
   notes: '',
+  remindersEnabled: true,
 };
 export function CreateKpi({ api }: { api: CreateApi<KpiCreate, Kpi> }) {
   const t = useTranslations('kpis');
@@ -33,6 +34,7 @@ export function CreateKpi({ api }: { api: CreateApi<KpiCreate, Kpi> }) {
           objectiveId: text('objectiveId') === NO_OBJECTIVE ? null : text('objectiveId'),
           ownerId: text('ownerId') === NO_OWNER ? null : text('ownerId'),
           notes: text('notes'),
+          remindersEnabled: form.get('remindersEnabled') !== null,
         }),
       );
     } catch (failure) {

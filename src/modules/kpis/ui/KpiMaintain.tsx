@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/ui/prim
 import { KpiReadings } from './KpiReadings';
 import { KpiTargets } from './KpiTargets';
 import type { KpiDetail } from '../schema/validation';
+import { useRecordReadingAction } from './use-record-reading';
 type Task = 'readings' | 'targets' | null;
 // KPIS-B08: what a KPI is maintained from is work, not reading. The history and the year's targets
 // are opened by their owner a few times a quarter, and each is a table wider than the record column
@@ -18,7 +19,12 @@ type Task = 'readings' | 'targets' | null;
 // button how much sits behind it, so nothing has to be opened to find out whether it is empty.
 export function KpiMaintenance({ kpi, editable }: { kpi: KpiDetail; editable: boolean }) {
   const t = useTranslations('kpis');
-  const [task, setTask] = useState<Task>(null);
+  const action = useRecordReadingAction();
+  const [task, setTask] = useState<Task>(action.requested && editable ? 'readings' : null);
+  function close() {
+    setTask(null);
+    if (action.requested) action.clear();
+  }
   return (
     <section className="mt-8 flex flex-wrap gap-2">
       <Button
@@ -43,7 +49,7 @@ export function KpiMaintenance({ kpi, editable }: { kpi: KpiDetail; editable: bo
         {t('targets')}
         <span className="text-text-muted">· {t('targetCount', { count: kpi.targets.length })}</span>
       </Button>
-      <Dialog open={task !== null} onOpenChange={(open) => !open && setTask(null)}>
+      <Dialog open={task !== null} onOpenChange={(open) => !open && close()}>
         {/* A phone takes it as a sheet from the bottom edge and a desk as a centred dialog with the
             width the tables want. Only the body scrolls: the title and the close stay put, so a long
             history never scrolls its own way out of the reader's reach. */}

@@ -9,12 +9,10 @@ import {
   percentChangeOf,
   resolveEffectiveTarget,
   deriveMeta,
-  KpiCreate,
-  ReadingCreate,
-  TargetsPut,
-  type Direction,
+  derivePeriods,
   type StatusInput,
-} from '../schema/validation';
+} from '../scorecard';
+import { KpiCreate, ReadingCreate, TargetsPut, type Direction } from '../schema/validation';
 const thresholds = StatusThresholds.parse({
   higher: { on: 0.99, near: 0.85 },
   lower: { on: 1.01, near: 1.18 },
@@ -230,6 +228,45 @@ it('KPIS-B26 a target already past does not go stale the way the current one doe
   const old = { ...shiftable, current: { date: '2026-01-05', value: 90 } };
   expect(deriveMeta(old, { today: TODAY, thresholds }).status).toBe('stale');
   expect(deriveMeta(old, { today: TODAY, thresholds, offset: -1 }).status).toBe('on_target');
+});
+// KPIS-B31: a period is read at its own reading, and an older one never fills its arc.
+const history = {
+  ...shiftable,
+  current: { date: '2026-09-01', value: 90 },
+  sparkline: [
+    { date: '2026-05-10', value: 50 },
+    { date: '2026-09-01', value: 90 },
+  ],
+};
+it('KPIS-B31 a neighbouring period is read at the reading dated inside it', () => {
+  const back = deriveMeta(history, { today: TODAY, thresholds, offset: -1 });
+  expect(back.achievement).toBeCloseTo(50 / 60);
+  const next = deriveMeta(history, { today: TODAY, thresholds, offset: 1 });
+  expect(next.achievement).toBeNull();
+  expect(next.status).toBe('no_data');
+});
+it('KPIS-B31 a period with no reading of its own reads N/A, never an older figure', () => {
+  const meta = deriveMeta(history, { today: TODAY, thresholds });
+  const { periods } = derivePeriods(
+    history,
+    { today: TODAY, thresholds },
+    { year: 2026, period: 3 },
+    meta,
+  );
+  expect(periods.map((row) => row.value)).toEqual([50, 90, null]);
+  expect(periods[2]).toMatchObject({ achievement: null, status: 'no_data', target: 120 });
+  expect(periods[1]).toMatchObject({ achievement: meta.achievement, status: meta.status });
+});
+it('KPIS-B31 a stale reading leaves the arc empty against the current target', () => {
+  const old = {
+    ...history,
+    current: { date: '2026-01-05', value: 99 },
+    sparkline: [{ date: '2026-01-05', value: 99 }],
+  };
+  const meta = deriveMeta(old, { today: TODAY, thresholds });
+  expect(meta.status).toBe('stale');
+  expect(meta.achievement).toBeNull();
+  expect(meta.current).toBe(99);
 });
 it('KPIS-I04 thresholds are rejected when a band is ordered against its direction', () => {
   expect(

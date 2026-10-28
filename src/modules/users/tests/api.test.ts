@@ -475,7 +475,12 @@ it('ADMIN-B10 the AI page reads the connection status, tests it without credenti
   const before = await controls.read(request('GET', '/admin/ai/controls'));
   expect(await before.json()).toMatchObject({
     data: {
-      enabledCapabilities: ['tasks.breakdown', 'notes.refine', 'notes.suggest_tags'],
+      enabledCapabilities: [
+        'tasks.breakdown',
+        'notes.refine',
+        'notes.suggest_tags',
+        'kpis.narrative',
+      ],
       monthlyBudgetMicros: null,
       usedTokens: 0,
       reservedTokens: 0,

@@ -9,7 +9,7 @@ import {
   check,
 } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
-import { users, time, now, stamps } from '@/core/db/system-schema';
+import { users, jobs, time, now, stamps, boolean, json } from '@/core/db/system-schema';
 import { people } from '@/modules/people/schema/db';
 // docs/03 § Numbers: KPI values and targets are REAL (an IEEE double), the same number the JSON
 // boundary carries, so what a reading holds is exactly what the API returns.
@@ -46,6 +46,8 @@ export const kpis = sqliteTable(
     ownerId: text('owner_id').references(() => people.id, { onDelete: 'set null' }),
     notes: text().notNull().default(''),
     sortOrder: integer('sort_order').notNull().default(0),
+    // KPIS-B30: whether the owner is reminded of a period that has no reading yet.
+    remindersEnabled: boolean('reminders_enabled').notNull().default(true),
     ...stamps(),
     // Search corpus written by the repo (ADR 0029): normalize(name) + '\n' + normalize(rest).
     searchText: text('search_text').notNull().default(''),
@@ -115,5 +117,40 @@ export const kpiTargets = sqliteTable(
     check('kpi_targets_period_check', sql`${t.period} between 1 and 12`),
     check('kpi_targets_year_check', sql`${t.year} between 1900 and 2999`),
     check('kpi_targets_value_check', sql`abs(${t.targetValue}) < 10000000000`),
+  ],
+);
+// KPIS-B32: an executive brief written over a scope of the scorecard — the whole of it, one
+// objective or one KPI — in one language and against one comparison period. `data_hash` is the
+// digest of the figures it was written from, so a brief whose figures have since moved reads as
+// stale rather than as current.
+export const kpiNarratives = sqliteTable(
+  'kpi_narratives',
+  {
+    id: text().primaryKey(),
+    objectiveId: text('objective_id').references(() => objectives.id, { onDelete: 'cascade' }),
+    kpiId: text('kpi_id').references(() => kpis.id, { onDelete: 'cascade' }),
+    locale: text().notNull(),
+    periodMode: text('period_mode').notNull().default('current'),
+    dataHash: text('data_hash').notNull(),
+    jobId: text('job_id').references(() => jobs.id, { onDelete: 'set null' }),
+    status: text().notNull().default('generating'),
+    headline: text(),
+    bodyMarkdown: text('body_markdown'),
+    highlightsJson: json('highlights_json'),
+    error: text(),
+    createdAt: time('created_at').notNull().default(now),
+    updatedAt: time('updated_at').notNull().default(now),
+    createdBy: text('created_by').references(() => users.id),
+    deletedAt: time('deleted_at'),
+    deletedOpId: text('deleted_op_id'),
+  },
+  (t) => [
+    index('kpi_narratives_kpi_idx').on(t.kpiId, t.locale, t.createdAt),
+    index('kpi_narratives_objective_idx').on(t.objectiveId),
+    index('kpi_narratives_job_idx').on(t.jobId),
+    index('kpi_narratives_creator_idx').on(t.createdBy),
+    check('kpi_narratives_locale_check', sql`${t.locale} in ('en', 'ar')`),
+    check('kpi_narratives_period_check', sql`${t.periodMode} in ('previous', 'current', 'next')`),
+    check('kpi_narratives_status_check', sql`${t.status} in ('generating', 'ready', 'failed')`),
   ],
 );

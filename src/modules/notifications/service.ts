@@ -3,6 +3,7 @@ import { transactional } from '@/core/db/transaction';
 import type { Context } from '@/core/auth/session';
 import { AppError } from '@/core/http/errors';
 import { notificationContributors } from '@/core/modules/registry';
+import type { NotificationSubject } from '@/core/modules/server-manifest';
 import { selectFeed, selectOwn, markRead, markManyRead } from '@/core/db/notifications-repo';
 import { z } from 'zod';
 import type { FeedFilter, FeedRow } from '@/core/db/notifications-repo';
@@ -23,7 +24,7 @@ async function resolveSubjects(
   const byType = new Map<string, string[]>();
   for (const row of page)
     byType.set(row.subjectType, [...(byType.get(row.subjectType) ?? []), row.subjectId]);
-  const subjects = new Map<string, { title: string; href: string }>();
+  const subjects = new Map<string, NotificationSubject>();
   for (const [type, ids] of byType) {
     const resolve = resolvers.get(type);
     if (!resolve) continue;
@@ -34,10 +35,7 @@ async function resolveSubjects(
 // NOTIF-B06: a row becomes a line only if its subject still resolves. A kind the database holds
 // but this build no longer declares is treated the same way -- dropped rather than rendered as
 // something the reader cannot act on.
-function draw(
-  row: FeedRow,
-  subjects: Map<string, { title: string; href: string }>,
-): Notification | null {
+function draw(row: FeedRow, subjects: Map<string, NotificationSubject>): Notification | null {
   const subject = subjects.get(`${row.subjectType}:${row.subjectId}`);
   const kind = NotificationKind.safeParse(row.kind);
   if (!subject || !kind.success) return null;
@@ -47,7 +45,7 @@ function draw(
     subjectType: row.subjectType,
     subjectId: row.subjectId,
     title: subject.title,
-    href: subject.href,
+    href: subject.hrefs?.[kind.data] ?? subject.href,
     actorName: actorName(row.payload),
     createdAt: row.createdAt.toISOString(),
     readAt: row.readAt?.toISOString() ?? null,

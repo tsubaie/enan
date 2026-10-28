@@ -69,5 +69,6 @@ One decision per file. Format: **Status**, **Context**, **Decision**, **Conseque
 | 0063 | One Install now for the updater and the app | accepted |
 | 0064 | Passkeys through Better Auth | accepted |
 | 0065 | Voice memos save their audio first and take their transcripts from the reader | accepted |
+| 0066 | Internal people link to workspace logins by their address | accepted |
 
 Open decisions awaiting an ADR: license (see roadmap); chart library confirmation (`recharts`).

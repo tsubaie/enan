@@ -98,7 +98,9 @@ Every module under `src/modules/<name>/` has this shape. The structure audit rea
 | `search.ts` | if the module owns searchable records | The workspace-wide search provider (ADR 0021): the module's own query over its `search_text` corpus, mapped to hits. A capability gets its own file, as `jobs.ts` does, so `service.ts` keeps the business rules. |
 | `home.ts` | optional | The module's Home provider (HOME-B01, HOME-B03): its sections, counted and shaped in one query, mapped to rows with their hrefs. A provider small enough may stay in `service.ts`; it moves here when the service is at its limit, for the reason `search.ts` gives. |
 | `voice/` | optional | A module's voice memos (`repo.ts` for their SQL, `service.ts` for their rules), split out of the module's own repo and service when those are at their limit, for the reason `search.ts` gives. Only Notes has one (NOTES-B29, NOTES-B36). |
-| `ai/` | if the module owns capabilities | `capabilities.ts` and `prompts/<name>.v<N>.ts`. |
+| `scorecard.ts` | optional | Pure derivations a module's reads compute and never store (statuses, ratios, the periods a figure is read against), split out of `schema/validation.ts` when it is at its limit. Client-safe: no database. Only KPIs has one (KPIS-B01–B05, KPIS-B31). |
+| `reminders/` | optional | A module's scheduled reminders (`repo.ts` for the candidates' SQL, `service.ts` for who is told and when), split out of the module's own repo and service when those are at their limit, as `voice/` is. Only KPIs has one (KPIS-B30). |
+| `ai/` | if the module owns capabilities | `capabilities.ts` and `prompts/<name>.v<N>.ts`; where the module's repo and service are at their limit, the capability's own `repo.ts` and `service.ts` (KPIS-B32). |
 | `ui/` | yes | Components, `queries.ts` (TanStack hooks), `index.ts` (components other modules may reuse). |
 | `tests/` | yes | Scenario tests named by requirement ID (see `08-testing-strategy.md`). |
 | `index.ts` | yes | Public surface: service functions and types for other modules, plus `server`. |

@@ -57,6 +57,7 @@ it('NOTIF-I03 the database refuses a kind no module declares', async () => {
     'task.overdue',
     'note.mentioned',
     'kpi.off_target',
+    'kpi.reading_due',
     'job.finished',
     'update.installed',
     'update.failed',

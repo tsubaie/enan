@@ -27,10 +27,14 @@ import { type AiReview } from './queries';
 // is the one person who can act.
 // The catalog is two levels deep by contract, and a capability's own id carries a dot that
 // next-intl would read as a path, so the detail line is looked up through a map of literal keys.
-const detail: Record<z.infer<typeof AiCapability>, 'unavailableRefine' | 'unavailableTags' | 'unavailableBreakdown'> = {
+const detail: Record<
+  z.infer<typeof AiCapability>,
+  'unavailableRefine' | 'unavailableTags' | 'unavailableBreakdown' | 'unavailableNarrative'
+> = {
   'notes.refine': 'unavailableRefine',
   'notes.suggest_tags': 'unavailableTags',
   'tasks.breakdown': 'unavailableBreakdown',
+  'kpis.narrative': 'unavailableNarrative',
 };
 // The notice names the five fields it actually reads rather than taking the whole review: it does
 // not depend on the job, and saying so keeps the dependency honest.

@@ -50,7 +50,7 @@ export function useKpiColumns(): Column<Kpi>[] {
       key: 'current',
       head: t('currentReading'),
       numeric: true,
-      cell: (kpi) => value(kpi.meta.current, kpi) ?? t('noReading'),
+      cell: (kpi) => value(kpi.meta.current, kpi) ?? t('notAvailable'),
     },
     {
       key: 'target',

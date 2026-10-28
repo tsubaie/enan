@@ -54,8 +54,9 @@ export function KpiCard({ kpi }: { kpi: Kpi }) {
 // has no proportion to draw, so the arc stays an empty track and says so rather than reading as
 // zero — which is a different and much worse answer.
 function KpiDial({ kpi }: { kpi: Kpi }) {
+  const t = useTranslations('kpis');
   const labels = useKpiLabels();
-  const { achievement, status } = kpi.meta;
+  const { achievement, status, current } = kpi.meta;
   return (
     <span className="kpi-dial relative grid size-[84px] shrink-0 place-items-center">
       <MeterArc ratio={achievement} tone={labels.tone(status)} className="absolute inset-0" />
@@ -65,7 +66,13 @@ function KpiDial({ kpi }: { kpi: Kpi }) {
           achievement === null && 'text-text-muted',
         )}
       >
-        {achievement === null ? '—' : labels.percent(achievement)}
+        {current === null ? (
+          <bdi dir="ltr">{t('notAvailable')}</bdi>
+        ) : achievement === null ? (
+          '—'
+        ) : (
+          labels.percent(achievement)
+        )}
       </span>
     </span>
   );
@@ -87,7 +94,7 @@ function KpiFigures({ kpi }: { kpi: Kpi }) {
             meta.current === null && 'text-base text-text-muted',
           )}
         >
-          {meta.current === null ? t('noReading') : labels.value(meta.current, kpi.unit)}
+          {meta.current === null ? t('notAvailable') : labels.value(meta.current, kpi.unit)}
         </span>
         <KpiChange kpi={kpi} />
       </span>

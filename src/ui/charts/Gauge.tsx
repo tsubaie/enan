@@ -42,6 +42,27 @@ function Arc({ filled, tone, label }: { filled: number; tone: ChartTone; label: 
     </span>
   );
 }
+// KPIS-B31: with no ratio to draw, the meter is still a meter — the empty track, drawn without
+// the chart runtime, so "no reading" reads as an unfilled arc rather than as a missing chart.
+function Track() {
+  return (
+    <svg
+      width={SIZE.width}
+      height={SIZE.height}
+      viewBox="0 0 208 116"
+      aria-hidden={true}
+      className="block"
+    >
+      <path
+        d="M 21 100 A 83 83 0 0 1 187 100"
+        stroke={chartColor.grid}
+        strokeWidth={26}
+        strokeLinecap="round"
+        fill="none"
+      />
+    </svg>
+  );
+}
 export function Gauge({
   achievement,
   tone,
@@ -61,11 +82,11 @@ export function Gauge({
   return (
     <div className="grid justify-items-center gap-1.5">
       <div className="relative grid justify-items-center">
-        {achievement !== null && <Arc filled={filled} tone={tone} label={label} />}
+        {achievement === null ? <Track /> : <Arc filled={filled} tone={tone} label={label} />}
         <div
           className={
             achievement === null
-              ? 'grid justify-items-center gap-2 py-6'
+              ? 'pointer-events-none absolute inset-x-0 bottom-4 flex flex-col items-center justify-end'
               : 'absolute inset-x-0 bottom-1 grid justify-items-center gap-1'
           }
         >
