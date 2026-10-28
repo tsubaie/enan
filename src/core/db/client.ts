@@ -317,6 +317,11 @@ export function readOnlyDb(): Database {
             statements.forEach(refuse);
             return target.batch(statements, mode);
           };
+        // drizzle's own transaction() would open a BEGIN outside the queue with nothing refused.
+        if (key === 'transaction' && !shared().holding.getStore())
+          throw new Error(
+            'a read-only handler cannot open a transaction: use withTransaction / a transactional service',
+          );
         return bound(target, Reflect.get(target, key));
       },
     }),

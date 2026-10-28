@@ -68,3 +68,16 @@ it('ADR 0067 ADR 0054 a GET may still write through a service transaction of its
   expect((await route(get())).status).toBe(200);
   expect(await count()).toBe(1);
 });
+it('ADR 0067 a transaction opened directly on the read-only handle is refused and stores nothing', async () => {
+  const route = defineHandler({
+    guard: 'public',
+    input: z.strictObject({}),
+    response: z.object({}),
+    handler: async (_, ctx) => {
+      await ctx.db.transaction((tx) => tx.insert(jobs).values(job()));
+      return {};
+    },
+  });
+  expect((await route(get())).status).toBe(500);
+  expect(await count()).toBe(0);
+});
