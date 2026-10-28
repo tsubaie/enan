@@ -117,6 +117,7 @@ Browser ──HTTP──▶ src/app/api/v1/tasks/route.ts
                                          └─▶ SQLite file (libsql)
 ```
 
+- A request that writes runs in one immediate transaction behind the process-wide write queue (ADR 0029). A `GET` runs on the pool without a transaction, outside that queue, on a handle that refuses a write (ADR 0067); a GET that must write sets `transaction: true`, and a slow handler of another method may set `transaction: false` and write only through its service's own transaction (ADR 0045, ADR 0054). Two statements of one GET may run on different pooled connections and see different commits; a list shown beside its count tolerates that, and no read-only handler needs one snapshot across statements.
 - Server components MAY call `service.ts` for initial page data with the request's `ctx`. They MUST NOT call `repo.ts`.
 - Client components use TanStack Query hooks from `modules/<m>/ui/queries.ts`, which call `/api/v1/...` through `core/http/client.ts`. Components never call `fetch` directly.
 - Cross-module effects are explicit awaited calls in the originating service, inside its transaction. There is no event bus. A durable side effect that must survive a crash is a job inserted in the same transaction.
