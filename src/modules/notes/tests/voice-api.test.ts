@@ -1,5 +1,4 @@
 import { afterAll, afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest';
-import { readdir } from 'node:fs/promises';
 import { eq } from 'drizzle-orm';
 import { closeDatabase, db } from '@/core/db/client';
 import { clearDatabase } from '@/core/db/reset';
@@ -8,7 +7,7 @@ import { insertUser } from '@/core/db/auth-repo';
 import { auditLog, files } from '@/core/db/system-schema';
 import { id } from '@/core/db/ids';
 import { env } from '@/core/config/env';
-import { readStoredFile } from '@/core/files/storage';
+import { readStoredFile, storageUsage } from '@/core/files/storage';
 import { User } from '@/core/http/user-schema';
 import { resetConnection } from '@/core/ai/client';
 import { latestAiJob } from '@/core/db/ai-jobs-repo';
@@ -178,13 +177,12 @@ it('NOTES-B29 a disguised file, an unknown note and a deleted note are refused',
   expect(await db().select().from(noteVoiceMemos)).toEqual([]);
 });
 it('NOTES-B29 an upload to an unknown note stores no audio', async () => {
-  const stored = () => readdir(env().FILES_DIR).catch(() => [] as string[]);
-  const before = await stored();
+  const before = await storageUsage();
   // Random bytes: the key is the content's hash, so an earlier run cannot have stored this one.
   const bytes = crypto.getRandomValues(new Uint8Array(2048));
   bytes.set([0x1a, 0x45, 0xdf, 0xa3]);
   expect((await upload(id(), bytes)).status).toBe(404);
-  expect(await stored()).toEqual(before);
+  expect(await storageUsage()).toBe(before);
 });
 it('NOTES-I08 a note holds at most twenty voice memos', async () => {
   const note = await createNote();
