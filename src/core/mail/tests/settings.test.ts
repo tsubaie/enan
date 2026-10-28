@@ -134,6 +134,19 @@ it('ADMIN-B60 saving the form the server variables filled keeps their password, 
   await write({ ...filled, host: 'other.example.test', fromAddress: 'office@example.test' });
   expect((await mailServer(db()))?.password).toBeNull();
 });
+it('ADMIN-B60 the server variables password is kept when SMTP_HOST has upper-case letters', async () => {
+  overrides.value = {
+    SMTP_HOST: 'SMTP.Example.test',
+    SMTP_PORT: 465,
+    SMTP_USER: 'env-user',
+    SMTP_PASSWORD: 'env-password',
+    MAIL_FROM: 'env@example.test',
+  };
+  const filled = { host: 'SMTP.Example.test', port: 465, username: 'env-user', password: '' };
+  const status = await write({ ...filled, fromAddress: 'office@example.test' });
+  expect(status).toMatchObject({ host: 'smtp.example.test', hasPassword: true });
+  expect((await mailServer(db()))?.password).toBe('env-password');
+});
 it('ADMIN-B60 refuses a host that is not a server name and an invalid sender', async () => {
   await expect(write({ ...server, host: 'smtp.example.test:25' })).rejects.toThrow();
   await expect(write({ ...server, host: 'https://smtp.example.test' })).rejects.toThrow();
