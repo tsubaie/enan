@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
@@ -413,6 +414,8 @@ func (u *Updater) readable(ctx context.Context, running, candidate *Image, diges
 	return true
 }
 
+var digestPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+
 // Install installs exactly digest, the release Admin → Updates announced, not whatever the
 // channel names by now (ADMIN-B67). A release the running one cannot go back from needs confirm.
 func (u *Updater) Install(ctx context.Context, digest string, confirm bool) {
@@ -434,8 +437,9 @@ func (u *Updater) Install(ctx context.Context, digest string, confirm bool) {
 	}
 	u.status = Status{Channel: u.status.Channel, Running: u.status.Running, UpdaterUpdate: u.status.UpdaterUpdate, LastCheckAt: u.status.LastCheckAt, StartedAt: u.now(), State: Updating, Step: "check"}
 	u.publish()
-	if !strings.HasPrefix(digest, "sha256:") {
-		u.fail(ctx, "check", fmt.Errorf("%q is not an image digest", digest), "")
+	// The digest goes into a registry URL path: only a full sha256 digest, as Enan validates it.
+	if !digestPattern.MatchString(digest) {
+		u.fail(ctx, "check", fmt.Errorf("%q is not a sha256 image digest", digest), "")
 		return
 	}
 	app, ref, running, err := u.current(ctx)

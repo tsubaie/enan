@@ -18,6 +18,9 @@ import (
 
 const repo = "ghcr.io/tsubaie/enan"
 
+// two is the next release, a full digest: Install accepts nothing shorter (ADMIN-B67).
+const two = "sha256:" + "2222222222222222222222222222222222222222222222222222222222222222"
+
 // fake is an in-memory Docker daemon and registry: enough of both for the update cycle.
 type fake struct {
 	containers map[string]*docker.Container
@@ -390,8 +393,8 @@ func noNewImageIsAQuietCheck(t *testing.T) {
 
 func aNewImageIsBackedUpInstalledAndVerified(t *testing.T) {
 	u, f, sent := setup(t)
-	f.image("img-2", "sha256:two", "1.1.0", 8, 0)
-	f.publish("latest", "sha256:two")
+	f.image("img-2", two, "1.1.0", 8, 0)
+	f.publish("latest", two)
 	u.Check(context.Background())
 	if u.status.State != Updated {
 		t.Fatalf("state %s: %s at %s", u.status.State, u.status.Error, u.status.Step)
@@ -444,9 +447,9 @@ func anySlice(value any) any {
 
 func aFailingImageIsRolledBackAndNotRetried(t *testing.T) {
 	u, f, sent := setup(t)
-	f.image("img-2", "sha256:two", "1.1.0", 8, 0)
+	f.image("img-2", two, "1.1.0", 8, 0)
 	f.broken["img-2"] = true
-	f.publish("latest", "sha256:two")
+	f.publish("latest", two)
 	u.Check(context.Background())
 	if u.status.State != RolledBack || u.status.Step != "verify" {
 		t.Fatalf("state %s at %s: %s", u.status.State, u.status.Step, u.status.Error)
@@ -481,8 +484,8 @@ func aFailingImageIsRolledBackAndNotRetried(t *testing.T) {
 
 func aFailedBackupSwitchesNothing(t *testing.T) {
 	u, f, _ := setup(t)
-	f.image("img-2", "sha256:two", "1.1.0", 8, 0)
-	f.publish("latest", "sha256:two")
+	f.image("img-2", two, "1.1.0", 8, 0)
+	f.publish("latest", two)
 	f.backupCode = 1
 	u.Check(context.Background())
 	if u.status.State != Failed || u.status.Step != "backup" || app(t, f).Image != "img-1" {
@@ -513,8 +516,8 @@ func guards(t *testing.T) {
 			}
 			// The running image's own newest contract migration is 6.
 			f.image("img-1", "sha256:one", "1.0.0", 7, 6)
-			f.image("img-2", "sha256:two", tc.version, tc.schema, tc.contract)
-			f.publish("latest", "sha256:two")
+			f.image("img-2", two, tc.version, tc.schema, tc.contract)
+			f.publish("latest", two)
 			u.Check(context.Background())
 			if u.status.State != tc.state || u.status.Confirm != (tc.state == Available) {
 				t.Fatalf("state %s, confirm %v: %s", u.status.State, u.status.Confirm, u.status.Error)
@@ -525,8 +528,8 @@ func guards(t *testing.T) {
 
 func anUpdateInterruptedAfterTheSwitchIsFinished(t *testing.T) {
 	u, f, _ := setup(t)
-	f.image("img-2", "sha256:two", "1.1.0", 8, 0)
-	f.pulled["sha256:two"] = true
+	f.image("img-2", two, "1.1.0", 8, 0)
+	f.pulled[two] = true
 	// The process stopped after creating and starting the new container.
 	old := app(t, f)
 	u.state = State{Phase: Verifying, Target: &Image{ID: "img-2", Version: "1.1.0", Revision: "img-2"}, Previous: &Image{ID: "img-1"},
@@ -543,10 +546,10 @@ func anUpdateInterruptedAfterTheSwitchIsFinished(t *testing.T) {
 
 func anUpdateInterruptedDuringTheSwitchIsReversed(t *testing.T) {
 	u, f, _ := setup(t)
-	f.image("img-2", "sha256:two", "1.1.0", 8, 0)
+	f.image("img-2", two, "1.1.0", 8, 0)
 	// The process stopped after renaming and stopping the old container, before creating the new.
 	old := app(t, f)
-	u.state = State{Phase: Switching, Target: &Image{ID: "img-2", Digest: "sha256:two"}, Previous: &Image{ID: "img-1", Version: "1.0.0", Revision: "img-1"},
+	u.state = State{Phase: Switching, Target: &Image{ID: "img-2", Digest: two}, Previous: &Image{ID: "img-1", Version: "1.0.0", Revision: "img-1"},
 		PreviousContainer: old.ID, Name: "enan-app-1", Ref: repo + ":latest", Rejected: map[string]string{}, Alerted: map[string]bool{}}
 	old.Name, old.State.Running = "enan-app-1"+previousSuffix, false
 	f.tags[repo+":latest"] = "img-2"
@@ -559,8 +562,8 @@ func anUpdateInterruptedDuringTheSwitchIsReversed(t *testing.T) {
 
 func pauseAndResume(t *testing.T) {
 	u, f, _ := setup(t)
-	f.image("img-2", "sha256:two", "1.1.0", 8, 0)
-	f.publish("latest", "sha256:two")
+	f.image("img-2", two, "1.1.0", 8, 0)
+	f.publish("latest", two)
 	u.Apply(context.Background(), Command{Command: "pause"})
 	u.Check(context.Background())
 	if u.status.State != Paused || len(f.calls) != 0 {
@@ -577,8 +580,8 @@ func pauseAndResume(t *testing.T) {
 
 func manualRollbackGoesBackToTheReplacedImage(t *testing.T) {
 	u, f, _ := setup(t)
-	f.image("img-2", "sha256:two", "1.1.0", 8, 0)
-	f.publish("latest", "sha256:two")
+	f.image("img-2", two, "1.1.0", 8, 0)
+	f.publish("latest", two)
 	u.Check(context.Background())
 	u.status.UpdaterUpdate = "sha256:updater"
 	u.Apply(context.Background(), Command{Command: "rollback"})
@@ -598,8 +601,8 @@ func manualRollbackGoesBackToTheReplacedImage(t *testing.T) {
 
 func aFailingContainerIsStoppedBeforeRemoval(t *testing.T) {
 	u, f, _ := setup(t)
-	f.image("img-2", "sha256:two", "1.1.0", 8, 0)
-	f.publish("latest", "sha256:two")
+	f.image("img-2", two, "1.1.0", 8, 0)
+	f.publish("latest", two)
 	f.broken["img-2"] = true
 	u.Check(context.Background())
 	if u.status.State != RolledBack || len(f.killed) != 0 {
@@ -610,8 +613,8 @@ func aFailingContainerIsStoppedBeforeRemoval(t *testing.T) {
 func theNewContainerRunsTheChannelTag(t *testing.T) {
 	u, f, _ := setup(t)
 	u.Config.Channel = "edge"
-	f.image("img-2", "sha256:two", "1.1.0", 8, 0)
-	f.publish("edge", "sha256:two")
+	f.image("img-2", two, "1.1.0", 8, 0)
+	f.publish("edge", two)
 	u.Check(context.Background())
 	running := app(t, f)
 	if u.status.State != Updated || running.Ref() != repo+":edge" || running.Image != "img-2" {
@@ -624,7 +627,7 @@ func theNewContainerRunsTheChannelTag(t *testing.T) {
 
 func aPinnedContainerIsReplacedOnTheTag(t *testing.T) {
 	u, f, _ := setup(t)
-	f.image("img-2", "sha256:two", "1.1.0", 8, 0)
+	f.image("img-2", two, "1.1.0", 8, 0)
 	pinned := app(t, f)
 	pinned.Config["Image"] = repo + "@sha256:one"
 	target := &Image{ID: "img-2"}
@@ -637,8 +640,8 @@ func aPinnedContainerIsReplacedOnTheTag(t *testing.T) {
 
 func aShutdownDuringVerificationIsLeftForRecovery(t *testing.T) {
 	u, f, sent := setup(t)
-	f.image("img-2", "sha256:two", "1.1.0", 8, 0)
-	f.publish("latest", "sha256:two")
+	f.image("img-2", two, "1.1.0", 8, 0)
+	f.publish("latest", two)
 	// Not healthy yet when the stop arrives; the verification wait sees the cancelled context.
 	f.broken["img-2"] = true
 	ctx, cancel := context.WithCancel(context.Background())
@@ -656,11 +659,11 @@ func aShutdownDuringVerificationIsLeftForRecovery(t *testing.T) {
 
 func aFailedRollbackPausesTheUpdater(t *testing.T) {
 	u, f, sent := setup(t)
-	f.image("img-2", "sha256:two", "1.1.0", 8, 0)
-	f.publish("latest", "sha256:two")
+	f.image("img-2", two, "1.1.0", 8, 0)
+	f.publish("latest", two)
 	f.broken["img-1"], f.broken["img-2"] = true, true
 	u.Check(context.Background())
-	if u.status.State != RollbackFailed || !u.state.Paused || u.state.Rejected["sha256:two"] == "" {
+	if u.status.State != RollbackFailed || !u.state.Paused || u.state.Rejected[two] == "" {
 		t.Fatalf("state %s, paused %v, rejected %v", u.status.State, u.state.Paused, u.state.Rejected)
 	}
 	f.calls = nil
@@ -776,8 +779,8 @@ func historyKeepsTheLastOutcomes(t *testing.T) {
 
 func aHeldUpdateIsOneHistoryEntry(t *testing.T) {
 	u, f, sent := setup(t)
-	f.image("img-2", "sha256:two", "1.1.0", 9, 8)
-	f.publish("latest", "sha256:two")
+	f.image("img-2", two, "1.1.0", 9, 8)
+	f.publish("latest", two)
 	for range 5 {
 		u.Check(context.Background())
 	}
@@ -793,8 +796,8 @@ func aHeldUpdateIsOneHistoryEntry(t *testing.T) {
 func announceModeNeverInstalls(t *testing.T) {
 	u, f, sent := setup(t)
 	u.Apply(context.Background(), Command{Command: "settings", Automatic: ptr(false)})
-	f.image("img-2", "sha256:two", "2026.11.0", 8, 0)
-	f.publish("latest", "sha256:two")
+	f.image("img-2", two, "2026.11.0", 8, 0)
+	f.publish("latest", two)
 	for range 3 {
 		u.Check(context.Background())
 	}
@@ -812,13 +815,18 @@ func announceModeNeverInstalls(t *testing.T) {
 func installNowInstallsTheAnnouncedDigest(t *testing.T) {
 	u, f, _ := setup(t)
 	u.Apply(context.Background(), Command{Command: "settings", Automatic: ptr(false)})
-	f.image("img-2", "sha256:two", "2026.11.0", 8, 0)
-	f.publish("latest", "sha256:two")
+	f.image("img-2", two, "2026.11.0", 8, 0)
+	f.publish("latest", two)
 	u.Check(context.Background())
-	// A newer release is published after the page showed sha256:two.
+	// A newer release is published after the page showed two.
 	f.image("img-3", "sha256:three", "2026.11.1", 8, 0)
 	f.publish("latest", "sha256:three")
-	u.Apply(context.Background(), Command{Command: "install", Digest: "sha256:two"})
+	// Only a full sha256 digest reaches the registry's URL path.
+	u.Apply(context.Background(), Command{Command: "install", Digest: "sha256:../x"})
+	if u.status.State != Failed || u.status.Step != "check" || len(f.pulled) != 0 {
+		t.Fatalf("a malformed digest was not refused: state %s/%s, pulled %v", u.status.State, u.status.Step, f.pulled)
+	}
+	u.Apply(context.Background(), Command{Command: "install", Digest: two})
 	if u.status.State != Updated || app(t, f).Image != "img-2" || u.status.Backup == "" {
 		t.Fatalf("state %s: %s, running %s", u.status.State, u.status.Error, app(t, f).Image)
 	}
@@ -830,17 +838,17 @@ func installNowInstallsTheAnnouncedDigest(t *testing.T) {
 
 func installNowOfAContractMigrationNeedsConfirmation(t *testing.T) {
 	u, f, _ := setup(t)
-	f.image("img-2", "sha256:two", "2026.11.0", 9, 8)
-	f.publish("latest", "sha256:two")
+	f.image("img-2", two, "2026.11.0", 9, 8)
+	f.publish("latest", two)
 	u.Check(context.Background())
 	if u.status.State != Available || !u.status.Confirm {
 		t.Fatalf("automatic installed a contract migration: state %s", u.status.State)
 	}
-	u.Apply(context.Background(), Command{Command: "install", Digest: "sha256:two"})
-	if u.status.State != Failed || u.status.Step != "guard" || app(t, f).Image != "img-1" || f.pulled["sha256:two"] {
+	u.Apply(context.Background(), Command{Command: "install", Digest: two})
+	if u.status.State != Failed || u.status.Step != "guard" || app(t, f).Image != "img-1" || f.pulled[two] {
 		t.Fatalf("unconfirmed: state %s at %s, running %s", u.status.State, u.status.Step, app(t, f).Image)
 	}
-	u.Apply(context.Background(), Command{Command: "install", Digest: "sha256:two", Confirm: true})
+	u.Apply(context.Background(), Command{Command: "install", Digest: two, Confirm: true})
 	if u.status.State != Updated || app(t, f).Image != "img-2" || u.status.Backup == "" {
 		t.Fatalf("confirmed: state %s: %s", u.status.State, u.status.Error)
 	}
@@ -849,11 +857,11 @@ func installNowOfAContractMigrationNeedsConfirmation(t *testing.T) {
 func aPausedUpdaterInstallsNothing(t *testing.T) {
 	u, f, _ := setup(t)
 	u.Apply(context.Background(), Command{Command: "settings", Automatic: ptr(false)})
-	f.image("img-2", "sha256:two", "2026.11.0", 8, 0)
-	f.publish("latest", "sha256:two")
+	f.image("img-2", two, "2026.11.0", 8, 0)
+	f.publish("latest", two)
 	u.Check(context.Background())
 	u.Apply(context.Background(), Command{Command: "pause"})
-	u.Apply(context.Background(), Command{Command: "install", Digest: "sha256:two"})
+	u.Apply(context.Background(), Command{Command: "install", Digest: two})
 	if app(t, f).Image != "img-1" || u.status.State != Available {
 		t.Fatalf("paused: state %s, running %s", u.status.State, app(t, f).Image)
 	}
@@ -862,8 +870,8 @@ func aPausedUpdaterInstallsNothing(t *testing.T) {
 func automaticOnAndOff(t *testing.T) {
 	u, f, _ := setup(t)
 	u.Apply(context.Background(), Command{Command: "settings", Automatic: ptr(false)})
-	f.image("img-2", "sha256:two", "2026.11.0", 8, 0)
-	f.publish("latest", "sha256:two")
+	f.image("img-2", two, "2026.11.0", 8, 0)
+	f.publish("latest", two)
 	u.Check(context.Background())
 	if due := u.Apply(context.Background(), Command{Command: "settings", Automatic: ptr(true)}); !due {
 		t.Fatal("turning automatic on did not ask for a check")
@@ -894,8 +902,8 @@ func automaticInstallsWaitForTheWindow(t *testing.T) {
 		t.Fatalf("an invalid window was kept: %q", u.state.Window)
 	}
 	u.Apply(context.Background(), Command{Command: "settings", Window: ptr("02:00-05:00")})
-	f.image("img-2", "sha256:two", "2026.11.0", 8, 0)
-	f.publish("latest", "sha256:two")
+	f.image("img-2", two, "2026.11.0", 8, 0)
+	f.publish("latest", two)
 	u.Check(context.Background())
 	if u.status.State != Available || u.status.Window != "02:00-05:00" || u.status.LastCheckAt.IsZero() {
 		t.Fatalf("outside: state %s", u.status.State)
@@ -913,8 +921,8 @@ func automaticInstallsAtTheWindowStart(t *testing.T) {
 	now := time.Date(2026, 10, 23, 10, 0, 0, 0, time.UTC)
 	u.Now = func() time.Time { return now }
 	u.Apply(context.Background(), Command{Command: "settings", Window: ptr("02:00-05:00")})
-	f.image("img-2", "sha256:two", "2026.11.0", 8, 0)
-	f.publish("latest", "sha256:two")
+	f.image("img-2", two, "2026.11.0", 8, 0)
+	f.publish("latest", two)
 	// The start check, outside the window: the next wake is the window's start, not 24h later.
 	next, _ := u.cycle(context.Background(), now)
 	start := time.Date(2026, 10, 24, 2, 0, 0, 0, time.UTC)
