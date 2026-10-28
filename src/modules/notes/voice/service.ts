@@ -72,6 +72,8 @@ export async function uploadVoiceMemo(
   noteId: string,
   input: z.output<typeof VoiceUpload>,
 ) {
+  // An unknown or deleted note is refused before its audio reaches the disk.
+  await getNote(ctx, noteId);
   const audio = await storeVoiceAudio(input.file);
   return withTransaction(ctx.db, async (database) => {
     const scoped = { ...ctx, db: database };
