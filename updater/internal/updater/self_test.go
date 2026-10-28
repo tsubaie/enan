@@ -116,8 +116,16 @@ func automaticSelfUpdate(t *testing.T) {
 	if u.selfDue() {
 		t.Fatal("replaced outside its window")
 	}
-	u.Apply(context.Background(), Command{Command: "settings", Window: ptr("")})
+	// Not left to the next daily check: the loop wakes at the window's start.
+	if next, _ := u.cycle(context.Background(), u.Now().Add(24*time.Hour)); !next.Equal(time.Date(2026, 10, 24, 2, 0, 0, 0, time.UTC)) {
+		t.Fatalf("next wake %s", next)
+	}
+	// An image that failed before is never installed by itself, so the window does not wake for it.
 	u.state.Rejected["updater:sha256:upd-2"] = "updater at an earlier time"
+	if next, _ := u.cycle(context.Background(), u.Now().Add(24*time.Hour)); u.status.State == Available || !next.Equal(u.Now().Add(24*time.Hour)) {
+		t.Fatalf("woke for a rejected updater: state %s, next wake %s", u.status.State, next)
+	}
+	u.Apply(context.Background(), Command{Command: "settings", Window: ptr("")})
 	if u.selfDue() {
 		t.Fatal("an image that failed before was tried again by itself")
 	}
@@ -225,8 +233,8 @@ func releaseSetup(t *testing.T) (*Updater, *fake) {
 	t.Helper()
 	u, f := selfSetup(t)
 	u.Apply(context.Background(), Command{Command: "settings", Automatic: ptr(false)})
-	f.image("img-2", "sha256:two", "1.1.0", 8, 0)
-	f.publish("latest", "sha256:two")
+	f.image("img-2", two, "1.1.0", 8, 0)
+	f.publish("latest", two)
 	u.Check(context.Background())
 	if u.status.State != Available || u.status.UpdaterUpdate == "" {
 		t.Fatalf("state %s, updater %q", u.status.State, u.status.UpdaterUpdate)
@@ -236,8 +244,8 @@ func releaseSetup(t *testing.T) (*Updater, *fake) {
 
 func installNowReplacesTheUpdaterFirst(t *testing.T) {
 	u, f := releaseSetup(t)
-	u.Apply(context.Background(), Command{Command: "install", Digest: "sha256:two"})
-	if u.state.Pending == nil || u.state.Pending.Digest != "sha256:two" || !u.selfDue() {
+	u.Apply(context.Background(), Command{Command: "install", Digest: two})
+	if u.state.Pending == nil || u.state.Pending.Digest != two || !u.selfDue() {
 		t.Fatalf("pending %+v, due %v", u.state.Pending, u.selfDue())
 	}
 	if slices.Contains(f.calls, "backup") || app(t, f).Image != "img-1" {
@@ -250,7 +258,7 @@ func installNowReplacesTheUpdaterFirst(t *testing.T) {
 
 func theNewUpdaterInstallsTheRelease(t *testing.T) {
 	u, f := releaseSetup(t)
-	u.Apply(context.Background(), Command{Command: "install", Digest: "sha256:two"})
+	u.Apply(context.Background(), Command{Command: "install", Digest: two})
 	f.calls = nil
 	// The new updater starts with the state and status the old one left.
 	u.selfAsked = false
@@ -265,7 +273,7 @@ func theNewUpdaterInstallsTheRelease(t *testing.T) {
 
 func aFailedReplacementInstallsNothing(t *testing.T) {
 	u, f := releaseSetup(t)
-	u.Apply(context.Background(), Command{Command: "install", Digest: "sha256:two"})
+	u.Apply(context.Background(), Command{Command: "install", Digest: two})
 	f.calls = nil
 	_ = u.store.write(replacedFile, replaced{Digest: "sha256:upd-2", Error: "the new updater stopped before it checked", At: time.Now()})
 	u.resume(context.Background(), u.recordReplaced(context.Background()))
@@ -292,7 +300,7 @@ func installNowWithOnlyANewerUpdater(t *testing.T) {
 func aFailedUpdaterDoesNotBlockTheRelease(t *testing.T) {
 	u, f := releaseSetup(t)
 	u.state.Rejected["updater:sha256:upd-2"] = "updater at an earlier time"
-	u.Apply(context.Background(), Command{Command: "install", Digest: "sha256:two"})
+	u.Apply(context.Background(), Command{Command: "install", Digest: two})
 	if u.state.Pending != nil || u.selfDue() || u.status.State != Updated || app(t, f).Image != "img-2" {
 		t.Fatalf("state %s, pending %+v, running %s: %s", u.status.State, u.state.Pending, app(t, f).Image, u.status.Error)
 	}
