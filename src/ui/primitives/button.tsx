@@ -28,9 +28,9 @@ const sizes = {
   'icon-lg': 'size-9',
 };
 type ButtonVariants = {
-  variant?: keyof typeof variants | null;
-  size?: keyof typeof sizes | null;
-  className?: string;
+  variant?: keyof typeof variants | null | undefined;
+  size?: keyof typeof sizes | null | undefined;
+  className?: string | undefined;
 };
 function buttonVariants({ variant, size, className }: ButtonVariants = {}) {
   return cn(base, variants[variant ?? 'default'], sizes[size ?? 'default'], className);
