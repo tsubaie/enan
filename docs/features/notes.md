@@ -105,7 +105,7 @@ Create: title, type ("No type" unless `notes.default_type` is set), date (today)
 }
 ```
 
-A `pending` refinement is stored per note (at most one), becomes `stale` when the note's `revision` moves, and is applied atomically: content replaced if accepted, tags merged, selected tasks created with `source_note_id`. `notes.suggest_tags` (fast model) returns `{ tags: string[] (≤ 5) }` preferring existing workspace tags. Post-parse rules: `owner_name` must match an assignable person or is nulled; `due_date` must parse; tags normalized. Fixtures `notes.refine.v1.{en,ar,mixed,adversarial}.json`.
+A `pending` refinement is stored per note (at most one), becomes `stale` when the note's `revision` moves, and is applied atomically: content replaced if accepted, tags merged, selected tasks created with `source_note_id`. `notes.suggest_tags` (fast model) returns `{ tags: string[] (≤ 5) }` preferring existing workspace tags. Post-parse rules: `owner_name` must match an assignable person or is nulled; `due_date` must parse; tags are trimmed, blank ones dropped, then normalized. Fixtures `notes.refine.v1.{en,ar,mixed,adversarial}.json`.
 
 ## i18n notes
 

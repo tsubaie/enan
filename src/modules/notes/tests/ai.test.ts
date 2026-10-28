@@ -19,6 +19,9 @@ import { AiPayload } from '@/core/ai/job-schema';
 import { latestAiJob } from '@/core/db/ai-jobs-repo';
 import { applyNoteAi, discardNoteAi, restoreNoteAi } from '../ai/apply';
 import { getNote, patchNote } from '../service';
+import { noteJobs } from '../jobs';
+const provider = vi.hoisted(() => ({ output: {} as object }));
+vi.mock('@/core/ai/execute', () => ({ executeAi: async () => provider.output }));
 vi.mock('@/core/ai/models', () => ({ loadModels: async () => [fixtureModel] }));
 vi.mock('@/core/ai/client', () => ({ aiConnection: () => ({ state: 'enabled' }) }));
 beforeAll(() => migrateDatabase());
@@ -385,6 +388,23 @@ it('NOTES-B18 restoring a discarded proposal is refused with 409 while a newer o
     sql`select status from note_refinements where job_id = ${first.id}`,
   );
   expect(rows[0]?.status).toBe('discarded');
+});
+it('NOTES-B17 a blank tag from the model is dropped instead of failing the job', async () => {
+  const note = await harness.note('Plan', { content: 'Review the board draft.' });
+  const signal = new AbortController().signal;
+  provider.output = { tags: [' ', 'board'] };
+  const tagJob = await finishedJob(db(), actorId(), 'notes.suggest_tags', note.id, note.revision, {});
+  expect(await noteJobs['ai.notes.suggest_tags']?.run(tagJob, signal)).toEqual({
+    output: { tags: ['board'] },
+    warnings: [],
+  });
+  provider.output = { ...refinement, suggested_tasks: [], suggested_tags: [' ', 'board'] };
+  const refineJob = await finishedJob(db(), actorId(), 'notes.refine', note.id, note.revision, {}, {
+    assignablePeople: [],
+    content: note.content,
+  });
+  const refined = await noteJobs['ai.notes.refine']?.run(refineJob, signal);
+  expect(refined?.output).toMatchObject({ suggested_tags: ['board'] });
 });
 it('ADMIN-B36 a direct note apply that fails after creating a task leaves no task and no change', async () => {
   const note = await harness.note('Plan', { content: 'draft content' });
