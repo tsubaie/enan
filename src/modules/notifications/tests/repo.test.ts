@@ -10,7 +10,8 @@ import {
   markManyRead,
   markRead,
   selectFeed,
-  selectOwn,
+  selectUnread,
+  countRead,
   type Emission,
 } from '@/core/db/notifications-repo';
 import { harness } from './fixtures';
@@ -32,8 +33,7 @@ const emission = (userId: string, fields: Partial<Emission> = {}): Emission => (
   actorId: null,
   ...fields,
 });
-const unreadOf = async (userId: string) =>
-  (await selectOwn(db(), userId)).filter((row) => !row.readAt).length;
+const unreadOf = async (userId: string) => (await selectUnread(db(), userId)).length;
 const rows = (userId: string) =>
   db().select().from(notifications).where(eq(notifications.userId, userId));
 // Moves a row back in time, so ordering and the upsert's refresh can be observed rather than
@@ -112,7 +112,10 @@ it('NOTIF-B14 the feed narrows to unread rows and to a set of kinds', async () =
   expect(unread).toHaveLength(2);
   const notes = await selectFeed(db(), member.id, 10, null, { kinds: ['note.mentioned'] });
   expect(notes.map((row) => row.kind)).toEqual(['note.mentioned']);
-  expect(await selectOwn(db(), member.id)).toHaveLength(3);
+  expect(await selectUnread(db(), member.id)).toHaveLength(2);
+  expect(await countRead(db(), member.id)).toBe(1);
+  expect(await countRead(db(), member.id, [first.kind])).toBe(1);
+  expect(await countRead(db(), member.id, ['no.such_kind'])).toBe(0);
 });
 it('NOTIF-B06 rows created in the same millisecond are never skipped at a page boundary', async () => {
   const { member } = users();

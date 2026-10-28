@@ -177,3 +177,22 @@ it('NOTIF-B13 NOTIF-B04 unlinking a person stops future notifications and keeps 
   expect(rows).toHaveLength(1);
   expect(rows[0]?.userId).toBe(member.id);
 });
+
+it('NOTIF-B08 NOTIF-B15 the badge counts resolvable unread rows; read rows are counted without resolving', async () => {
+  const member = harness.member;
+  if (!member) throw new Error('harness');
+  const person = await harness.personFor(member, 'Receiving Member');
+  const opened = await harness.task('Opened already', { ownerId: person.id });
+  await harness.task('Still unread', { ownerId: person.id });
+  const trashed = await harness.task('Unread and trashed', { ownerId: person.id });
+  const first = await feed();
+  const row = first.items.find((item) => item.subjectId === opened.id);
+  if (!row) throw new Error('no notification');
+  await run((ctx) => service.readOne(ctx, row.id), member);
+  await db().update(tasks).set({ deletedAt: new Date() }).where(eq(tasks.id, trashed.id));
+  const page = await feed();
+  expect(page.items.map((item) => item.title)).toEqual(['Still unread', 'Opened already']);
+  expect(page).toMatchObject({ unread: 1, totalCount: 2 });
+  const unread = await run((ctx) => service.feed(ctx, 20, null, { unread: true }), member);
+  expect(unread).toMatchObject({ unread: 1, totalCount: 1 });
+});
