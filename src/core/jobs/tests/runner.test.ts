@@ -10,6 +10,7 @@ const repo = vi.hoisted(() => ({
   publish: vi.fn(),
   fail: vi.fn(),
   requestedCancellations: vi.fn(),
+  activeKinds: vi.fn(),
 }));
 const handler = vi.hoisted(() => ({
   concurrency: 1,
@@ -18,6 +19,7 @@ const handler = vi.hoisted(() => ({
   publish: vi.fn(),
 }));
 vi.mock('@/core/db/jobs-repo', () => repo);
+vi.mock('@/core/db/jobs-queue-repo', () => ({ activeKinds: repo.activeKinds }));
 vi.mock('../registry', () => ({ jobKinds: ['system.backup'], handlerFor: () => handler }));
 vi.mock('../scheduler', () => ({ scheduleDue: vi.fn(async () => {}) }));
 const maintenance = vi.hoisted(() => ({ restoring: false }));
@@ -37,6 +39,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   maintenance.restoring = false;
   repo.requestedCancellations.mockResolvedValue([]);
+  repo.activeKinds.mockResolvedValue(['system.backup']);
   repo.claim.mockResolvedValueOnce(job).mockResolvedValue(null);
   repo.publish.mockResolvedValue(undefined);
   repo.fail.mockResolvedValue(undefined);
@@ -185,6 +188,18 @@ describe('runner drain', () => {
     expect(await effectOf(asked, 'publish')).toEqual(told);
     expect(await effectOf(asked, 'fail')).toEqual(told);
     expect(await effectOf({ ...job, createdBy: 'admin-1' }, 'fail')).toEqual([]);
+  });
+  it('ADR 0067 an idle tick reads which kinds have work and opens no claim transaction', async () => {
+    repo.activeKinds.mockResolvedValue([]);
+    repo.claim.mockReset().mockResolvedValue(null);
+    const stop = startRunner();
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(repo.activeKinds).toHaveBeenCalledTimes(3);
+    expect(repo.claim).not.toHaveBeenCalled();
+    repo.activeKinds.mockResolvedValue(['system.backup']);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(repo.claim).toHaveBeenCalledWith('owner', 'system.backup', 1, 4);
+    await stop();
   });
   it('ADMIN-B33 stopping twice drains once', async () => {
     handler.run.mockResolvedValue({ completed: true });

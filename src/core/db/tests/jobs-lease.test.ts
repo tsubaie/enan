@@ -6,6 +6,7 @@ import { clearDatabase } from '../reset';
 import { jobs, jobAttempts } from '../system-schema';
 import { busyTimeoutMs } from '../client';
 import { claim, enqueue, fail, prune, renew } from '../jobs-repo';
+import { activeKinds } from '../jobs-queue-repo';
 beforeAll(() => migrateDatabase());
 beforeEach(() => clearDatabase());
 afterAll(() => closeDatabase());
@@ -36,6 +37,16 @@ const attemptRow = async (jobId: string, attempt: number) =>
       .from(jobAttempts)
       .where(and(eq(jobAttempts.jobId, jobId), eq(jobAttempts.attempt, attempt)))
   )[0];
+it('ADR 0067 activeKinds names the kinds with a queued or running job, expired leases included, and nothing once they end', async () => {
+  expect(await activeKinds()).toEqual([]);
+  const jobId = await abandoned('backup', 1);
+  await withTransaction(db(), (database) => enqueue(database, 'system.other', {}, null));
+  expect((await activeKinds()).sort()).toEqual([kind, 'system.other']);
+  const claimed = await claim('runner', kind, 1, 4);
+  if (claimed?.id !== jobId) throw new Error('the abandoned job was not reclaimed');
+  await fail(claimed, 'provider', false);
+  expect(await activeKinds()).toEqual(['system.other']);
+});
 it('ADMIN-B46 enqueue on the key of a running job whose lease expired requeues it while attempts remain and returns it', async () => {
   const jobId = await abandoned('backup', 1);
   const returned = await enqueueWith('backup');
