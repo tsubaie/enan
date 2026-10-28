@@ -405,6 +405,21 @@ it('ACCT-B02 ACCT-A02 the right current password changes it, keeps this session 
   expect(after.body.data.sessions).toEqual([expect.objectContaining({ current: true })]);
 });
 
+it('ACCT-B02 the sessions signed out by a password change count only live ones, not expired rows', async () => {
+  await insertSession(db(), {
+    id: id(),
+    userId: holder.id,
+    token: id(),
+    expiresAt: new Date(Date.now() - 1000),
+  });
+  const changed = await call(api.password, 'POST', '/password', {
+    current: PASSWORD,
+    next: 'a brand new password',
+  });
+  expect(changed.status).toBe(200);
+  expect(changed.body).toEqual({ data: { revoked: 1 } });
+});
+
 it('ACCT-B03 the list marks this device, one session is revoked by id and a second attempt is a 404', async () => {
   const read = await call(api.detail, 'GET');
   const listed = read.body.data.sessions as {

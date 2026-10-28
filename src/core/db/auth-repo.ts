@@ -166,10 +166,18 @@ export async function userSessions(database: Database, userId: string) {
 }
 // ACCT-B02/B03: ending everything the reader holds except the session making the request, so a
 // password change signs them out everywhere else without signing them out of the tab they are in.
+// Only live sessions count, so the number reported matches the list (ACCT-B03); expired rows are
+// left for the daily prune.
 export async function revokeOtherSessions(database: Database, userId: string, keepId: string) {
   const rows = await database
     .delete(authSessions)
-    .where(and(eq(authSessions.userId, userId), ne(authSessions.id, keepId)))
+    .where(
+      and(
+        eq(authSessions.userId, userId),
+        ne(authSessions.id, keepId),
+        gt(authSessions.expiresAt, new Date()),
+      ),
+    )
     .returning({ id: authSessions.id });
   return rows.length;
 }
