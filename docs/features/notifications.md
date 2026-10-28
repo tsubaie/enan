@@ -62,8 +62,12 @@ Indexes: `(user_id, read_at, created_at desc)` for the feed; a unique partial in
   - `task.assigned` — a task's owner becomes a person with an account, and the actor is someone
     else. Payload: the task title at the time.
   - `task.due_today` — scheduled; a task the reader owns is due today and not completed.
-  - `task.overdue` — scheduled; a task the reader owns passed its due date yesterday and is not
-    completed. Once per task, on the first day it is late, not every morning it stays late.
+  - `task.overdue` — scheduled; a task the reader owns passed its due date and is not completed.
+    Once per task, on the first run after it went late, not every morning it stays late: the run
+    looks back over every late task, so days the app was down are caught up by the next run, and
+    a task already told keeps that line whether or not it was read. It looks back no further than
+    the read-notification retention (NOTIF-B10, 30 days), so a task late for longer, whose line may
+    have been purged, is not told again.
   - `note.mentioned` — the reader's person is added to a note's participants (NOTES/ADR 0014).
   - `kpi.off_target` — a reading lands a KPI the reader owns off target, where it was not before:
     recording, overwriting or editing a reading, compared before and after in its transaction.
@@ -79,8 +83,10 @@ Indexes: `(user_id, read_at, created_at desc)` for the feed; a unique partial in
     queued by the updater's status and daily, with no actor.
 - NOTIF-B05 **Time-derived kinds come from the scheduler**, never from a request, and are keyed so
   a re-run on the same day writes nothing new (ADR 0010 dedup keys). `task.due_today` and
-  `task.overdue` come from the `tasks.reminders` job at 04:00 UTC each day, and `kpi.reading_due`
-  from the `kpis.reminders` job at 05:00 UTC.
+  `task.overdue` come from the `tasks.reminders` job at 04:00 each day, and `kpi.reading_due`
+  from the `kpis.reminders` job at 05:00, both in the workspace's time zone: the two schedules are
+  moved to `workspace.timezone` whenever it is written (setup, ADMIN-B07), so "today" is the day
+  the office is in. The system jobs stay on UTC.
 - NOTIF-B06 **The feed resolves subjects at read time** through the owning module. A notification
   whose subject is deleted, trashed or no longer visible to that reader is omitted from the feed
   and counted in neither total. It is not deleted: the subject may be restored.

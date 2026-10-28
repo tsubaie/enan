@@ -7,6 +7,11 @@ import { users } from '@/core/db/system-schema';
 import { people } from '@/modules/people/schema/db';
 import { User } from '@/core/http/user-schema';
 import { id } from '@/core/db/ids';
+import { getSetting, writeSetting } from '@/core/db/settings-repo';
+import { addDays, dayAt } from '@/core/time/tasks';
+import { dayValue } from '@/core/time/days';
+import { dayStart } from '@/core/time/ai';
+import { midnightBoundaries } from '../../../../tests/fixtures/timezones';
 import { tasks } from '../schema/db';
 import { TaskCreate, TaskListQuery, TaskPatch } from '../schema/validation';
 import * as service from '../service';
@@ -427,4 +432,42 @@ it('ADMIN-B71 an edit keeps what the changed fields read before and names its ta
   });
   expect(diff('delete')).toMatchObject({ title: 'Draft the agenda' });
   expect(diff('restore')).toEqual({ _name: 'Draft the agenda' });
+});
+// A task completed at a chosen instant: the service completes it, the row is then dated as asked.
+async function completedAt(title: string, instant: Date) {
+  const task = await create(title);
+  await run((ctx) => service.completeTask(ctx, task.id, task.revision));
+  await db().update(tasks).set({ completedAt: instant }).where(eq(tasks.id, task.id));
+  return task.id;
+}
+const completedIds = async () =>
+  (await run((ctx) => service.listTasks(ctx, TaskListQuery.parse({ view: 'completed' })))).data.map(
+    (row) => row.id,
+  );
+it('HOME-B09 the overdue section counts as stale what is more than thirty days past due', async () => {
+  const today = dayAt(await getSetting(db(), 'workspace.timezone'));
+  for (const days of [31, 30, 29, 1])
+    await create(`Late ${days}`, { dueDate: addDays(today, -days) });
+  const overdue = (await run((ctx) => homeSummary(ctx, today))).find((s) => s.key === 'overdue');
+  expect(overdue).toMatchObject({ count: 4, stale: 1 });
+});
+it('TASKS-B04 the completed view holds ninety days of work, from the local midnight that began the ninetieth day back', async () => {
+  const today = dayAt(await getSetting(db(), 'workspace.timezone'));
+  const cutoff = dayValue(addDays(today, -90));
+  const kept = [
+    await completedAt('Fresh', new Date(dayValue(addDays(today, -89)))),
+    await completedAt('On the line', new Date(cutoff)),
+  ];
+  await completedAt('Just before', new Date(cutoff - 1));
+  await completedAt('Stale', new Date(dayValue(addDays(today, -91))));
+  expect((await completedIds()).sort()).toEqual(kept.sort());
+});
+it('TASKS-B04 the ninety-day window opens at the workspace midnight: 01:00 in Riyadh on the cut-off day is inside it', async () => {
+  const zone = midnightBoundaries[0]?.timezone ?? 'UTC';
+  await writeSetting(db(), 'workspace.timezone', zone, actorId);
+  const opens = dayStart(zone, addDays(dayAt(zone), -90)).getTime();
+  const hour = 3_600_000;
+  const kept = await completedAt('Small hours', new Date(opens + hour));
+  await completedAt('Night before', new Date(opens - hour));
+  expect(await completedIds()).toEqual([kept]);
 });

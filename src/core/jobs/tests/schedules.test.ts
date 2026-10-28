@@ -12,7 +12,7 @@ afterAll(() => closeDatabase());
 it('ADMIN-B12 NOTIF-B10 ADMIN-B59 KPIS-B30 a migrated database schedules the backup, prune, notification purge, reminders and update notifications', async () => {
   const kinds = (await dueSchedules(db())).map((row) => row.kind).sort();
   expect(kinds).toEqual([
-    // KPIS-B30: the reading-due reminders, daily at 05:00 UTC.
+    // KPIS-B30: the reading-due reminders, daily at 05:00 in the workspace zone (UTC until one is set).
     'kpis.reminders',
     'system.backup',
     'system.notifications_purge',

@@ -75,7 +75,7 @@ const exempt: Record<string, string[]> = {
     'uploadWallpaper',
     'deleteWallpaper',
   ],
-  tasks: ['listTasks', 'getTask', 'peopleForAi'],
+  tasks: ['listTasks', 'getTask'],
   users: ['setup', 'listUsers'],
 };
 // Every service surface is discovered, so a new module or a new AI file cannot be left out: each

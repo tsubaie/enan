@@ -46,7 +46,6 @@ type Filters = {
 // SQLite's JSON functions return text, and its timestamps are epoch milliseconds (ADR 0029):
 // embedded documents are parsed here so rows keep the shape the Postgres `json_build_object`
 // columns had, with instants as ISO strings and flags as booleans.
-const embedded = embeddedJson;
 const isoOrNull = (value: number | null) => (value === null ? null : new Date(value).toISOString());
 const children = sql<number>`(select count(*) from tasks c where c.parent_id = tasks.id and c.deleted_at is null)`;
 const completed = sql<number>`(select count(*) from tasks c where c.parent_id = tasks.id and c.deleted_at is null and c.status = 'completed')`;
@@ -57,7 +56,7 @@ type SourceNoteRow = {
   archivedAt: number | null;
 };
 type CommitteeRow = { id: string; name: string; status: string; deleted: number };
-const sourceNote = embedded(
+const sourceNote = embeddedJson(
   sql`(select json_object('id', n.id, 'title', n.title, 'deletedAt', n.deleted_at, 'archivedAt', n.archived_at) from notes n where n.id = tasks.source_note_id)`,
   (note: SourceNoteRow) => ({
     ...note,
@@ -65,7 +64,7 @@ const sourceNote = embedded(
     archivedAt: isoOrNull(note.archivedAt),
   }),
 );
-const committee = embedded(
+const committee = embeddedJson(
   sql`(select json_object('id', c.id, 'name', c.name, 'status', c.status, 'deleted', c.deleted_at is not null) from committees c where c.id = tasks.committee_id)`,
   (row: CommitteeRow) => ({ ...row, deleted: row.deleted === 1 }),
 );
@@ -357,10 +356,11 @@ export async function selectTaskSubjects(database: Database, ids: readonly strin
     .from(tasks)
     .where(and(inArray(tasks.id, [...ids]), isNull(tasks.deletedAt)));
 }
-// NOTIF-B04: open tasks due on `day` whose owner is a live person with an account, with that account.
-export function selectOwnedDueOn(database: Database, day: string) {
-  return database.all<{ id: string; userId: string }>(sql`select t.id, p.user_id as userId from tasks t join people p
-    on p.id = t.owner_id and p.deleted_at is null and p.user_id is not null where t.due_date = ${day} and t.deleted_at is null and t.status <> 'completed'`);
+// NOTIF-B04: open tasks due in a span of days, both ends included, owned by a live person with an account.
+export type OwnedDue = { id: string; userId: string };
+export function selectOwnedDueBetween(database: Database, from: string, to: string) {
+  return database.all<OwnedDue>(sql`select t.id, p.user_id as userId from tasks t join people p
+    on p.id = t.owner_id and p.deleted_at is null and p.user_id is not null where t.due_date between ${from} and ${to} and t.deleted_at is null and t.status <> 'completed'`);
 }
 // TASKS-B02 completion operations. Two Undos of the same completion serialize on the immediate
 // transaction (ADR 0029), so the second reads the first's result.

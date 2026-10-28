@@ -63,7 +63,7 @@ export async function selectPeople(
   limit: number,
   last: (string | number)[] | null,
   // The workspace's today, which decides what is late; the service passes it.
-  today = new Date().toISOString().slice(0, 10),
+  today: string,
 ) {
   return database
     .select({ ...getTableColumns(people), stats: stats(today), ...cursorColumns(nameSort) })

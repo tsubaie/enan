@@ -2,13 +2,14 @@ import { beforeAll, beforeEach, afterAll, it, expect } from 'vitest';
 import { closeDatabase, db, withTransaction, type Database } from '@/core/db/client';
 import { migrateDatabase } from '@/core/db/migrate';
 import { clearDatabase } from '@/core/db/reset';
-import { insertUser, lockWorkspace } from '@/core/db/auth-repo';
+import { insertUser, lockWorkspace, setSetupToken } from '@/core/db/auth-repo';
 import { User } from '@/core/http/user-schema';
 import { id } from '@/core/db/ids';
-import { listUsers, patchUser, createUser } from '../service';
-import { auditLog } from '@/core/db/system-schema';
-import { verifyPassword } from '@/core/auth/password';
+import { listUsers, patchUser, createUser, setup } from '../service';
+import { auditLog, schedules } from '@/core/db/system-schema';
+import { digest, token, verifyPassword } from '@/core/auth/password';
 import { users } from '@/core/db/system-schema';
+import { midnightBoundaries } from '../../../../tests/fixtures/timezones';
 import { eq } from 'drizzle-orm';
 const run = <T>(
   user: User,
@@ -88,4 +89,34 @@ it('ADMIN-B03 members cannot create users', async () => {
     ),
   ).rejects.toMatchObject({ code: 'forbidden' });
   expect(await db().select().from(users).where(eq(users.email, 'x@example.test'))).toEqual([]);
+});
+it('ADMIN-B01 NOTIF-B05 setup moves the reminder schedules to the chosen time zone', async () => {
+  const setupToken = token();
+  const timezone = midnightBoundaries[0]?.timezone ?? 'UTC';
+  await withTransaction(db(), async (database) => {
+    await lockWorkspace(database);
+    await setSetupToken(database, digest(setupToken));
+    await database.insert(schedules).values(
+      ['tasks.reminders', 'kpis.reminders'].map((kind) => ({
+        id: id(),
+        kind,
+        cron: '0 4 * * *',
+        timezone: 'UTC',
+        payload: {},
+      })),
+    );
+  });
+  await setup({
+    setupToken,
+    password: token(),
+    email: 'admin@example.test',
+    name: 'Admin',
+    workspaceName: 'Office',
+    locale: 'en',
+    timezone,
+    principalName: '',
+  });
+  expect(
+    (await db().select({ zone: schedules.timezone }).from(schedules)).map((r) => r.zone),
+  ).toEqual([timezone, timezone]);
 });

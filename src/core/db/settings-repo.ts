@@ -1,7 +1,7 @@
 import 'server-only';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
-import { settings } from './system-schema';
+import { schedules, settings } from './system-schema';
 import { db, type Database } from './client';
 import { settingsRegistry, type SettingKey, type SettingValue } from '@/core/config/settings';
 export async function readSettings(database: Database = db()) {
@@ -70,7 +70,16 @@ export async function writeSetting<K extends SettingKey>(
 // it. A cleared preference falls back through the registry, so a later change to the workspace
 // default still reaches the reader; a copied one would silently pin them to today's answer.
 export async function clearSetting(database: Database, key: SettingKey, userId: string) {
+  await database.delete(settings).where(and(eq(settings.key, key), eq(settings.userId, userId)));
+}
+// NOTIF-B05, KPIS-B30: the reminder jobs decide "today" on the workspace day, so their schedules
+// run in the workspace's time zone and move with it when it is written; the system jobs stay on UTC.
+// A westward move would make today's 04:00 in the new zone later than the last run and run the
+// reminders twice in one day, so the next run is the first occurrence in the new zone.
+export async function followWorkspaceTimezone(database: Database, timezone: string) {
+  const now = new Date();
   await database
-    .delete(settings)
-    .where(and(eq(settings.key, key), eq(settings.userId, userId)));
+    .update(schedules)
+    .set({ timezone, lastOccurrence: now, updatedAt: now })
+    .where(inArray(schedules.kind, ['tasks.reminders', 'kpis.reminders']));
 }
