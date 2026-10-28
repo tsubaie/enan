@@ -13,7 +13,7 @@ import { applyUpdate, requireRevision, type EntityOps } from '@/core/entity/serv
 import { AppError } from '@/core/http/errors';
 import { emit } from '@/core/notifications/emit';
 import { dayAt, addDays, bandOf } from '@/core/time/tasks';
-import { aiPeople, getPerson, personNameSql, userIdsForPeople } from '@/modules/people';
+import { getPerson, personNameSql, userIdsForPeople } from '@/modules/people';
 import { getNote } from '@/modules/notes';
 import {
   DefaultView,
@@ -395,6 +395,3 @@ export const reorderTasks = transactional(async function reorderTasks(
   });
   return getTask(ctx, input.parentId);
 });
-export function peopleForAi(ctx: Context) {
-  return aiPeople(ctx);
-}

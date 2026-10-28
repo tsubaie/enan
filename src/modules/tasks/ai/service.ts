@@ -6,7 +6,6 @@ import { AppError } from '@/core/http/errors';
 import { transactional } from '@/core/db/transaction';
 import { admitAi } from '@/core/ai/admission';
 import { applied, reviewJob } from '@/core/ai/review';
-import { peopleForAi } from '../service';
 import { getTask, createTask, patchTask } from '../service';
 import { TaskCreate, type TaskDetail } from '../schema/validation';
 import { BreakdownApply, BreakdownOutput } from '../schema/validation';
@@ -26,9 +25,6 @@ export const startBreakdown = transactional(async function startBreakdown(
     title: task.title,
     description: task.description,
     dueDate: task.dueDate,
-    assignablePeople: (await peopleForAi(ctx))
-      .filter((person) => person.isAssignable)
-      .map((person) => person.name),
   });
 });
 // ADMIN-B36: the selected subtasks, the parent's revision bump and the apply mark commit together.

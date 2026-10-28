@@ -46,7 +46,6 @@ type Filters = {
 // SQLite's JSON functions return text, and its timestamps are epoch milliseconds (ADR 0029):
 // embedded documents are parsed here so rows keep the shape the Postgres `json_build_object`
 // columns had, with instants as ISO strings and flags as booleans.
-const embedded = embeddedJson;
 const isoOrNull = (value: number | null) => (value === null ? null : new Date(value).toISOString());
 const children = sql<number>`(select count(*) from tasks c where c.parent_id = tasks.id and c.deleted_at is null)`;
 const completed = sql<number>`(select count(*) from tasks c where c.parent_id = tasks.id and c.deleted_at is null and c.status = 'completed')`;
@@ -57,7 +56,7 @@ type SourceNoteRow = {
   archivedAt: number | null;
 };
 type CommitteeRow = { id: string; name: string; status: string; deleted: number };
-const sourceNote = embedded(
+const sourceNote = embeddedJson(
   sql`(select json_object('id', n.id, 'title', n.title, 'deletedAt', n.deleted_at, 'archivedAt', n.archived_at) from notes n where n.id = tasks.source_note_id)`,
   (note: SourceNoteRow) => ({
     ...note,
@@ -65,7 +64,7 @@ const sourceNote = embedded(
     archivedAt: isoOrNull(note.archivedAt),
   }),
 );
-const committee = embedded(
+const committee = embeddedJson(
   sql`(select json_object('id', c.id, 'name', c.name, 'status', c.status, 'deleted', c.deleted_at is not null) from committees c where c.id = tasks.committee_id)`,
   (row: CommitteeRow) => ({ ...row, deleted: row.deleted === 1 }),
 );
