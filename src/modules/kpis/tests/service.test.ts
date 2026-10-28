@@ -98,6 +98,19 @@ it('KPIS-I02 a target for a period the cadence does not have is refused', async 
   expect(statuses.rule_violation).toBe(422);
   expect((await run((ctx) => service.listTargets(ctx, kpi.id))).data).toHaveLength(0);
 });
+it('KPIS-I02 a cadence change hides the targets the new cadence cannot name', async () => {
+  const kpi = await harness.kpi('Leads', { frequency: 'monthly' });
+  const { year } = await periodOfToday();
+  const months = Array.from({ length: 12 }, (_, i) => ({ year, period: i + 1, targetValue: i }));
+  expect((await harness.targets(kpi.id, months)).targets).toHaveLength(12);
+  const detail = await run((ctx) =>
+    service.patchKpi(ctx, kpi.id, { frequency: 'quarterly', revision: kpi.revision }),
+  );
+  const periods = (targets: { period: number }[]) => targets.map((target) => target.period);
+  expect(periods(detail.targets)).toEqual([1, 2, 3, 4]);
+  const listed = await run((ctx) => service.listTargets(ctx, kpi.id));
+  expect(periods(listed.data)).toEqual([1, 2, 3, 4]);
+});
 it('KPIS-B11 KPIS-A05 a target changes the status on the next read without touching the KPI row', async () => {
   const today = await workspaceToday();
   const kpi = await harness.kpi('Backlog', { direction: 'lower' });

@@ -29,7 +29,7 @@ A strategic scorecard: objectives, KPIs, readings, a target per reporting period
 See `03-data-model.md`. Invariants:
 
 - KPIS-I01 One reading per KPI per date among non-deleted (unique index; 409 `unique` with `existing` for overwrite).
-- KPIS-I02 One target per `(kpi, year, period)` (unique); `period ∈ 1..12` in the table, read at the KPI's frequency. A PUT naming a period the cadence does not have (`period > periodsPerYear(frequency)`) is refused with 422 `rule_violation` (`period_outside_cadence`). Changing the cadence keeps the targets already written: those the new cadence cannot name are ignored by every read until the cadence names them again, so a monthly plan's May row never reads as a quarterly plan's 2027 Q1.
+- KPIS-I02 One target per `(kpi, year, period)` (unique); `period ∈ 1..12` in the table, read at the KPI's frequency. A PUT naming a period the cadence does not have (`period > periodsPerYear(frequency)`) is refused with 422 `rule_violation` (`period_outside_cadence`). Changing the cadence keeps the targets already written: those the new cadence cannot name are ignored by every read until the cadence names them again, so a monthly plan's May row never reads as a quarterly plan's 2027 Q1; the record and the targets list hold only the in-cadence targets, so the editor never shows a row it cannot clear.
 - KPIS-I03 Deleting a KPI soft-deletes it; readings and targets are hidden with the same op id; purge cascades.
 - KPIS-I04 Thresholds setting `kpis.status_thresholds = { higher: { on, near }, lower: { on, near } }` validated: `higher.on ≥ higher.near`, `lower.on ≤ lower.near`.
 

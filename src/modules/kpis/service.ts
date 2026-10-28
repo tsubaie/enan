@@ -141,7 +141,9 @@ export async function getKpi(ctx: Context, kpiId: string, includeDeleted = false
 export async function getKpiDetail(ctx: Context, kpiId: string, includeDeleted = false) {
   const { row, at } = await requireRow(ctx, kpiId, includeDeleted);
   const readings = await repo.selectReadings(ctx.db, kpiId);
-  const targets = await repo.selectTargets(ctx.db, kpiId);
+  const frequency = Frequency.parse(row.frequency);
+  const max = periodsPerYear(frequency); // KPIS-I02: a period the cadence cannot name is hidden
+  const targets = (await repo.selectTargets(ctx.db, kpiId)).filter((item) => item.period <= max);
   const facts = {
     ...row,
     readings: readings.map((reading) => ({ date: reading.readingDate, value: reading.value })),
@@ -149,7 +151,6 @@ export async function getKpiDetail(ctx: Context, kpiId: string, includeDeleted =
   const meta = deriveMeta(facts, at);
   // The comparisons are centred on the period the KPI is actually measured against, so the middle
   // one repeats the row's answer and the reader starts where the list left them.
-  const frequency = Frequency.parse(row.frequency);
   const base = meta.effectiveTargetPeriod ?? periodOf(at.today, frequency);
   return KpiDetail.parse({
     ...row,
@@ -356,8 +357,7 @@ async function removeReadingInTransaction(ctx: Context, kpiId: string, readingId
   return { opId };
 }
 export async function listTargets(ctx: Context, kpiId: string) {
-  await getKpi(ctx, kpiId, true);
-  return { data: await repo.selectTargets(ctx.db, kpiId) };
+  return { data: (await getKpiDetail(ctx, kpiId, true)).targets };
 }
 async function putTargetsInTransaction(ctx: Context, kpiId: string, input: TargetsPut) {
   const kpi = await getKpi(ctx, kpiId);
