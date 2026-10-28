@@ -83,8 +83,10 @@ Indexes: `(user_id, read_at, created_at desc)` for the feed; a unique partial in
     queued by the updater's status and daily, with no actor.
 - NOTIF-B05 **Time-derived kinds come from the scheduler**, never from a request, and are keyed so
   a re-run on the same day writes nothing new (ADR 0010 dedup keys). `task.due_today` and
-  `task.overdue` come from the `tasks.reminders` job at 04:00 UTC each day, and `kpi.reading_due`
-  from the `kpis.reminders` job at 05:00 UTC.
+  `task.overdue` come from the `tasks.reminders` job at 04:00 each day, and `kpi.reading_due`
+  from the `kpis.reminders` job at 05:00, both in the workspace's time zone: the two schedules are
+  moved to `workspace.timezone` whenever it is written (setup, ADMIN-B07), so "today" is the day
+  the office is in. The system jobs stay on UTC.
 - NOTIF-B06 **The feed resolves subjects at read time** through the owning module. A notification
   whose subject is deleted, trashed or no longer visible to that reader is omitted from the feed
   and counted in neither total. It is not deleted: the subject may be restored.

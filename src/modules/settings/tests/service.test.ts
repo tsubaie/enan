@@ -5,7 +5,9 @@ import { clearDatabase } from '@/core/db/reset';
 import { insertUser } from '@/core/db/auth-repo';
 import { User } from '@/core/http/user-schema';
 import { id } from '@/core/db/ids';
+import { schedules } from '@/core/db/system-schema';
 import { listSettings, updateSetting } from '../service';
+import { midnightBoundaries } from '../../../../tests/fixtures/timezones';
 let admin: User;
 let member: User;
 const run = <T>(
@@ -65,4 +67,32 @@ it('PEOPLE-I04 the principal must name a person who exists and is not in the tra
   await expect(
     run(admin, (ctx) => updateSetting(ctx, 'workspace.principal_person_id', id())),
   ).rejects.toMatchObject({ code: 'rule_violation', details: { reason: 'unknown_person' } });
+});
+it('NOTIF-B05 ADMIN-B07 a new workspace time zone moves the reminder schedules with it and leaves the system jobs on UTC', async () => {
+  const zone = midnightBoundaries[1]?.timezone ?? 'UTC';
+  const seed = (kind: string, cron: string) => ({
+    id: id(),
+    kind,
+    cron,
+    timezone: 'UTC',
+    payload: {},
+  });
+  await db()
+    .insert(schedules)
+    .values([
+      seed('tasks.reminders', '0 4 * * *'),
+      seed('kpis.reminders', '0 5 * * *'),
+      seed('system.backup', '0 2 * * *'),
+    ]);
+  await run(admin, (ctx) => updateSetting(ctx, 'workspace.timezone', zone));
+  const zones = Object.fromEntries(
+    (await db().select({ kind: schedules.kind, timezone: schedules.timezone }).from(schedules)).map(
+      (row) => [row.kind, row.timezone],
+    ),
+  );
+  expect(zones).toEqual({
+    'tasks.reminders': zone,
+    'kpis.reminders': zone,
+    'system.backup': 'UTC',
+  });
 });
