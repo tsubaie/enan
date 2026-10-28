@@ -88,15 +88,12 @@ it('KPIS-B32 a brief is asked for once per set of figures, written from cited me
   await harness.reading(kpi.id, lastQuarter(today), 35);
   expect((await read()).isStale).toBe(true);
 });
-it('KPIS-B32 a brief whose job failed reads as failed and can be asked for again', async () => {
+it('KPIS-B32 a brief whose job failed reads as failed, with its reason, and can be asked for again', async () => {
   await scorecard();
   const asked = await start();
   const job = await jobOf(asked.narrative?.id ?? '');
-  await db()
-    .update(jobs)
-    .set({ status: 'failed', lastError: 'provider' })
-    .where(eq(jobs.id, job.id));
-  expect((await read()).narrative?.status).toBe('failed');
+  await db().update(jobs).set({ status: 'failed', lastError: 'budget' }).where(eq(jobs.id, job.id));
+  expect((await read()).narrative).toMatchObject({ status: 'failed', error: 'budget' });
   const again = await start();
   expect(again.narrative?.status).toBe('generating');
   expect(again.narrative?.id).not.toBe(asked.narrative?.id);
