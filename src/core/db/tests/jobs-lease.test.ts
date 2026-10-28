@@ -47,6 +47,14 @@ it('ADR 0067 activeKinds names the kinds with a queued or running job, expired l
   await fail(claimed, 'provider', false);
   expect(await activeKinds()).toEqual(['system.other']);
 });
+it('ADR 0067 a claim refused by the concurrency limit still sweeps a queued job whose cancel was requested', async () => {
+  const running = await enqueueWith('first');
+  expect((await claim('runner', kind, 1, 4))?.id).toBe(running.id);
+  const waiting = await enqueueWith('second');
+  await db().update(jobs).set({ cancelRequested: true }).where(eq(jobs.id, waiting.id));
+  expect(await claim('runner', kind, 1, 4)).toBeNull();
+  expect((await stored(waiting.id))?.status).toBe('cancelled');
+});
 it('ADMIN-B46 enqueue on the key of a running job whose lease expired requeues it while attempts remain and returns it', async () => {
   const jobId = await abandoned('backup', 1);
   const returned = await enqueueWith('backup');
@@ -122,7 +130,10 @@ it('NOTIF-B04 a failure effect runs once, when the job has failed for good, not 
 it('ADMIN-B33 a job stopped by a shutdown on its last attempt is queued again with that attempt given back', async () => {
   const job = await enqueueWith('last-try');
   const maxAttempts = (await stored(job.id))?.maxAttempts ?? 1;
-  await db().update(jobs).set({ attempt: maxAttempts - 1 }).where(eq(jobs.id, job.id));
+  await db()
+    .update(jobs)
+    .set({ attempt: maxAttempts - 1 })
+    .where(eq(jobs.id, job.id));
   const claimed = await claim('runner', kind, 1, 4);
   if (!claimed) throw new Error('not claimed');
   expect(claimed.attempt).toBe(maxAttempts);
