@@ -100,7 +100,13 @@ export type MeasuredAt = { today: string; thresholds: StatusThresholds; offset?:
 export function periodValue(facts: KpiFacts, at: Period, today: string) {
   const history = facts.readings ?? facts.sparkline;
   if (!history.length) return facts.current?.value ?? null;
-  const { from, to } = periodRange(at, Frequency.parse(facts.frequency));
+  const frequency = Frequency.parse(facts.frequency);
+  // The sparkline holds eight readings, which one busy period fills; the row reads the previous
+  // period from the fact the repo keeps for it (KPIS-B04), so the list and the record agree.
+  const before = shiftPeriod(periodOf(today, frequency), -1, frequency);
+  if (!facts.readings && at.year === before.year && at.period === before.period)
+    return facts.previousPeriodValue;
+  const { from, to } = periodRange(at, frequency);
   const inside = history.filter(
     (point) => point.date >= from && point.date <= to && point.date <= today,
   );

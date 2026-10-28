@@ -253,11 +253,29 @@ it('KPIS-B26 a target already past does not go stale the way the current one doe
 const history = {
   ...shiftable,
   current: { date: '2026-09-01', value: 90 },
+  previousPeriodValue: 50,
   sparkline: [
     { date: '2026-05-10', value: 50 },
     { date: '2026-09-01', value: 90 },
   ],
 };
+it('KPIS-B04 KPIS-B31 a row whose sparkline is all this period still reads the previous one', () => {
+  // Nine readings in September: the eight-point sparkline no longer reaches the previous period,
+  // which the row carries as its own fact, as the record (which has every reading) would read it.
+  const busy = {
+    ...history,
+    previousPeriodValue: 45,
+    sparkline: [2, 3, 4, 5, 6, 7, 8, 9].map((day) => ({ date: `2026-09-0${day}`, value: 90 })),
+  };
+  const back = deriveMeta(busy, { today: TODAY, thresholds, offset: -1 });
+  expect(back.status).toBe('off_target');
+  expect(back.achievement).toBeCloseTo(45 / 60);
+  // With the full history in hand the period is read from it, and the two agree.
+  const record = { ...busy, readings: [{ date: '2026-06-30', value: 45 }, ...busy.sparkline] };
+  expect(deriveMeta(record, { today: TODAY, thresholds, offset: -1 }).achievement).toBeCloseTo(
+    45 / 60,
+  );
+});
 it('KPIS-B31 a neighbouring period is read at the reading dated inside it', () => {
   const back = deriveMeta(history, { today: TODAY, thresholds, offset: -1 });
   expect(back.achievement).toBeCloseTo(50 / 60);
