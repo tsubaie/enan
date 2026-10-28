@@ -988,7 +988,8 @@ func (u *Updater) cycle(ctx context.Context, next time.Time) (time.Time, bool) {
 		return next, true
 	}
 	// ADMIN-B68: what waits for the window is installed at the window's start, not at the next check.
-	if window := u.window(); window != nil && u.automatic() && (u.status.State == Available || u.status.UpdaterUpdate != "") {
+	selfWaits := u.status.UpdaterUpdate != "" && u.Self != "" && u.state.Rejected["updater:"+u.status.UpdaterUpdate] == ""
+	if window := u.window(); window != nil && u.automatic() && (u.status.State == Available || selfWaits) {
 		if at := window.Next(u.now()); at.Before(next) {
 			next = at
 		}

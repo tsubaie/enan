@@ -120,8 +120,12 @@ func automaticSelfUpdate(t *testing.T) {
 	if next, _ := u.cycle(context.Background(), u.Now().Add(24*time.Hour)); !next.Equal(time.Date(2026, 10, 24, 2, 0, 0, 0, time.UTC)) {
 		t.Fatalf("next wake %s", next)
 	}
-	u.Apply(context.Background(), Command{Command: "settings", Window: ptr("")})
+	// An image that failed before is never installed by itself, so the window does not wake for it.
 	u.state.Rejected["updater:sha256:upd-2"] = "updater at an earlier time"
+	if next, _ := u.cycle(context.Background(), u.Now().Add(24*time.Hour)); u.status.State == Available || !next.Equal(u.Now().Add(24*time.Hour)) {
+		t.Fatalf("woke for a rejected updater: state %s, next wake %s", u.status.State, next)
+	}
+	u.Apply(context.Background(), Command{Command: "settings", Window: ptr("")})
 	if u.selfDue() {
 		t.Fatal("an image that failed before was tried again by itself")
 	}
