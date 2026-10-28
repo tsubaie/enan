@@ -404,7 +404,7 @@ it('NOTES-B17 a blank tag from the model is dropped instead of failing the job',
     content: note.content,
   });
   const refined = await noteJobs['ai.notes.refine']?.run(refineJob, signal);
-  expect(refined?.output).toMatchObject({ suggested_tags: ['board'] });
+  expect(refined).toMatchObject({ output: { suggested_tags: ['board'] } });
 });
 it('ADMIN-B36 a direct note apply that fails after creating a task leaves no task and no change', async () => {
   const note = await harness.note('Plan', { content: 'draft content' });
