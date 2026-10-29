@@ -17,7 +17,7 @@ import {
 import { type Asked, Code, commands, Facts, Followup, Panel, Stalled } from './update-parts';
 import { History, Outcome, UpdaterOutdated } from './UpdateDetails';
 import { UpdaterUpdate } from './UpdaterUpdate';
-import { Automatic, Install } from './UpdateInstall';
+import { Automatic, Available, Install } from './UpdateInstall';
 
 export function UpdatesPage() {
   const query = useUpdates();
@@ -49,22 +49,16 @@ function Updates({
   const askable = outdated ? null : live;
   return (
     <div className="space-y-5">
-      <UpdaterPanel health={health} status={status}>
+      <UpdaterPanel health={health} status={status} newer={askable !== null && announces(askable)}>
         {live && <Controls status={live} command={command} enabled={commands} />}
+        <Available status={askable} command={command} enabled={commands} />
       </UpdaterPanel>
       {outdated ? (
         <UpdaterOutdated />
       ) : (
         live && <UpdaterUpdate status={live} command={command} enabled={commands} />
       )}
-      {askable && (
-        <Install
-          status={askable}
-          command={command}
-          enabled={commands}
-          reconnecting={reconnecting}
-        />
-      )}
+      {askable && <Install status={askable} reconnecting={reconnecting} />}
       {command.error && <ErrorPanel error={command.error} />}
       {issue && <Outcome status={issue} />}
       {askable && (
@@ -81,15 +75,21 @@ function Updates({
   );
 }
 
+// ADMIN-B67, ADMIN-B75: something newer, Enan's release or its updater, is announced in the Updates
+// card itself, which turns green for it.
+const announces = (status: Status) =>
+  status.state === 'available' || (status.protocol >= 3 && Boolean(status.updaterUpdate));
 // ADMIN-B57: whether updates happen at all, and if the updater is alive. ADMIN-B58: what can be
 // asked of it sits in the same card, under the facts it changes.
 function UpdaterPanel({
   health,
   status,
+  newer,
   children,
 }: {
   health: z.infer<typeof Health>;
   status: Status | null;
+  newer: boolean;
   children: ReactNode;
 }) {
   const t = useTranslations('admin');
@@ -109,7 +109,7 @@ function UpdaterPanel({
       </Panel>
     );
   return (
-    <Panel title={t('updatesTitle')} tone={health === 'stalled' ? 'border-danger/40' : undefined}>
+    <Panel title={t('updatesTitle')} tone={panelTone(health, newer)}>
       {health === 'stalled' && <Stalled />}
       <Facts status={status} />
       <div className="mt-5 border-t border-border/70 pt-4">{children}</div>
@@ -117,6 +117,8 @@ function UpdaterPanel({
   );
 }
 
+const panelTone = (health: z.infer<typeof Health>, newer: boolean) =>
+  health === 'stalled' ? 'border-danger/40' : newer ? 'border-success/50' : undefined;
 // Try again clears the updater's list of images that failed; it does nothing for an update held
 // back as a contract migration (step `guard`), which waits for the operator.
 const retryable = (status: Status) =>
