@@ -45,7 +45,10 @@ export function computeKpiStatus(input: StatusInput): KpiStatus {
   const { current, currentDate, target, direction, thresholds } = input;
   if (current === null || currentDate === null) return 'no_data';
   // One missed report is lag; more than one is nobody maintaining the measure (KPIS-B01).
-  if (periodsBehind(currentDate, input.today, input.frequency) > 1) return 'stale';
+  const behind = periodsBehind(currentDate, input.today, input.frequency);
+  if (behind > 1) return 'stale';
+  // KPIS-B31: a reading from the period before is not this period's figure, so it is not scored.
+  if (behind > 0) return 'no_data';
   if (target === null) return 'no_target';
   // No "near" band without a ratio of same-signed values; both negative, the ratio is inverted.
   if (target === 0 || Math.sign(current) !== Math.sign(target))
@@ -165,10 +168,11 @@ function effective(facts: KpiFacts, at: MeasuredAt, target: number | null): Read
     thresholds: at.thresholds,
     today: at.today,
   });
-  // KPIS-B31: a stale reading is not progress against today's target, so the arc stays empty.
+  // KPIS-B31: a reading from an earlier period is not this period's figure and not progress
+  // against its target, so the figure reads N/A and the arc stays empty.
   const counts = status !== 'stale' && status !== 'no_data';
   return {
-    value: current,
+    value: counts ? current : null,
     achievement: counts ? achievementOf(current, target, direction) : null,
     status,
   };
@@ -184,8 +188,10 @@ export function deriveMeta(facts: KpiFacts, at: MeasuredAt): KpiMeta {
   return {
     current,
     currentDate: facts.current?.date ?? null,
+    value: reading.value,
     previous: facts.previousPeriodValue,
-    percentChange: percentChangeOf(current, facts.previousPeriodValue),
+    // KPIS-B04: a period with no figure of its own has no movement to report either.
+    percentChange: percentChangeOf(at.offset ? current : reading.value, facts.previousPeriodValue),
     effectiveTarget: value,
     effectiveTargetPeriod: target ? { year: target.year, period: target.period } : null,
     status: reading.status,
@@ -208,7 +214,7 @@ export function derivePeriods(facts: KpiFacts, at: MeasuredAt, base: Period, met
       const target = targetIn(slot);
       const own =
         offset === 0
-          ? { value: meta.current, achievement: meta.achievement, status: meta.status }
+          ? { value: meta.value, achievement: meta.achievement, status: meta.status }
           : neighbour(facts, at, slot, target);
       return { ...slot, target, ...own };
     }),

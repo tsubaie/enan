@@ -20,8 +20,17 @@ const periodsOf = (frequency: Frequency) =>
 //
 // The form is also the display: it shows every target the chosen year holds, so a table underneath
 // would print the same numbers a second time. Clearing an input and saving removes that period's
-// target, which is how a target is taken back without a separate delete control per cell.
-export function KpiTargets({ kpi, editable }: { kpi: KpiDetail; editable: boolean }) {
+// target, which is how a target is taken back without a separate delete control per cell. Setting
+// the year is the whole job, so a save that lands hands back to the record (`onSaved`).
+export function KpiTargets({
+  kpi,
+  editable,
+  onSaved,
+}: {
+  kpi: KpiDetail;
+  editable: boolean;
+  onSaved?: () => void;
+}) {
   const t = useTranslations('kpis');
   const labels = useKpiLabels();
   const today = useToday();
@@ -35,17 +44,8 @@ export function KpiTargets({ kpi, editable }: { kpi: KpiDetail; editable: boolea
     (a, b) => a - b,
   );
   const save = useMutation({
-    mutationFn: async () => {
-      const wanted = periods
-        .map((period) => ({ year: chosen, period, targetValue: Number(draft[period - 1]) }))
-        .filter((item) => draft[item.period - 1] !== '' && Number.isFinite(item.targetValue));
-      // A cleared input on a period that still has a target is a target being taken back.
-      const cleared = kpi.targets.filter(
-        (target) => target.year === chosen && draft[target.period - 1] === '',
-      );
-      for (const target of cleared) await mutations.remove(target.id);
-      if (wanted.length) await mutations.put({ items: wanted });
-    },
+    mutationFn: () => writeYear(mutations, kpi.targets, chosen, periods, draft),
+    onSuccess: () => onSaved?.(),
   });
   function pick(next: number) {
     setChosen(next);
@@ -80,6 +80,24 @@ export function KpiTargets({ kpi, editable }: { kpi: KpiDetail; editable: boolea
       <div role="status">{save.error && <ErrorPanel error={save.error} />}</div>
     </form>
   );
+}
+// The year's inputs as writes: a figure is a target to set, and a cleared input on a period that
+// still has a target is a target being taken back.
+async function writeYear(
+  mutations: ReturnType<typeof useTargetMutations>,
+  targets: Target[],
+  year: number,
+  periods: number[],
+  draft: string[],
+) {
+  const wanted = periods
+    .map((period) => ({ year, period, targetValue: Number(draft[period - 1]) }))
+    .filter((item) => draft[item.period - 1] !== '' && Number.isFinite(item.targetValue));
+  const cleared = targets.filter(
+    (target) => target.year === year && draft[target.period - 1] === '',
+  );
+  for (const target of cleared) await mutations.remove(target.id);
+  if (wanted.length) await mutations.put({ items: wanted });
 }
 // The year the plan covers, stepped one at a time. It used to be a stack of year chips beside a
 // labelled number box, which put three controls of three different heights on one line and left the

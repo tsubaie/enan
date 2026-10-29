@@ -98,6 +98,7 @@ const detail = KpiDetail.parse({
   meta: {
     current: 42,
     currentDate: '2026-06-09',
+    value: 42,
     previous: null,
     percentChange: null,
     effectiveTarget: 50,

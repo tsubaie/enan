@@ -217,7 +217,10 @@ it('ADMIN-B57 the backup and restore command stay on the page after the next che
 it('ADMIN-B67 a release the updater announced waits for Install now, which sends exactly its digest', () => {
   show('running', status({ state: 'available', candidate: { version: '2026.11.0', digest } }));
   mount(<UpdatesPage />);
-  expect(screen.getByRole('heading', { name: en.admin.updateAvailableTitle })).toBeTruthy();
+  // The announcement sits inside the Updates card, which turns green for it, not in a card below.
+  const card = screen.getByRole('region', { name: en.admin.updatesTitle });
+  expect(card.className).toContain('border-success');
+  expect(within(card).getByRole('region', { name: en.admin.updateAvailableTitle })).toBeTruthy();
   expect(screen.getByText(en.admin.updateState_available)).toBeTruthy();
   const notes = screen.getAllByRole('link', { name: new RegExp(en.admin.updateReleaseNotes) });
   expect(notes.map((link) => link.getAttribute('href'))).toContain(

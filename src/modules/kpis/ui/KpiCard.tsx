@@ -3,6 +3,7 @@ import { useTranslations } from 'next-intl';
 import { ArrowDown, ArrowUp } from 'lucide-react';
 import { cn } from '@/ui/cn';
 import { MeterArc } from '@/ui/layout/Meter';
+import { useRelativeDay } from '@/ui/format';
 import { useKpiLabels } from './use-kpi-labels';
 import type { Kpi } from '../schema/validation';
 // KPIS-B07: a scorecard tile answers four questions in the order a principal asks them. Which
@@ -56,7 +57,7 @@ export function KpiCard({ kpi }: { kpi: Kpi }) {
 function KpiDial({ kpi }: { kpi: Kpi }) {
   const t = useTranslations('kpis');
   const labels = useKpiLabels();
-  const { achievement, status, current } = kpi.meta;
+  const { achievement, status, value } = kpi.meta;
   return (
     <span className="kpi-dial relative grid size-[84px] shrink-0 place-items-center">
       <MeterArc ratio={achievement} tone={labels.tone(status)} className="absolute inset-0" />
@@ -66,7 +67,7 @@ function KpiDial({ kpi }: { kpi: Kpi }) {
           achievement === null && 'text-text-muted',
         )}
       >
-        {current === null ? (
+        {value === null ? (
           <bdi dir="ltr">{t('notAvailable')}</bdi>
         ) : achievement === null ? (
           '—'
@@ -84,6 +85,7 @@ function KpiDial({ kpi }: { kpi: Kpi }) {
 function KpiFigures({ kpi }: { kpi: Kpi }) {
   const t = useTranslations('kpis');
   const labels = useKpiLabels();
+  const ago = useRelativeDay();
   const { meta } = kpi;
   return (
     <span className="grid min-w-0 gap-1">
@@ -91,13 +93,22 @@ function KpiFigures({ kpi }: { kpi: Kpi }) {
         <span
           className={cn(
             'text-[1.75rem] leading-none font-semibold tracking-tight',
-            meta.current === null && 'text-base text-text-muted',
+            meta.value === null && 'text-base text-text-muted',
           )}
         >
-          {meta.current === null ? t('notAvailable') : labels.value(meta.current, kpi.unit)}
+          {meta.value === null ? t('notAvailable') : labels.value(meta.value, kpi.unit)}
         </span>
         <KpiChange kpi={kpi} />
       </span>
+      {/* KPIS-B31: the last reading taken is still worth knowing, named as that, with its age. */}
+      {meta.value === null && meta.current !== null && meta.currentDate !== null && (
+        <span className="truncate text-xs font-light text-text-muted tabular-nums">
+          {t('lastReading', {
+            value: labels.value(meta.current, kpi.unit),
+            age: ago(meta.currentDate),
+          })}
+        </span>
+      )}
       <span className="truncate text-xs font-light text-text-muted tabular-nums">
         {meta.effectiveTarget === null || meta.effectiveTargetPeriod === null
           ? t('no_target')

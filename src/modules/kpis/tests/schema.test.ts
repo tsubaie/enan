@@ -52,17 +52,23 @@ describe('KPIS-B01 KPIS-A01 the status bands run in the direction the KPI is mea
 it('KPIS-B01 KPIS-A02 a missing, stale or untargeted reading is named rather than scored', () => {
   expect(status({ current: null, target: 100 })).toBe('no_data');
   expect(status({ current: 100, currentDate: null, target: 100 })).toBe('no_data');
-  // One missed report is lag, two is nobody maintaining it: on 2026-09-10 a quarterly KPI read in
-  // Q2 is still current and one read in Q1 is not.
-  expect(status({ current: 100, target: 100, currentDate: '2026-05-13' })).toBe('on_target');
+  // Only a reading dated in this period is scored (KPIS-B31). One missed report is lag, two is
+  // nobody maintaining it: on 2026-09-10 a quarterly KPI read in Q2 has no figure for Q3 and one
+  // read in Q1 is stale.
+  expect(status({ current: 100, target: 100, currentDate: '2026-07-01' })).toBe('on_target');
+  expect(status({ current: 100, target: 100, currentDate: '2026-05-13' })).toBe('no_data');
   expect(status({ current: 100, target: 100, currentDate: '2026-03-31' })).toBe('stale');
   // A monthly measure falls behind four times faster, an annual one four times slower.
   const monthly = { frequency: 'monthly' as const, current: 100, target: 100 };
-  expect(status({ ...monthly, currentDate: '2026-08-01' })).toBe('on_target');
+  expect(status({ ...monthly, currentDate: '2026-09-01' })).toBe('on_target');
+  expect(status({ ...monthly, currentDate: '2026-08-01' })).toBe('no_data');
   expect(status({ ...monthly, currentDate: '2026-07-31' })).toBe('stale');
   expect(
-    status({ current: 100, target: 100, frequency: 'annual', currentDate: '2025-01-02' }),
+    status({ current: 100, target: 100, frequency: 'annual', currentDate: '2026-01-02' }),
   ).toBe('on_target');
+  expect(
+    status({ current: 100, target: 100, frequency: 'annual', currentDate: '2025-01-02' }),
+  ).toBe('no_data');
   expect(
     status({ current: 100, target: 100, frequency: 'annual', currentDate: '2024-12-31' }),
   ).toBe('stale');
@@ -304,7 +310,36 @@ it('KPIS-B31 a stale reading leaves the arc empty against the current target', (
   const meta = deriveMeta(old, { today: TODAY, thresholds });
   expect(meta.status).toBe('stale');
   expect(meta.achievement).toBeNull();
+  expect(meta.value).toBeNull();
+  // The last reading taken is still carried, as that, for the age and the "last read" line.
   expect(meta.current).toBe(99);
+});
+it('KPIS-B31 the effective period read only in the period before has no figure of its own', () => {
+  const lagged = {
+    ...history,
+    current: { date: '2026-06-30', value: 45 },
+    previousPeriodValue: 45,
+    sparkline: [{ date: '2026-06-30', value: 45 }],
+  };
+  const meta = deriveMeta(lagged, { today: TODAY, thresholds });
+  expect(meta).toMatchObject({
+    status: 'no_data',
+    value: null,
+    achievement: null,
+    percentChange: null,
+    current: 45,
+    currentDate: '2026-06-30',
+  });
+  const { periods } = derivePeriods(
+    lagged,
+    { today: TODAY, thresholds },
+    { year: 2026, period: 3 },
+    meta,
+  );
+  expect(periods.map((row) => row.value)).toEqual([45, null, null]);
+  expect(periods[1]).toMatchObject({ achievement: null, status: 'no_data' });
+  // Read as its own period, the same reading is scored against that period's target.
+  expect(periods[0]).toMatchObject({ status: 'off_target' });
 });
 it('KPIS-I04 thresholds are rejected when a band is ordered against its direction', () => {
   expect(

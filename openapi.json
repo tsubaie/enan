@@ -2685,11 +2685,18 @@
                         "no_target"
                       ],
                       "type": "string"
+                    },
+                    "value": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
                     }
                   },
                   "required": [
                     "current",
                     "currentDate",
+                    "value",
                     "previous",
                     "percentChange",
                     "effectiveTarget",
@@ -5648,11 +5655,18 @@
                   },
                   "status": {
                     "$ref": "#/$defs/__schema3"
+                  },
+                  "value": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
                   }
                 },
                 "required": [
                   "current",
                   "currentDate",
+                  "value",
                   "previous",
                   "percentChange",
                   "effectiveTarget",
@@ -5762,6 +5776,7 @@
                   "required": [
                     "year",
                     "period",
+                    "value",
                     "target",
                     "achievement",
                     "status"

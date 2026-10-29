@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Download } from 'lucide-react';
 import { Button } from '@/ui/primitives/button';
@@ -12,30 +12,12 @@ import { Completed, ConfirmInstall, Pressed, Progress } from './UpdateProgress';
 
 type Send = ReturnType<typeof useCommand>;
 
-// ADMIN-B67: an install under way, or a release waiting for Install now. ADMIN-B75: one card and
-// one Install now for whatever is newer, Enan or its updater; the reader need not tell them apart.
-export function Install({
-  status,
-  command,
-  enabled,
-  reconnecting,
-}: {
-  status: Status;
-  command: Send;
-  enabled: boolean;
-  reconnecting: boolean;
-}) {
+// ADMIN-B67: an install under way, or one just finished. What waits for Install now is announced
+// in the Updates card (`Available`).
+export function Install({ status, reconnecting }: { status: Status; reconnecting: boolean }) {
   const finished = useFinished(status.state);
   if (status.state === 'updating') return <Progress status={status} reconnecting={reconnecting} />;
-  const updater = status.protocol >= 3 && Boolean(status.updaterUpdate);
-  return (
-    <>
-      {finished && <Completed status={status} />}
-      {(status.state === 'available' || updater) && (
-        <Available status={status} command={command} enabled={enabled} />
-      )}
-    </>
-  );
+  return finished ? <Completed status={status} /> : null;
 }
 
 const help = (status: Status, release: boolean) => {
@@ -43,24 +25,30 @@ const help = (status: Status, release: boolean) => {
   return status.confirm ? 'updateAvailableContract' : 'updateAvailableHelp';
 };
 
-// ADMIN-B67: a release the updater announced, installed only when an administrator chooses.
-function Available({
+// ADMIN-B67: a release the updater announced, installed only when an administrator chooses. It
+// sits inside the Updates card, under the check that found it, rather than as a card of its own.
+// ADMIN-B75: one announcement and one Install now for whatever is newer, Enan or its updater; the
+// reader need not tell them apart.
+export function Available({
   status,
   command,
   enabled,
 }: {
-  status: Status;
+  status: Status | null;
   command: Send;
   enabled: boolean;
 }) {
   const t = useTranslations('admin');
+  const id = useId();
   const [confirming, setConfirming] = useState(false);
   // What Install now was pressed for: it stays pressed until the updater starts, or the request fails.
   const [queued, setQueued] = useState<string | null>(null);
+  if (!status) return null;
   // Only the updater newer: no release of Enan to name, and nothing of Enan's to back up.
   const candidate = status.state === 'available' ? status.candidate : undefined;
   const digest = candidate?.digest;
-  const target = digest ?? status.updaterUpdate;
+  // ADMIN-B75: an updater this old announces nothing (ADMIN-B69, ADMIN-B74).
+  const target = digest ?? (status.protocol >= 3 ? status.updaterUpdate : undefined);
   if (!target) return null;
   const starting = queued === target && !command.isError;
   const install = (confirm: boolean) => {
@@ -71,7 +59,10 @@ function Available({
     );
   };
   return (
-    <Panel title={t('updateAvailableTitle')} tone="border-accent/40">
+    <section aria-labelledby={id} className="mt-5 border-t border-border/70 pt-4">
+      <h3 id={id} className="mb-3 font-medium text-success">
+        {t('updateAvailableTitle')}
+      </h3>
       <div className="grid gap-3 text-sm">
         {candidate && <Candidate candidate={candidate} />}
         <p className="font-light text-text-muted">{t(help(status, Boolean(candidate)))}</p>
@@ -95,7 +86,7 @@ function Available({
         starting={starting}
         onInstall={() => install(true)}
       />
-    </Panel>
+    </section>
   );
 }
 
