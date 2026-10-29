@@ -1229,6 +1229,8 @@
     "summary": "{value} مقابل مستهدف {target} في {period} — {status}، آخر قراءة {age}.",
     "summaryNoTarget": "{value} في {period} — بلا مستهدف، آخر قراءة {age}.",
     "summaryNoReading": "لا توجد قراءة مسجّلة في {period}.",
+    "summaryNoReadingLast": "لا توجد قراءة مسجّلة في {period} — آخر قراءة {last}، {age}.",
+    "lastReading": "آخر قراءة {value} · {age}",
     "definition": "التعريف",
     "latestNote": "أحدث ملاحظة",
     "notedOn": "{date}",

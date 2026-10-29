@@ -1229,6 +1229,8 @@
     "summary": "{value} against a {target} target for {period} — {status}, last read {age}.",
     "summaryNoTarget": "{value} for {period} — no target set, last read {age}.",
     "summaryNoReading": "No reading recorded for {period}.",
+    "summaryNoReadingLast": "No reading recorded for {period} — last read {last}, {age}.",
+    "lastReading": "Last reading {value} · {age}",
     "definition": "Definition",
     "latestNote": "Latest note",
     "notedOn": "{date}",

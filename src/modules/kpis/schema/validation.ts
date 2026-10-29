@@ -103,8 +103,11 @@ export const Point = z.object({ date: z.iso.date(), value: z.number() });
 export type Point = z.infer<typeof Point>;
 // Everything the row and the gauge read, computed once per request (statuses are never stored).
 export const KpiMeta = z.object({
+  // The last reading taken, whichever period it falls in, and its date.
   current: z.number().nullable(),
   currentDate: z.iso.date().nullable(),
+  // KPIS-B31: the effective period's own figure; null when nothing is dated inside it.
+  value: z.number().nullable(),
   previous: z.number().nullable(),
   percentChange: z.number().nullable(),
   effectiveTarget: z.number().nullable(),
@@ -157,7 +160,7 @@ export const PeriodComparison = PeriodRef.extend({
 // the effective period, and it repeats the row's own answer exactly.
 export const PeriodView = PeriodRef.extend({
   // KPIS-B31: the reading that period holds of its own, never one borrowed from another period.
-  value: z.number().nullable().optional(),
+  value: z.number().nullable(),
   target: z.number().nullable(),
   achievement: z.number().nullable(),
   status: KpiStatus,

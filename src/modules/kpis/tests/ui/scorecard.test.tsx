@@ -43,18 +43,20 @@ const base = {
 };
 // The three quarters the record can be read against; the middle one repeats the row's answer.
 const periodsFor = (meta: KpiMeta) => [
-  { year: 2026, period: 2, target: 40, achievement: 1.06, status: 'on_target' },
+  { year: 2026, period: 2, value: 42.5, target: 40, achievement: 1.06, status: 'on_target' },
   {
     ...(meta.effectiveTargetPeriod ?? { year: 2026, period: 3 }),
+    value: meta.value,
     target: meta.effectiveTarget,
     achievement: meta.achievement,
     status: meta.status,
   },
-  { year: 2026, period: 4, target: 60, achievement: 0.71, status: 'off_target' },
+  { year: 2026, period: 4, value: 42.5, target: 60, achievement: 0.71, status: 'off_target' },
 ];
 const meta: KpiMeta = {
   current: 42.5,
   currentDate: '2026-09-09',
+  value: 42.5,
   previous: 34,
   percentChange: 0.25,
   effectiveTarget: 50,
@@ -155,14 +157,29 @@ it('KPIS-B06 KPIS-A07 an objective that was deleted still names its group, as ar
 it('KPIS-B07 a KPI with no reading says so instead of showing a number', () => {
   mount(
     <KpiCard
-      kpi={kpi({}, { current: null, currentDate: null, percentChange: null, sparkline: [] })}
+      kpi={kpi(
+        {},
+        { current: null, currentDate: null, value: null, percentChange: null, sparkline: [] },
+      )}
     />,
   );
   // KPIS-B31: both the dial and the figure say N/A rather than a zero.
   expect(screen.getAllByText(en.kpis.notAvailable)).toHaveLength(2);
 });
+it('KPIS-B31 a tile with no reading in the period says N/A and names the last reading as that', () => {
+  mount(
+    <KpiCard
+      kpi={kpi({}, { value: null, achievement: null, status: 'stale', percentChange: null })}
+    />,
+  );
+  expect(screen.getAllByText(en.kpis.notAvailable)).toHaveLength(2);
+  // The older 42.5 is not the period's figure; it is named as the last reading, with its age.
+  expect(screen.queryByText('42.5 pts')).toBeNull();
+  expect(screen.getByText(/^Last reading 42.5 pts · /u)).toBeTruthy();
+  expect(screen.queryByText('+25%')).toBeNull();
+});
 it('KPIS-B31 a period with no reading of its own draws the empty track with N/A inside it', () => {
-  const detail = kpi({}, { achievement: null, status: 'stale' });
+  const detail = kpi({}, { value: null, achievement: null, status: 'stale' });
   const empty = {
     ...detail,
     periods: detail.periods.map((row, index) =>
@@ -178,7 +195,7 @@ it('KPIS-B31 a period with no reading of its own draws the empty track with N/A 
   expect(screen.getAllByText(en.kpis.notAvailable)).toHaveLength(2);
   expect(screen.queryByText('42.5 pts')).toBeNull();
   mount(<KpiSummary kpi={empty} />);
-  expect(screen.getByText(/No reading recorded/u)).toBeTruthy();
+  expect(screen.getByText(/^No reading recorded for Q3 2026 — last read 42.5 pts, /u)).toBeTruthy();
 });
 it('KPIS-B03 the gauge shows the achievement as its headline and names both figures it spans', () => {
   const { container } = mount(<KpiHeadline kpi={kpi({}, { achievement: 3.4 })} />);
@@ -223,7 +240,7 @@ it('KPIS-B08 the period toggle moves the comparison and every figure the arc sta
   expect(screen.getByText('71%')).toBeTruthy();
   expect(screen.getByText('60 pts')).toBeTruthy();
   expect(screen.getByText(en.kpis.off_target)).toBeTruthy();
-  // The reading never moves: only what it is being read against does.
+  // Each period is read at its own reading (KPIS-B31); this fixture's quarters share one.
   expect(screen.getByText('42.5 pts')).toBeTruthy();
 });
 it('KPIS-B08 KPIS-A05 the year form offers the KPI cadence in order and pre-fills what is set', () => {

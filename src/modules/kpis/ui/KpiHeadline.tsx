@@ -18,11 +18,16 @@ export function KpiSummary({ kpi }: { kpi: KpiDetail }) {
   const view = kpi.periods[1];
   if (!view) return null;
   const period = labels.period(view, kpi.frequency);
-  const value = view.value === undefined ? kpi.meta.current : view.value;
+  const value = view.value;
   const age = kpi.meta.currentDate;
+  const last = kpi.meta.current;
+  // KPIS-B31: with nothing dated in the period, the sentence says so; the last reading taken is
+  // named with its age, as a last reading rather than as the period's figure.
   const sentence =
-    value === null || age === null || kpi.meta.status === 'no_data'
-      ? t('summaryNoReading', { period })
+    value === null || age === null
+      ? last === null || age === null
+        ? t('summaryNoReading', { period })
+        : t('summaryNoReadingLast', { period, last: labels.value(last, kpi.unit), age: ago(age) })
       : view.target === null
         ? t('summaryNoTarget', { value: labels.value(value, kpi.unit), period, age: ago(age) })
         : t('summary', {
@@ -69,7 +74,7 @@ function PeriodReading({ kpi, view }: { kpi: KpiDetail; view: PeriodView }) {
   const t = useTranslations('kpis');
   const labels = useKpiLabels();
   // KPIS-B31: the figure this period holds of its own, so an older reading never stands in for it.
-  const periodValue = view.value === undefined ? kpi.meta.current : view.value;
+  const periodValue = view.value;
   const spoken =
     view.achievement === null
       ? labels.status(view.status)
