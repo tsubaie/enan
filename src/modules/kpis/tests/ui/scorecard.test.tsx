@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { expect, it } from 'vitest';
-import { fireEvent, screen, within } from '@testing-library/react';
+import { expect, it, vi } from 'vitest';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import en from '@/core/i18n/messages/en.json';
 import ar from '@/core/i18n/messages/ar.json';
 import {
@@ -271,6 +271,22 @@ it('KPIS-B08 KPIS-A05 the year form offers the KPI cadence in order and pre-fill
   // Stepping to a year nobody has planned yet clears the form rather than carrying numbers over.
   expect(quarters.map((field) => (field as HTMLInputElement).value)).toEqual(['', '', '', '']);
   expect(screen.queryByRole('table')).toBeNull();
+});
+it('KPIS-B08 setting the year hands back to the record once the save lands', async () => {
+  const detail = kpi();
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response(JSON.stringify({ data: detail }), { status: 200 })),
+  );
+  try {
+    const onSaved = vi.fn();
+    mount(<KpiTargets kpi={detail} editable={true} onSaved={onSaved} />);
+    fireEvent.change(screen.getByLabelText('Q1'), { target: { value: '12' } });
+    fireEvent.click(screen.getByRole('button', { name: en.kpis.setYear }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });
 it('KPIS-B08 a deleted KPI shows its targets without offering to change them', () => {
   mount(

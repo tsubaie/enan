@@ -63,7 +63,7 @@ export function KpiMaintenance({ kpi, editable }: { kpi: KpiDetail; editable: bo
           </DialogDescription>
           <div className="min-h-0 overflow-y-auto">
             {task === 'targets' ? (
-              <KpiTargets kpi={kpi} editable={editable} />
+              <KpiTargets kpi={kpi} editable={editable} onSaved={close} />
             ) : (
               <KpiReadings kpi={kpi} editable={editable} />
             )}
