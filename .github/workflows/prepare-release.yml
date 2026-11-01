@@ -56,10 +56,13 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git switch -c "$branch"
           npm pkg set version="$VERSION"
+          # openapi.json carries the version too (scripts/audit/openapi.ts); audit:openapi fails the
+          # Gate when the two disagree.
+          node -e 'const fs = require("fs"); const d = JSON.parse(fs.readFileSync("openapi.json", "utf8")); d.info.version = process.argv[1]; fs.writeFileSync("openapi.json", `${JSON.stringify(d, null, 2)}\n`);' "$VERSION"
           git commit -qam "chore(release): $VERSION"
           git push -q origin "$branch"
           url=$(gh pr create --base main --head "$branch" --title "chore(release): $VERSION" \
-            --body "Sets \`package.json\` to \`$VERSION\`. Opened by the Prepare release workflow, which merges it once the Gate passes and then tags \`v$VERSION\` (ADR 0056).")
+            --body "Sets \`package.json\` and \`openapi.json\` to \`$VERSION\`. Opened by the Prepare release workflow, which merges it once the Gate passes and then tags \`v$VERSION\` (ADR 0056).")
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - name: Merge once the Gate passes, then tag
