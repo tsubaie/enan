@@ -32,7 +32,7 @@ One decision per file. Format: **Status**, **Context**, **Decision**, **Conseque
 | 0026 | A restore that may have split database and files stays in maintenance; restores are serialized; drained jobs retry | accepted |
 | 0027 | The database URL's host part is the only place the server is named | superseded by 0029 |
 | 0028 | Text fields take their direction from what is typed, and a text area from its first letter | accepted |
-| 0029 | SQLite as the only database | accepted |
+| 0029 | SQLite as the only database | accepted, base image refined by 0068 |
 | 0030 | Night and paper: the visual identity | accepted, night palette and system font superseded by 0031 |
 | 0031 | The night theme follows Apple's dark materials | accepted, night accent superseded by 0036, drawn indigo wallpaper by 0037 |
 | 0032 | Inter and Noto Sans Arabic carry the whole interface | accepted |
@@ -71,5 +71,6 @@ One decision per file. Format: **Status**, **Context**, **Decision**, **Conseque
 | 0065 | Voice memos save their audio first and take their transcripts from the reader | accepted |
 | 0066 | Internal people link to workspace logins by their address | accepted |
 | 0067 | Reads run outside the write lock | accepted |
+| 0068 | Node 26 is the runtime | accepted |
 
 Open decisions awaiting an ADR: license (see roadmap); chart library confirmation (`recharts`).

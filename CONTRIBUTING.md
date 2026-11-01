@@ -10,7 +10,7 @@ Thank you for helping. This project is built to be extended module by module, so
 
 ## Setting up
 
-Node 22 and pnpm 10 (`corepack enable`). Copy `.env.example` to `.env` for the Docker stack, and for tests (no database server; the suite uses a SQLite file under `tmp/` whose name ends in `_test.db`):
+Node 26 and pnpm 10 (`npm install -g corepack && corepack enable`; Node 25+ no longer bundles corepack). Copy `.env.example` to `.env` for the Docker stack, and for tests (no database server; the suite uses a SQLite file under `tmp/` whose name ends in `_test.db`):
 
 ```bash
 cp .env.test.example .env.test

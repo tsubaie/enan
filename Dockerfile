@@ -1,9 +1,10 @@
 # syntax=docker/dockerfile:1.7
 FROM ghcr.io/gitleaks/gitleaks:v8.30.1 AS gitleaks
-FROM node:22-bookworm-slim AS base
+FROM node:26-bookworm-slim AS base
 WORKDIR /app
 ENV COREPACK_HOME=/opt/corepack NEXT_TELEMETRY_DISABLED=1
-RUN corepack enable && corepack prepare pnpm@10.30.3 --activate
+# ADR 0068: Node 25+ no longer bundles corepack, so it comes from npm.
+RUN npm install -g corepack@0.36.0 && corepack enable && corepack prepare pnpm@10.30.3 --activate
 COPY --from=gitleaks /usr/bin/gitleaks /usr/local/bin/gitleaks
 
 FROM base AS deps
@@ -28,9 +29,10 @@ RUN pnpm build && rm -rf .next/cache && mv .next/standalone/node_modules .next/s
 
 # ADR 0029: the database is one SQLite file on the data volume, so the runtime image is plain
 # Node with no database client of any kind.
-FROM node:22-bookworm-slim AS runtime
+FROM node:26-bookworm-slim AS runtime
 RUN groupadd --gid 1001 enan && useradd --uid 1001 --gid enan --create-home enan
 COPY --from=base /opt/corepack /opt/corepack
+COPY --from=base /usr/local/lib/node_modules/corepack /usr/local/lib/node_modules/corepack
 RUN ln -s ../lib/node_modules/corepack/dist/pnpm.js /usr/local/bin/pnpm
 WORKDIR /app
 # Only Next's standalone output: the server, the packages its build traced, static files,
