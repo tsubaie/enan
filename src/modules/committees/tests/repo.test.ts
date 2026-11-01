@@ -206,9 +206,7 @@ it('COMM-B02 search covers name, description and ownership with Arabic forms and
   const [stored] = await db().all<{ search_text: string }>(
     sql`select search_text from committees where id = ${s.risk.id}`,
   );
-  expect(stored?.search_text).toBe(
-    `${normalize('Compliance')}\n${normalize('الإِعْدَاد للمخاطر')}`,
-  );
+  expect(stored?.search_text).toBe(`${normalize('Compliance')}\n${normalize('الإِعْدَاد للمخاطر')}`);
 });
 it('COMM-I03 COMM-B02 trashed bodies appear in Trash alone; choices and workspace search leave them out', async () => {
   const s = await seed();

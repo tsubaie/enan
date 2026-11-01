@@ -36,7 +36,9 @@ for (const name of Wallpaper.options) {
   const declarations = Object.entries(accentProperties(tokens))
     .map(([property, value]) => `  ${property}: ${value};`)
     .join('\n');
-  rules.push(`/* ${name}: picked ${colour ?? 'nothing (sage)'} */\nhtml[data-wallpaper='${name}'] {\n${declarations}\n}`);
+  rules.push(
+    `/* ${name}: picked ${colour ?? 'nothing (sage)'} */\nhtml[data-wallpaper='${name}'] {\n${declarations}\n}`,
+  );
   const ratios = [
     ...accentGrounds.night.map((g) => contrast(tokens.night.accent, g)),
     ...accentGrounds.paper.map((g) => contrast(tokens.paper.accent, g)),

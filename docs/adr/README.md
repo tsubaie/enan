@@ -72,5 +72,6 @@ One decision per file. Format: **Status**, **Context**, **Decision**, **Conseque
 | 0066 | Internal people link to workspace logins by their address | accepted |
 | 0067 | Reads run outside the write lock | accepted |
 | 0068 | Node 26 is the runtime | accepted |
+| 0069 | oxfmt replaces Prettier, and formatting is checked | accepted |
 
 Open decisions awaiting an ADR: license (see roadmap); chart library confirmation (`recharts`).

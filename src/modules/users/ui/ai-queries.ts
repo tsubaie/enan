@@ -44,14 +44,29 @@ export function useSaveAiModels() {
   return useMutation({
     mutationFn: (input: z.infer<typeof AiModelSelection>) =>
       request('/admin/ai/models', z.object({ data: AiModels }), { method: 'PUT', body: input }),
-    onSuccess: () => Promise.all([client.invalidateQueries({ queryKey: ['admin', 'ai'] }), client.invalidateQueries({ queryKey: ['ai'] })]),
+    onSuccess: () =>
+      Promise.all([
+        client.invalidateQueries({ queryKey: ['admin', 'ai'] }),
+        client.invalidateQueries({ queryKey: ['ai'] }),
+      ]),
   });
 }
 export function useAiControls() {
-  return useQuery({ queryKey: ['admin', 'ai', 'controls'], queryFn: () => request('/admin/ai/controls', z.object({ data: AiControls })), refetchInterval: 30000 });
+  return useQuery({
+    queryKey: ['admin', 'ai', 'controls'],
+    queryFn: () => request('/admin/ai/controls', z.object({ data: AiControls })),
+    refetchInterval: 30000,
+  });
 }
 export function useSaveAiControls() {
   const client = useQueryClient();
-  return useMutation({ mutationFn: (input: z.infer<typeof AiControlsWrite>) => request('/admin/ai/controls', z.object({ data: AiControls }), { method: 'PUT', body: input }),
-    onSuccess: () => Promise.all([client.invalidateQueries({ queryKey: ['admin', 'ai'] }), client.invalidateQueries({ queryKey: ['ai'] })]) });
+  return useMutation({
+    mutationFn: (input: z.infer<typeof AiControlsWrite>) =>
+      request('/admin/ai/controls', z.object({ data: AiControls }), { method: 'PUT', body: input }),
+    onSuccess: () =>
+      Promise.all([
+        client.invalidateQueries({ queryKey: ['admin', 'ai'] }),
+        client.invalidateQueries({ queryKey: ['ai'] }),
+      ]),
+  });
 }

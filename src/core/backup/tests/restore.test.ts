@@ -239,9 +239,7 @@ describe('restore sequence', () => {
     await hold.inRestore;
     const staging = (await names(space.files)).filter((name) => name.startsWith('.restore-'));
     expect(staging).toHaveLength(1);
-    await expect(restoreBackup(source(), { confirmed: true })).rejects.toThrow(
-      'already running',
-    );
+    await expect(restoreBackup(source(), { confirmed: true })).rejects.toThrow('already running');
     expect(await isRestoring()).toBe(true);
     expect(await names(space.files)).toEqual(expect.arrayContaining(staging));
     hold.release();

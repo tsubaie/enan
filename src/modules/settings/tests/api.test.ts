@@ -35,8 +35,7 @@ async function call(
     'Content-Type': 'application/json',
     'Idempotency-Key': options.key ?? crypto.randomUUID(),
   };
-  if (options.requestedWith !== null)
-    headers['X-Requested-With'] = options.requestedWith ?? 'Enan';
+  if (options.requestedWith !== null) headers['X-Requested-With'] = options.requestedWith ?? 'Enan';
   const request = new Request(new URL('/api/v1/admin/settings', env().APP_URL), {
     method,
     headers,

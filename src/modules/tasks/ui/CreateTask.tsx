@@ -5,7 +5,13 @@ import { EntityCreateForm } from '@/ui/entity/EntityCreateForm';
 import type { CreateApi } from '@/ui/entity/types';
 import { TaskCreate, type TaskDetail } from '../schema/validation';
 import { TaskFields } from './TaskFields';
-export function CreateTask({ api, committeeId = null }: { api: CreateApi<TaskCreate, TaskDetail>; committeeId?: string | null }) {
+export function CreateTask({
+  api,
+  committeeId = null,
+}: {
+  api: CreateApi<TaskCreate, TaskDetail>;
+  committeeId?: string | null;
+}) {
   const t = useTranslations('tasks');
   const c = useTranslations('common');
   const [error, setError] = useState<Error | null>(null);

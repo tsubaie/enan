@@ -25,12 +25,7 @@ import { writeAudit } from '@/core/db/audit-repo';
 import { getSetting, hasSetting } from '@/core/db/settings-repo';
 import { codeRequests, recordCodeRequest } from '@/core/db/sign-in-code-repo';
 import { users } from '@/core/db/system-schema';
-import {
-  authAccounts,
-  authPasskeys,
-  authSessions,
-  authVerifications,
-} from '@/core/db/auth-schema';
+import { authAccounts, authPasskeys, authSessions, authVerifications } from '@/core/db/auth-schema';
 import { type SignInMethod } from '@/core/config/sign-in-schema';
 import { clientIp } from '@/core/http/client-ip';
 import { AppError } from '@/core/http/errors';

@@ -44,7 +44,10 @@ it('ADMIN-B63 the code form asks for the email, then for the six digits it says 
   });
   fireEvent.click(screen.getByRole('button', { name: en.auth.codeSend }));
   await waitFor(() => expect(screen.getByLabelText(en.auth.code)).toBeTruthy());
-  expect(http.request.mock.calls[0]?.[0]).toEqual({ email: 'member@example.test', type: 'sign-in' });
+  expect(http.request.mock.calls[0]?.[0]).toEqual({
+    email: 'member@example.test',
+    type: 'sign-in',
+  });
   expect(screen.getByRole('status').textContent).toBe(
     en.auth.codeSent.replace('{email}', 'member@example.test'),
   );

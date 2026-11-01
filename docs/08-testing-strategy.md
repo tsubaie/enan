@@ -76,7 +76,7 @@ Collected, thresholds per file class: `service.ts` and `schema/validation.ts` â‰
 ## CI
 
 1. `pnpm install --frozen-lockfile`
-2. `pnpm lint`, `pnpm typecheck`, `pnpm depcruise`
+2. `pnpm lint`, `pnpm format:check`, `pnpm typecheck`, `pnpm depcruise`
 3. `pnpm knip`, `pnpm audit:structure`, `audit:i18n`, `audit:portability`, `audit:docs`, `audit:schema`, `audit:tests`, `audit:migrations`, `gitleaks`
 4. `pnpm test` with `DATABASE_URL_TEST` pointing at a `file:` path under `tmp/` (includes core adversarial suite and audit self-tests); no service container
 5. `pnpm build`, `pnpm audit:bundle`

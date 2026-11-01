@@ -1,1 +1,6 @@
-export { CommitteePicker, CommitteeBadge, CommitteeChip, useCommitteeOptions } from './CommitteePicker';
+export {
+  CommitteePicker,
+  CommitteeBadge,
+  CommitteeChip,
+  useCommitteeOptions,
+} from './CommitteePicker';

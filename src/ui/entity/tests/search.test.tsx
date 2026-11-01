@@ -3,7 +3,10 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { EntitySearch } from '../EntitySearch';
 vi.mock('next-intl', () => ({ useTranslations: () => (key: string) => key }));
-afterEach(() => { cleanup(); vi.useRealTimers(); });
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 it('EP-B22 a delayed search URL update preserves characters typed since submission', () => {
   vi.useFakeTimers();
   const navigate = vi.fn();

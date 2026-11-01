@@ -62,7 +62,9 @@ export function notificationContributors(modules: readonly ServerManifest[] = se
   return {
     kinds: owners,
     resolvers: new Map(
-      modules.flatMap((item) => (item.notifications ? [[item.id, item.notifications.resolve]] : [])),
+      modules.flatMap((item) =>
+        item.notifications ? [[item.id, item.notifications.resolve]] : [],
+      ),
     ),
   };
 }

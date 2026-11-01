@@ -46,7 +46,11 @@ function GoogleButton() {
       onClick={() => {
         setPending(true);
         void authClient.signIn
-          .social({ provider: 'google', callbackURL: routes.home(), errorCallbackURL: routes.login() })
+          .social({
+            provider: 'google',
+            callbackURL: routes.home(),
+            errorCallbackURL: routes.login(),
+          })
           .finally(() => setPending(false));
       }}
     >

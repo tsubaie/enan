@@ -113,7 +113,9 @@ describe('review surface', () => {
     expect(master.getAttribute('aria-checked')).toBe('true');
     fireEvent.click(within(card).getByRole('checkbox', { name: 'Select Send the deck' }));
     expect(
-      within(card).getByRole('checkbox', { name: 'Select all suggestions' }).getAttribute('aria-checked'),
+      within(card)
+        .getByRole('checkbox', { name: 'Select all suggestions' })
+        .getAttribute('aria-checked'),
     ).toBe('mixed');
     expect(within(card).getByText('2 of 3 selected')).toBeTruthy();
     fireEvent.click(within(card).getByRole('button', { name: 'Source' }));
@@ -142,7 +144,11 @@ describe('review surface', () => {
     });
     fireEvent.click(screen.getByRole('checkbox', { name: 'Select all suggestions' }));
     fireEvent.click(screen.getByRole('button', { name: 'Use rewrite' }));
-    expect(apply.mock.calls[1]?.[0]).toMatchObject({ taskIndexes: [], tagIndexes: [], taskTitles: [] });
+    expect(apply.mock.calls[1]?.[0]).toMatchObject({
+      taskIndexes: [],
+      tagIndexes: [],
+      taskTitles: [],
+    });
   });
   it('NOTES-B18 an unedited draft is not sent as content; Discard discards and offers Undo, which restores', async () => {
     const review = fakeReview();

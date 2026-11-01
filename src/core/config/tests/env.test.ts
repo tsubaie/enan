@@ -59,9 +59,7 @@ describe('environment', () => {
     const relative = attempt('file:./tmp/dev.db').DATABASE_URL;
     expect(relative.startsWith('file:/')).toBe(true);
     expect(relative.endsWith('/tmp/dev.db')).toBe(true);
-    expect(attempt('file:///var/lib/enan/data/enan.db').DATABASE_URL).toContain(
-      'file:///',
-    );
+    expect(attempt('file:///var/lib/enan/data/enan.db').DATABASE_URL).toContain('file:///');
   });
   it('the test runner only ever opens the disposable DATABASE_URL_TEST file', () => {
     const parsed = parseEnvironment({

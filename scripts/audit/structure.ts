@@ -98,7 +98,13 @@ export function evaluateLintDirectives(file: string, text: string): Finding[] {
   if (!lintedFile.test(file) || file.startsWith('scripts/audit/tests/')) return [];
   return text.split('\n').flatMap((line, index) =>
     lintDirective.test(line)
-      ? [{ rule: 'lint-directive', file: `${file}:${index + 1}`, message: 'inline lint directive' }]
+      ? [
+          {
+            rule: 'lint-directive',
+            file: `${file}:${index + 1}`,
+            message: 'inline lint directive',
+          },
+        ]
       : [],
   );
 }
@@ -116,10 +122,13 @@ export async function collectModule(
     ? await read(join(root, 'src/core/jobs/registry.ts'))
     : '';
   const registryPath = join(root, 'src/core/modules/registry.ts');
-  const moduleRegistry = await exists(registryPath) ? await read(registryPath) : '';
+  const moduleRegistry = (await exists(registryPath)) ? await read(registryPath) : '';
   const indexPath = join(dir, 'index.ts');
-  const moduleIndex = await exists(indexPath) ? await read(indexPath) : '';
-  const registeredManifest = moduleRegistry.includes(`@/modules/${name}`) && /jobs:\s*\w+/u.test(moduleIndex) && /from ['"]\.\/jobs['"]/u.test(moduleIndex);
+  const moduleIndex = (await exists(indexPath)) ? await read(indexPath) : '';
+  const registeredManifest =
+    moduleRegistry.includes(`@/modules/${name}`) &&
+    /jobs:\s*\w+/u.test(moduleIndex) &&
+    /from ['"]\.\/jobs['"]/u.test(moduleIndex);
   let schemaIndex: ModuleInput['schemaIndex'] = null;
   if (schemaEntries.includes('index.ts')) {
     const text = await read(join(dir, 'schema/index.ts'));

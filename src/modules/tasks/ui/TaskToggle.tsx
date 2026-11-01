@@ -32,7 +32,13 @@ export type Toggleable = {
 // takes the task out of every list view, so a panel left open strands it, turns read-only and grows
 // the "outside the current view" banner — the framework reporting the reader's own action back to
 // them. The subtask checklist passes nothing, because the parent being read is going nowhere.
-export function TaskToggle({ task, onCompleted }: { task: Task; onCompleted?: (() => void) | undefined }) {
+export function TaskToggle({
+  task,
+  onCompleted,
+}: {
+  task: Task;
+  onCompleted?: (() => void) | undefined;
+}) {
   return (
     <TaskCheck
       onCompleted={onCompleted}
@@ -51,7 +57,8 @@ export function TaskToggle({ task, onCompleted }: { task: Task; onCompleted?: ((
 // every subtask the same operation completed, back to the exact status each held. Reopening is the
 // reader's own command in the other direction and carries no toast: it is not an undo, and it
 // deliberately lands on `next_action` rather than wherever the task came from.
-export function TaskCheck({ task, onCompleted }: { task: Toggleable; onCompleted?: (() => void) | undefined }) {
+type TaskCheckProps = { task: Toggleable; onCompleted?: (() => void) | undefined };
+export function TaskCheck({ task, onCompleted }: TaskCheckProps) {
   const t = useTranslations('tasks');
   const c = useTranslations('common');
   const mutations = useTaskMutations();

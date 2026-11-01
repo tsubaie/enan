@@ -5,8 +5,10 @@ import { useRowMotion, rowMotionClass } from '../use-row-motion';
 type Row = { id: string; revision: number; deletedAt: null; deletedOpId: null };
 const row = (id: string): Row => ({ id, revision: 1, deletedAt: null, deletedOpId: null });
 const rows = (...ids: string[]) => ids.map(row);
-const ids = (rendered: { item: Row; entering: boolean; leaving: boolean }[], key: 'entering' | 'leaving') =>
-  rendered.filter((entry) => entry[key]).map((entry) => entry.item.id);
+const ids = (
+  rendered: { item: Row; entering: boolean; leaving: boolean }[],
+  key: 'entering' | 'leaving',
+) => rendered.filter((entry) => entry[key]).map((entry) => entry.item.id);
 afterEach(() => vi.useRealTimers());
 it('EP-B12 a row created into a list already on screen arrives, and the entrance ends', () => {
   vi.useFakeTimers();

@@ -120,7 +120,12 @@ function UnitedKingdomFlag() {
       </clipPath>
       <rect width="60" height="30" fill="var(--flag-uk-blue)" />
       <path d="M0 0l60 30m0-30L0 30" stroke="var(--flag-white)" strokeWidth="6" />
-      <path d="M0 0l60 30m0-30L0 30" stroke="var(--flag-uk-red)" strokeWidth="4" clipPath={`url(#${clip})`} />
+      <path
+        d="M0 0l60 30m0-30L0 30"
+        stroke="var(--flag-uk-red)"
+        strokeWidth="4"
+        clipPath={`url(#${clip})`}
+      />
       <path d="M30 0v30M0 15h60" stroke="var(--flag-white)" strokeWidth="10" />
       <path d="M30 0v30M0 15h60" stroke="var(--flag-uk-red)" strokeWidth="6" />
     </svg>

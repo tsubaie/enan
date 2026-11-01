@@ -171,11 +171,13 @@ async function execute<I extends z.ZodType, O extends z.ZodType>(
 ) {
   const transactional = options.transaction ?? request.method !== 'GET';
   if (!transactional)
-    return z.json().parse(
-      options.response.parse(
-        await options.handler(input, { ...ctx, db: readOnlyDb() }, params, request),
-      ),
-    );
+    return z
+      .json()
+      .parse(
+        options.response.parse(
+          await options.handler(input, { ...ctx, db: readOnlyDb() }, params, request),
+        ),
+      );
   // One immediate transaction per request (ADR 0029): a retry carrying the same Idempotency-Key
   // waits at BEGIN until the first attempt commits, then replays its stored response.
   const outcome = await withTransaction(db(), async (database) => {

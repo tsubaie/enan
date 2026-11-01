@@ -4,11 +4,7 @@ import { z } from 'zod';
 import { type Context } from '@/core/auth/session';
 import { getSetting } from '@/core/db/settings-repo';
 import { enqueue } from '@/core/db/jobs-repo';
-import {
-  aiAdmissionUsage,
-  prepareAiJob,
-  latestAiJob,
-} from '@/core/db/ai-jobs-repo';
+import { aiAdmissionUsage, prepareAiJob, latestAiJob } from '@/core/db/ai-jobs-repo';
 import { monthStart } from '@/core/time/ai';
 import { aiExecutionLimits } from '@/core/config/ai';
 import { supportsModelSlot } from '@/core/config/ai-model-schema';
@@ -45,7 +41,11 @@ export async function availableCapabilities(ctx: Context, wait = false) {
     const models = await loadModels({ wait });
     return enabled.filter((capability) => {
       const slot = capability === 'notes.suggest_tags' ? 'fast' : 'default';
-      return models.some((model) => model.id === (slot === 'fast' ? fastModel : defaultModel) && supportsModelSlot(model, slot));
+      return models.some(
+        (model) =>
+          model.id === (slot === 'fast' ? fastModel : defaultModel) &&
+          supportsModelSlot(model, slot),
+      );
     });
   } catch {
     return [];
@@ -104,7 +104,11 @@ export async function admitAi(
     monthStart(await getSetting(ctx.db, 'workspace.timezone')),
   );
   if (env().AI_RATE_LIMIT_ENABLED && usage.count >= (capability === 'notes.suggest_tags' ? 60 : 30))
-    throw new AppError('ai_unavailable', { reason: 'rate_limit', retryAfterMs: usage.retryAfterMs, limit: capability === 'notes.suggest_tags' ? 60 : 30 });
+    throw new AppError('ai_unavailable', {
+      reason: 'rate_limit',
+      retryAfterMs: usage.retryAfterMs,
+      limit: capability === 'notes.suggest_tags' ? 60 : 30,
+    });
   if (budget !== null && usage.costMicros + payload.reservedCostMicros > budget)
     throw new AppError('ai_unavailable', { reason: 'budget' });
   const job = await enqueue(
@@ -129,7 +133,11 @@ async function chooseModel(
   const model = (await loadModels({ wait: false })).find((entry) => entry.id === selected);
   if (!model) throw new AppError('ai_unavailable', { reason: 'model' });
   const maxOutputTokens = Math.min(
-    capability === 'notes.refine' ? 16000 : capability === 'notes.suggest_tags' ? aiExecutionLimits.tags.maxOutputTokens : 4096,
+    capability === 'notes.refine'
+      ? 16000
+      : capability === 'notes.suggest_tags'
+        ? aiExecutionLimits.tags.maxOutputTokens
+        : 4096,
     model.maxOutputTokens,
   );
   const estimate = Buffer.byteLength(framedInput(input)) + 8192;

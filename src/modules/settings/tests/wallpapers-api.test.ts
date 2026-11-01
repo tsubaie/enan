@@ -205,7 +205,10 @@ it('ADMIN-B47 tone and accent are measured on the server; the browser cannot sen
   expect(dark.body.data.accent).toMatch(/^#[0-9a-f]{6}$/u);
   const light = await upload({ bytes: bright });
   expect(light.body.data).toMatchObject({ tone: 'light', accent: null });
-  const forged = await upload({ bytes: png, extra: { luminance: '1', accent: rgbToHex([255, 0, 0]) } });
+  const forged = await upload({
+    bytes: png,
+    extra: { luminance: '1', accent: rgbToHex([255, 0, 0]) },
+  });
   expect(forged.status).toBe(400);
 });
 
@@ -425,15 +428,13 @@ it('ADMIN-B47 a temporary file a crash left is removed at the next start', async
 it('ADMIN-B42 a saved choice of a retired wallpaper (Indigo, Fan, Mist) is read as the default, Jade', async () => {
   for (const retired of ['indigo', 'fan', 'mist']) {
     await db().delete(settings).where(eq(settings.key, 'workspace.wallpaper'));
-    await db()
-      .insert(settings)
-      .values({
-        key: 'workspace.wallpaper',
-        value: retired,
-        scope: 'workspace',
-        userId: null,
-        updatedBy: admin.id,
-      });
+    await db().insert(settings).values({
+      key: 'workspace.wallpaper',
+      value: retired,
+      scope: 'workspace',
+      userId: null,
+      updatedBy: admin.id,
+    });
     expect(await workspaceWallpaper()).toEqual({
       name: 'jade',
       tone: 'dark',

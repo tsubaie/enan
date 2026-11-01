@@ -10,12 +10,18 @@ export function useAiStart(path: string, revision: number, queryKey: string[], c
   const accepted = useRef<string | null>(null);
   const [waiting, setWaiting] = useState(false);
   const cancel = useMutation({
-    mutationFn: (jobId: string) => request('/ai/cancel', response, { method: 'POST', body: { jobId } }),
+    mutationFn: (jobId: string) =>
+      request('/ai/cancel', response, { method: 'POST', body: { jobId } }),
     onSuccess: () => client.invalidateQueries({ queryKey }),
     onError: () => setWaiting(false),
   });
   const start = useMutation({
-    onMutate: () => { intent.current = false; accepted.current = null; setWaiting(false); cancel.reset(); },
+    onMutate: () => {
+      intent.current = false;
+      accepted.current = null;
+      setWaiting(false);
+      cancel.reset();
+    },
     mutationFn: () => request(path, response, { method: 'POST', body: { revision } }),
     onSuccess: async (result) => {
       accepted.current = result.data.id;

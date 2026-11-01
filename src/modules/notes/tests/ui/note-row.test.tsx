@@ -32,7 +32,12 @@ const note = NoteDetail.parse({
 });
 describe('note row', () => {
   it('NOTES-B02 NOTES-A05 shows compact type, archive state and completed/total task progress without tag clutter', () => {
-    mount(<><NoteRow note={note} /><NoteTrail note={note} /></>);
+    mount(
+      <>
+        <NoteRow note={note} />
+        <NoteTrail note={note} />
+      </>,
+    );
     expect(screen.getByText('Board meeting')).toBeTruthy();
     expect(screen.getByText('Archived')).toBeTruthy();
     expect(screen.queryByText('Budget', { exact: true })).toBeNull();
@@ -59,7 +64,13 @@ describe('note row', () => {
     expect(screen.queryByTitle(/voice memo/u)).toBeNull();
   });
   it('NOTES-A01 renders the Arabic labels in the Arabic view', () => {
-    mount(<><NoteRow note={note} /><NoteTrail note={note} /></>, 'ar');
+    mount(
+      <>
+        <NoteRow note={note} />
+        <NoteTrail note={note} />
+      </>,
+      'ar',
+    );
     expect(screen.getByText(ar.notes.board_meeting)).toBeTruthy();
     expect(screen.getByText(ar.notes.today)).toBeTruthy();
   });

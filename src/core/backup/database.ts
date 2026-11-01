@@ -72,9 +72,7 @@ async function verifySnapshot(client: DatabaseClient) {
     ...readMigrationFiles({ migrationsFolder: './drizzle' }).map((file) => file.folderMillis),
   );
   if (ledger.latest > known)
-    throw new Error(
-      'Backup was created by a newer version of Enan; upgrade before restoring it',
-    );
+    throw new Error('Backup was created by a newer version of Enan; upgrade before restoring it');
 }
 // A random stamp in the file header (`user_version`) that tells one restored file from another,
 // so a client that predates a restore can be recognised (see reconcileDatabaseClient).

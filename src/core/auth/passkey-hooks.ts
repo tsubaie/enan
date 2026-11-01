@@ -90,9 +90,16 @@ export async function passkeyAfter(ctx: Ctx, returned: unknown, database: Databa
   if (ctx.path === '/passkey/verify-registration') {
     const added = Added.safeParse(returned);
     if (added.success)
-      await writeAudit(database, added.data.userId, 'account.passkey.add', 'user', added.data.userId, {
-        name: added.data.name ?? null,
-      });
+      await writeAudit(
+        database,
+        added.data.userId,
+        'account.passkey.add',
+        'user',
+        added.data.userId,
+        {
+          name: added.data.name ?? null,
+        },
+      );
   }
   const actor = ctx.context.session?.user.id;
   if (ctx.path === '/passkey/delete-passkey' && actor)

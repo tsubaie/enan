@@ -42,7 +42,14 @@ const maxDepth = 8;
 // What a redacted log line may contain: primitives, arrays and plain objects, nothing that could
 // still hold a live reference to a request, a provider client or an error's own properties.
 type Censored =
-  string | number | boolean | bigint | null | undefined | Censored[] | { [key: string]: Censored };
+  | string
+  | number
+  | boolean
+  | bigint
+  | null
+  | undefined
+  | Censored[]
+  | { [key: string]: Censored };
 type SerializedError = {
   type: string;
   message: string;

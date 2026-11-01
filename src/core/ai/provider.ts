@@ -29,10 +29,14 @@ export async function completeStructured<S extends z.ZodType>(
   };
   const deadline = AbortSignal.timeout(timeoutMs);
   const combined = AbortSignal.any([signal, deadline]);
-  const response = await client.messages.stream(params, { signal: combined }).finalMessage().catch((error) => {
-    if (deadline.aborted && !signal.aborted) throw new AppError('ai_failed', { reason: 'timeout' });
-    throw error;
-  });
+  const response = await client.messages
+    .stream(params, { signal: combined })
+    .finalMessage()
+    .catch((error) => {
+      if (deadline.aborted && !signal.aborted)
+        throw new AppError('ai_failed', { reason: 'timeout' });
+      throw error;
+    });
   const parsedUsage = ProviderUsage.safeParse(response.usage);
   const usageDetail = parsedUsage.success ? { usage: z.json().parse(parsedUsage.data) } : {};
   if (response.stop_reason !== 'end_turn')

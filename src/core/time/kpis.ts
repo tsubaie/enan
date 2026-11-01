@@ -34,5 +34,8 @@ export function periodRange({ year, period }: Period, frequency: Frequency) {
 // stale once it is more than one period behind, which is one missed report rather than a count of
 // days: a monthly KPI and an annual one are late at very different speeds.
 export function periodsBehind(day: string, today: string, frequency: Frequency) {
-  return periodIndex(periodOf(today, frequency), frequency) - periodIndex(periodOf(day, frequency), frequency);
+  return (
+    periodIndex(periodOf(today, frequency), frequency) -
+    periodIndex(periodOf(day, frequency), frequency)
+  );
 }

@@ -1,0 +1,21 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "singleQuote": true,
+  "trailingComma": "all",
+  "printWidth": 100,
+  "sortPackageJson": false,
+  "ignorePatterns": [
+    "pnpm-lock.yaml",
+    "drizzle/meta",
+    "openapi.json",
+    "docs",
+    "SPEC-REVIEW.md",
+    "LICENSE",
+    "NOTICE",
+    "node_modules",
+    ".next",
+    "coverage",
+    "test-results",
+    "scripts/audit/tests/fixtures"
+  ]
+}

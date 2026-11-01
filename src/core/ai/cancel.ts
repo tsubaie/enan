@@ -6,8 +6,12 @@ import { AiCapability } from '@/core/config/ai-capabilities';
 import { AppError } from '@/core/http/errors';
 export async function cancelAi(ctx: Context, jobId: string) {
   const job = await lockedAiJob(ctx.db, jobId);
-  if (!job || (job.createdBy !== ctx.user.id && ctx.user.role !== 'admin') ||
-      !job.kind.startsWith('ai.') || !AiCapability.safeParse(job.kind.slice(3)).success)
+  if (
+    !job ||
+    (job.createdBy !== ctx.user.id && ctx.user.role !== 'admin') ||
+    !job.kind.startsWith('ai.') ||
+    !AiCapability.safeParse(job.kind.slice(3)).success
+  )
     throw new AppError('not_found');
   if (['queued', 'running'].includes(job.status) && !job.cancelRequested) {
     await requestAiCancellation(ctx.db, job);
