@@ -16,9 +16,7 @@ export function AccountMenu({ user }: { user: { name: string; email: string; rol
   const [open, setOpen] = useState(false);
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
-        render={<Button variant="ghost" size="icon" className="rounded-full" />}
-      >
+      <PopoverTrigger render={<Button variant="ghost" size="icon" className="rounded-full" />}>
         <Avatar name={user.name} decorative className="size-7" />
         <span className="sr-only">{t('account')}</span>
       </PopoverTrigger>

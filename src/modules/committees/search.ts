@@ -8,5 +8,9 @@ import * as repo from './repo';
 // outside the current view). Registered on the manifest; nothing imports this directly.
 export async function searchProvider(ctx: Context, query: string, limit: number) {
   const rows = await repo.searchCommittees(ctx.db, query, limit);
-  return rows.map((row) => ({ ...row, module: 'committees', href: routes.committees({ id: row.id }) }));
+  return rows.map((row) => ({
+    ...row,
+    module: 'committees',
+    href: routes.committees({ id: row.id }),
+  }));
 }

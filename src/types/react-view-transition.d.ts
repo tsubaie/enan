@@ -4,7 +4,9 @@
 // moving the project onto a canary React or casting at every use.
 import 'react';
 declare module 'react' {
-  type ViewTransitionClass = string | { default?: string; [transitionType: string]: string | undefined };
+  type ViewTransitionClass =
+    | string
+    | { default?: string; [transitionType: string]: string | undefined };
   interface ViewTransitionProps {
     children?: import('react').ReactNode;
     name?: string;

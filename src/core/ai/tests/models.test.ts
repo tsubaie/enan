@@ -1,7 +1,16 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { loadModels, selectModels } from '../models';
-const transport = vi.hoisted(() => ({ token: 'first-key', get: vi.fn(), write: vi.fn(), outcomes: vi.fn<() => Promise<{ model: string; status: string; error: string | null }[]>>(async () => []) }));
-vi.mock('../sdk', () => ({ aiClient: async () => ({ get: transport.get, authToken: transport.token }) }));
+const transport = vi.hoisted(() => ({
+  token: 'first-key',
+  get: vi.fn(),
+  write: vi.fn(),
+  outcomes: vi.fn<() => Promise<{ model: string; status: string; error: string | null }[]>>(
+    async () => [],
+  ),
+}));
+vi.mock('../sdk', () => ({
+  aiClient: async () => ({ get: transport.get, authToken: transport.token }),
+}));
 vi.mock('@/core/db/settings-repo', () => ({ writeSetting: transport.write }));
 vi.mock('@/core/db/client', () => ({ db: () => ({}) }));
 vi.mock('@/core/db/ai-credentials-repo', () => ({ readAiCredentials: async () => undefined }));
@@ -44,7 +53,9 @@ it('ADMIN-B25 rejects unavailable models without changing saved model settings',
 });
 
 it('ADMIN-B27 hides models whose most recent invocation reports a routing failure', async () => {
-  transport.outcomes.mockResolvedValueOnce([{ model: compatible.id, status: 'error', error: '{"status":404}' }]);
+  transport.outcomes.mockResolvedValueOnce([
+    { model: compatible.id, status: 'error', error: '{"status":404}' },
+  ]);
   expect(await loadModels()).toEqual([]);
 });
 it('ADMIN-B25 a stale catalog is served while the fresh one loads in the background', async () => {

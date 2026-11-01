@@ -21,9 +21,12 @@ async function schema(database: Database) {
     );
     if (columns.some((column) => column.name === 'deleted_at') && !notTrash.has(name))
       trash.push(name);
-    const links = await database.all<{ table: string; from: string; to: string; on_delete: string }>(
-      sql`select "table", "from", "to", on_delete from pragma_foreign_key_list(${name})`,
-    );
+    const links = await database.all<{
+      table: string;
+      from: string;
+      to: string;
+      on_delete: string;
+    }>(sql`select "table", "from", "to", on_delete from pragma_foreign_key_list(${name})`);
     for (const link of links)
       if (link.on_delete !== 'CASCADE')
         references.set(link.table, [

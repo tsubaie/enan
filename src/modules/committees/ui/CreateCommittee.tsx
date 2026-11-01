@@ -12,11 +12,26 @@ export function CreateCommittee({ api }: { api: CreateApi<CommitteeCreate, Commi
   const [error, setError] = useState<Error | null>(null);
   async function submit(form: FormData) {
     setError(null);
-    try { await api.submit(CommitteeCreate.parse(Object.fromEntries(form))); }
-    catch (failure) { setError(failure instanceof Error ? failure : new Error(c('error'))); }
+    try {
+      await api.submit(CommitteeCreate.parse(Object.fromEntries(form)));
+    } catch (failure) {
+      setError(failure instanceof Error ? failure : new Error(c('error')));
+    }
   }
-  return <EntityCreateForm title={t('newCommittee')} pending={api.pending} error={error} cancel={api.cancel} onSubmit={submit}>
-    <CommitteeFields initial={{ name: '', description: '', ownership: '', scope: 'internal', status: 'active' }}
-      nameError={error instanceof ApiError && error.code === 'conflict' ? t('duplicateName') : undefined} />
-  </EntityCreateForm>;
+  return (
+    <EntityCreateForm
+      title={t('newCommittee')}
+      pending={api.pending}
+      error={error}
+      cancel={api.cancel}
+      onSubmit={submit}
+    >
+      <CommitteeFields
+        initial={{ name: '', description: '', ownership: '', scope: 'internal', status: 'active' }}
+        nameError={
+          error instanceof ApiError && error.code === 'conflict' ? t('duplicateName') : undefined
+        }
+      />
+    </EntityCreateForm>
+  );
 }

@@ -45,7 +45,9 @@ it('ADMIN-B26 a request reserves the most its two attempts can cost at the model
   const input = payload.reservedTokens / 2 - payload.maxOutputTokens;
   expect(reserved).toBe(
     Math.ceil(
-      2 * 1000000 * (fixtureModel.inputPrice * input + fixtureModel.outputPrice * payload.maxOutputTokens),
+      2 *
+        1000000 *
+        (fixtureModel.inputPrice * input + fixtureModel.outputPrice * payload.maxOutputTokens),
     ),
   );
   expect(reserved).toBeGreaterThan(0);
@@ -93,7 +95,10 @@ it('ADMIN-B26 a call whose usage was lost keeps half the dollar reservation as i
     reservedCostMicros: 30001,
     maxOutputTokens: 4096,
   });
-  expect(failedUsage(null, payload)).toMatchObject({ inputTokens: 5000, estimatedCostMicros: 15001 });
+  expect(failedUsage(null, payload)).toMatchObject({
+    inputTokens: 5000,
+    estimatedCostMicros: 15001,
+  });
   // A job snapshotted before the dollar limit carries no cost reservation and keeps none.
   const legacy = AiPayload.parse({ ...payload, reservedCostMicros: undefined });
   expect(legacy.reservedCostMicros).toBe(0);

@@ -1,9 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": [
-    "nextjs",
-    "typescript"
-  ],
+  "plugins": ["nextjs", "typescript"],
   // The project's own rules (tools/eslint), loaded through Oxlint's ESLint-plugin support. The
   // plugin has no meta.name, so it is named here.
   "jsPlugins": [
@@ -78,9 +75,7 @@
   },
   "overrides": [
     {
-      "files": [
-        "**/*.{js,jsx,mjs,ts,tsx,mts,cts}"
-      ],
+      "files": ["**/*.{js,jsx,mjs,ts,tsx,mts,cts}"],
       "rules": {
         "react/display-name": "error",
         "react/jsx-key": "error",
@@ -103,12 +98,8 @@
         "jsx-a11y/alt-text": [
           "warn",
           {
-            "elements": [
-              "img"
-            ],
-            "img": [
-              "Image"
-            ]
+            "elements": ["img"],
+            "img": ["Image"]
           }
         ],
         "jsx-a11y/aria-props": "warn",
@@ -131,23 +122,14 @@
         "react/set-state-in-render": "error",
         "react/unsupported-syntax": "warn"
       },
-      "plugins": [
-        "react",
-        "import",
-        "jsx-a11y"
-      ],
+      "plugins": ["react", "import", "jsx-a11y"],
       "env": {
         "browser": true,
         "node": true
       }
     },
     {
-      "files": [
-        "**/*.ts",
-        "**/*.tsx",
-        "**/*.mts",
-        "**/*.cts"
-      ],
+      "files": ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"],
       "rules": {
         "constructor-super": "off",
         "getter-return": "off",
@@ -173,17 +155,13 @@
     },
     // WI-0001 explicitly requires a CommonJS dependency-cruiser configuration.
     {
-      "files": [
-        "**/*.cjs"
-      ],
+      "files": ["**/*.cjs"],
       "rules": {
         "typescript/no-require-imports": "off"
       }
     },
     {
-      "files": [
-        "**/*.{ts,tsx,mjs,cjs}"
-      ],
+      "files": ["**/*.{ts,tsx,mjs,cjs}"],
       "rules": {
         "no-console": "error",
         "no-empty": [
@@ -192,19 +170,12 @@
             "allowEmptyCatch": false
           }
         ],
-        "no-restricted-globals": [
-          "error",
-          "alert",
-          "confirm",
-          "prompt"
-        ],
+        "no-restricted-globals": ["error", "alert", "confirm", "prompt"],
         "eos/environment": "error"
       }
     },
     {
-      "files": [
-        "**/*.{ts,tsx}"
-      ],
+      "files": ["**/*.{ts,tsx}"],
       "rules": {
         "max-lines": [
           "error",
@@ -222,10 +193,7 @@
             "skipComments": false
           }
         ],
-        "complexity": [
-          "error",
-          12
-        ],
+        "complexity": ["error", 12],
         "eos/cast-comments": "error",
         "eos/sql-boundary": "error",
         "eos/services-throw": "error",
@@ -238,9 +206,7 @@
       }
     },
     {
-      "files": [
-        "src/**/*.{ts,tsx}"
-      ],
+      "files": ["src/**/*.{ts,tsx}"],
       "rules": {
         "eos/no-color-literals": "error",
         "eos/logical-props": "error",
@@ -249,14 +215,9 @@
       }
     },
     {
-      "files": [
-        "**/*.tsx"
-      ],
+      "files": ["**/*.tsx"],
       "rules": {
-        "max-lines": [
-          "error",
-          250
-        ]
+        "max-lines": ["error", 250]
       }
     },
     {
@@ -275,12 +236,7 @@
       }
     },
     {
-      "files": [
-        "**/*.test.{ts,tsx}",
-        "**/*.spec.{ts,tsx}",
-        "**/tests/**",
-        "e2e/**"
-      ],
+      "files": ["**/*.test.{ts,tsx}", "**/*.spec.{ts,tsx}", "**/tests/**", "e2e/**"],
       "rules": {
         "typescript/no-non-null-assertion": "off"
       }

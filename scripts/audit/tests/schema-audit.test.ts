@@ -19,9 +19,7 @@ const table = {
     { name: 'kind', nullable: true, generated: false },
     { name: 'legacy', nullable: true, generated: false },
   ],
-  indexes: [
-    { name: 'stray_idx', definition: 'CREATE INDEX "stray_idx" ON "people" ("kind")' },
-  ],
+  indexes: [{ name: 'stray_idx', definition: 'CREATE INDEX "stray_idx" ON "people" ("kind")' }],
   constraints: [
     { name: 'primary', type: 'p', definition: 'PRIMARY KEY (id)' },
     { name: 'people_kind_check', type: 'c', definition: "CHECK (kind in ('internal'))" },
@@ -82,9 +80,18 @@ describe('audit:schema', () => {
         { name: 'kind', nullable: false, generated: false },
       ],
       indexes: [
-        { name: 'people_name_idx', definition: 'CREATE INDEX "people_name_idx" ON "people" ("full_name", "id")' },
-        { name: 'people_search_idx', definition: 'CREATE INDEX "people_search_idx" ON "people" ("search_text")' },
-        { name: 'people_user_id_unique', definition: 'CREATE UNIQUE INDEX "people_user_id_unique" ON "people" ("user_id")' },
+        {
+          name: 'people_name_idx',
+          definition: 'CREATE INDEX "people_name_idx" ON "people" ("full_name", "id")',
+        },
+        {
+          name: 'people_search_idx',
+          definition: 'CREATE INDEX "people_search_idx" ON "people" ("search_text")',
+        },
+        {
+          name: 'people_user_id_unique',
+          definition: 'CREATE UNIQUE INDEX "people_user_id_unique" ON "people" ("user_id")',
+        },
       ],
       constraints: [
         { name: 'primary', type: 'p', definition: 'PRIMARY KEY (id)' },

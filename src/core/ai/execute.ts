@@ -59,7 +59,9 @@ export async function executeAi<S extends z.ZodType>(
       payload.input,
       schema,
       signal,
-      payload.capability === 'notes.suggest_tags' ? aiExecutionLimits.tags.timeoutMs : aiExecutionLimits.defaultTimeoutMs,
+      payload.capability === 'notes.suggest_tags'
+        ? aiExecutionLimits.tags.timeoutMs
+        : aiExecutionLimits.defaultTimeoutMs,
     );
     const usage = { ...usageFields(result.usage, payload), latencyMs: Date.now() - started };
     await withTransaction(db(), (database) =>
@@ -82,5 +84,8 @@ export async function executeAi<S extends z.ZodType>(
 }
 
 function providerStatusFailure(status: number) {
-  return new AppError('ai_failed', status === 402 ? { reason: 'billing' } : { reason: 'model_unavailable', status });
+  return new AppError(
+    'ai_failed',
+    status === 402 ? { reason: 'billing' } : { reason: 'model_unavailable', status },
+  );
 }

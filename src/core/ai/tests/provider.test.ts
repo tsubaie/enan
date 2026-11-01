@@ -54,16 +54,32 @@ it('NOTES-B17 stops a stalled response stream at its deadline and reports timeou
   const deadline = new AbortController();
   const timeout = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(deadline.signal);
   captured.stream.mockImplementation((_, options) => ({
-    finalMessage: () => new Promise((_, reject) => {
-      options.signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
-    }),
+    finalMessage: () =>
+      new Promise((_, reject) => {
+        options.signal.addEventListener('abort', () => reject(new Error('aborted')), {
+          once: true,
+        });
+      }),
   }));
   try {
-    const request = completeStructured('vendor/model', 1024, 'tags', {}, z.object({ tags: z.array(z.string()) }), new AbortController().signal, 45000);
-    const rejection = expect(request).rejects.toMatchObject({ code: 'ai_failed', details: { reason: 'timeout' } });
+    const request = completeStructured(
+      'vendor/model',
+      1024,
+      'tags',
+      {},
+      z.object({ tags: z.array(z.string()) }),
+      new AbortController().signal,
+      45000,
+    );
+    const rejection = expect(request).rejects.toMatchObject({
+      code: 'ai_failed',
+      details: { reason: 'timeout' },
+    });
     await vi.waitFor(() => expect(captured.stream).toHaveBeenCalled());
     deadline.abort();
     await rejection;
     expect(timeout).toHaveBeenCalledWith(45000);
-  } finally { timeout.mockRestore(); }
+  } finally {
+    timeout.mockRestore();
+  }
 });

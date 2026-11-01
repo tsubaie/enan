@@ -22,4 +22,3 @@ export function PagePlaceholder({ children }: { children: ReactNode }) {
     </ViewTransition>
   );
 }
-

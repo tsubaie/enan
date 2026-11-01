@@ -6,10 +6,16 @@ const connection = vi.hoisted(() => ({
   check: vi.fn(),
 }));
 vi.mock('@/core/config/env', () => ({ env: () => ({ JOBS_ENABLED: true }) }));
-vi.mock('../client', () => ({ aiConnection: () => connection.value, checkConnection: connection.check }));
-vi.mock('../models', () => ({ loadModels: async () => [{ id: 'vendor/model', contextLength: 64000, maxOutputTokens: 16000 }] }));
-vi.mock('@/core/db/settings-repo', () => ({ getSetting: async (_: object, key: string) =>
-  key === 'ai.enabled_capabilities' ? ['notes.refine', 'notes.suggest_tags'] : 'vendor/model',
+vi.mock('../client', () => ({
+  aiConnection: () => connection.value,
+  checkConnection: connection.check,
+}));
+vi.mock('../models', () => ({
+  loadModels: async () => [{ id: 'vendor/model', contextLength: 64000, maxOutputTokens: 16000 }],
+}));
+vi.mock('@/core/db/settings-repo', () => ({
+  getSetting: async (_: object, key: string) =>
+    key === 'ai.enabled_capabilities' ? ['notes.refine', 'notes.suggest_tags'] : 'vendor/model',
 }));
 beforeEach(() => {
   connection.value = { state: 'disabled', checkedAt: null };

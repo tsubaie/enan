@@ -171,12 +171,10 @@ it('ADMIN-B60 the admin API saves and removes the server without echoing the pas
   const saved = await save(request('', 'PUT', server));
   expect(saved.status).toBe(200);
   expect(JSON.stringify(await saved.json())).not.toContain(server.password);
-  expect(((await (await read(request('', 'GET'))).json()) as { data: object }).data).toMatchObject(
-    {
-      source: 'saved',
-      hasPassword: true,
-    },
-  );
+  expect(((await (await read(request('', 'GET'))).json()) as { data: object }).data).toMatchObject({
+    source: 'saved',
+    hasPassword: true,
+  });
   expect((await remove(request('', 'DELETE', {}))).status).toBe(200);
   expect(await readMailSettings(db())).toBeUndefined();
 });

@@ -2,13 +2,22 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import { type Context } from '@/core/auth/session';
 import { cancelAi } from '../cancel';
 const repo = vi.hoisted(() => ({ read: vi.fn(), cancel: vi.fn(), audit: vi.fn() }));
-vi.mock('@/core/db/ai-jobs-repo', () => ({ lockedAiJob: repo.read, requestAiCancellation: repo.cancel }));
+vi.mock('@/core/db/ai-jobs-repo', () => ({
+  lockedAiJob: repo.read,
+  requestAiCancellation: repo.cancel,
+}));
 vi.mock('@/core/db/audit-repo', () => ({ writeAudit: repo.audit }));
 beforeEach(() => vi.clearAllMocks());
 // The service needs only the actor role/id and transaction handle; repositories are mocked.
 const member = { db: {}, user: { id: 'actor', role: 'member' } } as Context;
 it('NOTES-B19 requests cancellation for the creator without changing entity data', async () => {
-  const job = { id: 'job', createdBy: 'actor', kind: 'ai.notes.refine', status: 'running', cancelRequested: false };
+  const job = {
+    id: 'job',
+    createdBy: 'actor',
+    kind: 'ai.notes.refine',
+    status: 'running',
+    cancelRequested: false,
+  };
   repo.read.mockResolvedValue(job);
   expect(await cancelAi(member, 'job')).toEqual({ id: 'job' });
   expect(repo.cancel).toHaveBeenCalledWith(member.db, job);

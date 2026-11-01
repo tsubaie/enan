@@ -20,7 +20,10 @@ export function EntitySearch({
   // sync: debounce the search draft into the URL; external URL changes override stale drafts.
   useEffect(() => {
     if (value === query) return;
-    const timer = setTimeout(() => { setSubmitted(value); navigate({ q: value }, true); }, 250);
+    const timer = setTimeout(() => {
+      setSubmitted(value);
+      navigate({ q: value }, true);
+    }, 250);
     return () => clearTimeout(timer);
   }, [value, query, navigate]);
   return (

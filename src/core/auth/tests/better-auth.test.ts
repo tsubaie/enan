@@ -9,12 +9,7 @@ import { insertUser, lockWorkspace } from '@/core/db/auth-repo';
 import { saveMailSettings } from '@/core/db/mail-settings-repo';
 import { writeSetting } from '@/core/db/settings-repo';
 import { auditLog, loginAttempts, users } from '@/core/db/system-schema';
-import {
-  authAccounts,
-  authPasskeys,
-  authSessions,
-  authVerifications,
-} from '@/core/db/auth-schema';
+import { authAccounts, authPasskeys, authSessions, authVerifications } from '@/core/db/auth-schema';
 import { id } from '@/core/db/ids';
 import { env } from '@/core/config/env';
 import { maintenanceFile } from '@/core/backup/maintenance';
@@ -593,8 +588,7 @@ function fetchGet(path: string, headers: Record<string, string> = {}) {
     ),
   );
 }
-const codeOf = async (response: Response) =>
-  ((await response.json()) as { code?: string }).code;
+const codeOf = async (response: Response) => ((await response.json()) as { code?: string }).code;
 const addPasskey = (userId: string) =>
   withTransaction(db(), (database) =>
     database.insert(authPasskeys).values({

@@ -471,9 +471,7 @@ test('NOTES-A15 an uploaded voice memo plays, its typed transcript goes into the
   expect((await api(page, 'notes', `/${created.id}`)).body.data.content).toBe('Agenda');
   await memo.getByRole('button', { name: en.notes.insertIntoNote, exact: true }).click();
   await expect(memo.getByRole('button', { name: en.notes.insertedIntoNote })).toBeDisabled();
-  expect((await api(page, 'notes', `/${created.id}`)).body.data.content).toBe(
-    `Agenda\n\n${words}`,
-  );
+  expect((await api(page, 'notes', `/${created.id}`)).body.data.content).toBe(`Agenda\n\n${words}`);
   const scan = await new AxeBuilder({ page }).include('aside.entity-detail').analyze();
   expect(
     scan.violations
@@ -499,7 +497,9 @@ test('NOTES-A16 EP-B48 a WAV uploaded on the notes list becomes a new note that 
   expect(created.title).toMatch(/^Voice Memo · \d{4}-\d{2}-\d{2}$/u);
   expect(created.voiceMemos).toHaveLength(1);
   await expect(
-    detail(page).locator('li').filter({ hasText: 'hallway.wav' })
+    detail(page)
+      .locator('li')
+      .filter({ hasText: 'hallway.wav' })
       .getByText(en.notes.voiceSkipped, { exact: true }),
   ).toBeVisible();
   const scan = await new AxeBuilder({ page })

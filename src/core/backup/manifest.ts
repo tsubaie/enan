@@ -14,7 +14,10 @@ export const Manifest = z.object({
   createdAt: z.iso.datetime(),
   schemaVersion: z.number(),
   appVersion: z.string(),
-  files: z.record(FileName, z.object({ sha256: z.string(), bytes: z.number().int().nonnegative() })),
+  files: z.record(
+    FileName,
+    z.object({ sha256: z.string(), bytes: z.number().int().nonnegative() }),
+  ),
 });
 const LegacyManifest = z.object({ files: z.object({ 'db.dump': z.unknown() }) });
 export async function checksum(path: string, signal?: AbortSignal) {

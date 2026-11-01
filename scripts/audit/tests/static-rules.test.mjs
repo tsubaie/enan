@@ -40,7 +40,12 @@ describe('WI-0001-M1 static guardrails accept compliant code', () => {
 
   run(
     'effect-sync',
-    [{ code: '// sync: browser focus\nuseEffect(() => subscribe(), []);', filename: 'src/ui/Example.tsx' }],
+    [
+      {
+        code: '// sync: browser focus\nuseEffect(() => subscribe(), []);',
+        filename: 'src/ui/Example.tsx',
+      },
+    ],
     [],
   );
 
@@ -51,5 +56,9 @@ describe('WI-0001-M1 static guardrails accept compliant code', () => {
     [{ code: cast, filename: 'src/ui/Example.tsx', errors: 1 }],
   );
 
-  run('environment', [{ code: 'const raw = process.env;', filename: 'src/core/config/env.ts' }], []);
+  run(
+    'environment',
+    [{ code: 'const raw = process.env;', filename: 'src/core/config/env.ts' }],
+    [],
+  );
 });

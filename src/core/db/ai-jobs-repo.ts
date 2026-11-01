@@ -13,8 +13,9 @@ const reservedTokens =
   sql<number>`coalesce(sum(json_extract(${jobs.payload}, '$.reservedTokens')), 0)`.mapWith(Number);
 // ADR 0033: the dollar limit reads the same two sides in micro-dollars. A call whose cost is
 // unknown (null) adds nothing; a job snapshotted without a cost reservation reserves nothing.
-const spentCost =
-  sql<number>`coalesce(sum(${aiInvocations.estimatedCostMicros}), 0)`.mapWith(Number);
+const spentCost = sql<number>`coalesce(sum(${aiInvocations.estimatedCostMicros}), 0)`.mapWith(
+  Number,
+);
 const reservedCost =
   sql<number>`coalesce(sum(json_extract(${jobs.payload}, '$.reservedCostMicros')), 0)`.mapWith(
     Number,

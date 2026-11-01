@@ -38,7 +38,6 @@ export type Section = {
 export const daysBetween = (from: string, to: string) =>
   Math.round((plainDateValue(to).getTime() - plainDateValue(from).getTime()) / 86400000);
 
-
 // HOME-B01: the two task sections answer one question — what do I have to do — and are one view
 // in Tasks, so the page draws them as one block with two bands rather than two sections.
 const actionKeys: readonly SectionKey[] = ['overdue', 'today'];

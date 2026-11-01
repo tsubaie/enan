@@ -65,7 +65,9 @@ it('NOTES-B15 PEOPLE-B03 the person page shows the latest five notes the person 
 });
 it('NOTES-B15 the link to the full list carries the person and the whole count', () => {
   mount(7);
-  const more = screen.getByRole('link', { name: en.notes.viewNotes.replace(/\{count[^}]*\}/u, '7') });
+  const more = screen.getByRole('link', {
+    name: en.notes.viewNotes.replace(/\{count[^}]*\}/u, '7'),
+  });
   expect(more.getAttribute('href')).toBe(`/notes?view=all&personId=${personId}`);
   cleanup();
   mount(0, 'ar');

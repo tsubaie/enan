@@ -37,12 +37,17 @@ export const latest = defineHandler({
             status: job.status,
             cancelRequested: job.cancelRequested,
             revision: AiPayload.parse(job.payload).revision,
-            ...(input.capability === 'notes.refine' ? {
-              originalContent: z.object({ content: z.string() }).parse(AiPayload.parse(job.payload).input).content,
-            } : {}),
-            error: job.lastError === 'provider'
-              ? failureReason(await lastInvocationError(ctx.db, job.id))
-              : job.lastError,
+            ...(input.capability === 'notes.refine'
+              ? {
+                  originalContent: z
+                    .object({ content: z.string() })
+                    .parse(AiPayload.parse(job.payload).input).content,
+                }
+              : {}),
+            error:
+              job.lastError === 'provider'
+                ? failureReason(await lastInvocationError(ctx.db, job.id))
+                : job.lastError,
             result: job.result ? AiOutput.parse(job.result) : null,
           }
         : null,
@@ -61,7 +66,8 @@ function failureReason(raw: string | null) {
 }
 
 export const cancel = defineHandler({
-  guard: 'session', input: z.strictObject({ jobId: z.uuid() }),
+  guard: 'session',
+  input: z.strictObject({ jobId: z.uuid() }),
   response: z.object({ data: z.object({ id: z.uuid() }) }),
   handler: async (input, ctx) => ({ data: await cancelAi(authenticated(ctx), input.jobId) }),
 });
