@@ -335,7 +335,7 @@ Small on purpose, strict on purpose.
 <summary><b>Develop locally</b></summary>
 <br>
 
-You need Node 22 and pnpm 10 (`corepack enable`).
+You need Node 26 and pnpm 10 (`npm install -g corepack && corepack enable`; Node 25+ no longer bundles corepack).
 
 ```bash
 pnpm install

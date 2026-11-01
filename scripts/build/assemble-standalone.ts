@@ -28,7 +28,7 @@ async function bundleCommands() {
       bundle: true,
       platform: 'node',
       format: 'esm',
-      target: 'node22',
+      target: 'node26',
       conditions: ['react-server'],
       external,
       // Bundled CommonJS dependencies still call require().

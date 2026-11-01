@@ -247,7 +247,7 @@ jobs:
       # dependencies, so Node alone runs it, without installing the workspace.
       - uses: actions/setup-node@v4
         with:
-          node-version: 22.23.2
+          node-version: 26.13.0
       - name: Image identity
         id: identity
         run: |
