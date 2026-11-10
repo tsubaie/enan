@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, screen, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { NoteDetail, RefinementOutput } from '../../schema/validation';
 import { NoteVoiceMemos } from '../../ui/NoteVoiceMemos';
 import { QuickVoiceNoteBar } from '../../ui/QuickVoiceNoteBar';
@@ -203,6 +203,42 @@ describe('voice memo recorder', () => {
     fireEvent.keyDown(bar, { key: 'Escape' });
     expect(screen.queryByRole('form', { name: 'Voice recorder' })).toBeNull();
     expect(spies.attach).not.toHaveBeenCalled();
+    expect(media.stop).toHaveBeenCalled();
+  });
+  it('NOTES-B34 a recorder that already stopped on its own is attached and releases the microphone', async () => {
+    // A recorder stopped by an interruption ignores stop() and fires no stop event again.
+    class InterruptedRecorder extends FakeRecorder {
+      override stop() {}
+    }
+    vi.stubGlobal('MediaRecorder', InterruptedRecorder);
+    const bar = await startRecording();
+    act(() => {
+      if (media.recorder) media.recorder.state = 'inactive';
+    });
+    media.release.mockClear();
+    fireEvent.click(within(bar).getByRole('button', { name: 'Stop & Attach' }));
+    expect(spies.attach).toHaveBeenCalledTimes(1);
+    expect(media.stop).toHaveBeenCalled();
+    expect(media.release).toHaveBeenCalled();
+  });
+  it('NOTES-B34 keeps the microphone until the recorder has stopped, so Safari’s MP4 is not empty', async () => {
+    // Safari finishes an MP4 after stop() returns, and only with the microphone still live.
+    class SafariRecorder extends FakeRecorder {
+      override stop() {
+        this.state = 'inactive';
+        queueMicrotask(() => {
+          if (!media.stop.mock.calls.length)
+            this.ondataavailable?.({ data: new Blob(['spoken words']) });
+          this.onstop?.();
+        });
+      }
+    }
+    vi.stubGlobal('MediaRecorder', SafariRecorder);
+    const bar = await startRecording();
+    fireEvent.click(within(bar).getByRole('button', { name: 'Stop & Attach' }));
+    await waitFor(() => expect(spies.attach).toHaveBeenCalledTimes(1));
+    const [file] = spies.attach.mock.calls[0] ?? [];
+    expect((file as File).size).toBeGreaterThan(0);
     expect(media.stop).toHaveBeenCalled();
   });
   it('NOTES-B34 Stop & Attach attaches what was said; with less motion asked for the bars stand still', async () => {

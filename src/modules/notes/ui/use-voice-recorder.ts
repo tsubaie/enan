@@ -77,12 +77,20 @@ function closeSession(session: Session) {
 function finishSession(session: Session, onFinish: (recording: Recording) => void) {
   const seconds = secondsOf(session);
   const type = session.recorder.mimeType || 'audio/webm';
-  session.recorder.onstop = () =>
+  // The microphone is released only once the recorder has stopped: Safari writes an MP4's audio
+  // when it finishes, and a track stopped before then leaves a file with no sound in it.
+  const done = () => {
+    closeSession(session);
     onFinish({
       blob: new Blob(session.chunks, { type }),
       seconds,
       extension: type.includes('mp4') ? 'm4a' : 'webm',
     });
+  };
+  // A recorder that already stopped on its own (a call took the microphone) fires no further
+  // stop event, so what it gathered is kept and everything released here.
+  if (session.recorder.state === 'inactive') return done();
+  session.recorder.onstop = done;
   session.recorder.stop();
 }
 function togglePause(session: Session): 'paused' | 'recording' {
@@ -98,11 +106,12 @@ function togglePause(session: Session): 'paused' | 'recording' {
 }
 // Stop keeping what was said (Stop & Attach, the time limit, leaving the note) or dropping it.
 function release(session: Session, keep: boolean, onFinish: (recording: Recording) => void) {
-  if (keep) finishSession(session, onFinish);
-  else {
-    session.recorder.onstop = null;
-    session.recorder.stop();
-  }
+  // The meter and the clock stop at once; a kept recording holds the microphone until it stops.
+  cancelAnimationFrame(session.frame);
+  clearInterval(session.tick);
+  if (keep) return finishSession(session, onFinish);
+  session.recorder.onstop = null;
+  session.recorder.stop();
   closeSession(session);
 }
 async function holdScreen(session: Session, held: (on: boolean) => void) {
