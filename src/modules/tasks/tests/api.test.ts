@@ -340,3 +340,16 @@ it('TASKS-B16 TASKS-B05 the list carries meta.total only on request and the deta
   });
   expect(missing.status).toBe(404);
 });
+it('TASKS-B19 a saved due date is cleared by patching it to null', async () => {
+  const task = await harness.task('Dated');
+  const dated = await call(api.patch, 'PATCH', `/tasks/${task.id}`, {
+    body: { revision: task.revision, dueDate: '2026-09-12' },
+    params: { id: task.id },
+  });
+  const cleared = await call(api.patch, 'PATCH', `/tasks/${task.id}`, {
+    body: { revision: (await json(dated)).data.revision, dueDate: null },
+    params: { id: task.id },
+  });
+  expect(cleared.status).toBe(200);
+  expect((await json(cleared)).data).toMatchObject({ dueDate: null, band: 'nodate' });
+});

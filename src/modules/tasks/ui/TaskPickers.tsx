@@ -161,6 +161,7 @@ export function DueDateField({
       value={value}
       onChange={(next) => onChange?.(next)}
       label={t('dueDate')}
+      clearable
       tone={tone}
       size={size}
       {...(name ? { name } : {})}

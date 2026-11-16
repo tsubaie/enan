@@ -136,10 +136,16 @@ function Filters({ filter, set }: { filter: Filter; set: (change: Partial<Filter
         <>
           <DatePicker
             label={t('auditFrom')}
+            clearable
             value={filter.from}
             onChange={(from) => set({ from })}
           />
-          <DatePicker label={t('auditTo')} value={filter.to} onChange={(to) => set({ to })} />
+          <DatePicker
+            label={t('auditTo')}
+            clearable
+            value={filter.to}
+            onChange={(to) => set({ to })}
+          />
         </>
       )}
     </div>

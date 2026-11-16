@@ -18,7 +18,7 @@ import {
 export type PanelProps = {
   value: string | null;
   today: string;
-  pick: (day: string | null) => void;
+  pick: (day: string) => void;
 };
 // The body of the date picker, loaded when the popover first opens: quick picks above a
 // Sunday-first month grid showing only the month's own days.
@@ -51,16 +51,6 @@ function QuickPicks({ today, value, pick }: PanelProps) {
           {t(option.key)}
         </Button>
       ))}
-      {value && (
-        <Button
-          size="sm"
-          variant="ghost"
-          className="col-span-2 h-7 min-h-0 px-2 text-xs text-text-muted"
-          onClick={() => pick(null)}
-        >
-          {t('noDate')}
-        </Button>
-      )}
     </div>
   );
 }
@@ -99,12 +89,7 @@ function MonthHeader({ month, setMonth }: { month: string; setMonth: (month: str
     </div>
   );
 }
-function MonthGrid({
-  initial,
-  value,
-  today,
-  pick,
-}: PanelProps & { initial: string; pick: (day: string) => void }) {
+function MonthGrid({ initial, value, today, pick }: PanelProps & { initial: string }) {
   const format = useFormatter();
   const count = useCount();
   const plainDate = usePlainDate();
