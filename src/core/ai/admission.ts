@@ -7,7 +7,7 @@ import { enqueue } from '@/core/db/jobs-repo';
 import { aiAdmissionUsage, prepareAiJob, latestAiJob } from '@/core/db/ai-jobs-repo';
 import { monthStart } from '@/core/time/ai';
 import { aiExecutionLimits } from '@/core/config/ai';
-import { supportsModelSlot } from '@/core/config/ai-model-schema';
+import { AiModel, supportsModelSlot } from '@/core/config/ai-model-schema';
 import { AiCapability } from '@/core/config/ai-capabilities';
 import { AppError } from '@/core/http/errors';
 import { env } from '@/core/config/env';
@@ -40,6 +40,9 @@ export async function availableCapabilities(ctx: Context, wait = false) {
   try {
     const models = await loadModels({ wait });
     return enabled.filter((capability) => {
+      // ADR 0070: the transcription model is not a chat model, so the chat catalog cannot vouch
+      // for it; a model the provider does not serve fails its job with that reason.
+      if (capability === 'notes.transcribe') return true;
       const slot = capability === 'notes.suggest_tags' ? 'fast' : 'default';
       return models.some(
         (model) =>
@@ -69,10 +72,39 @@ export async function admitAi(
   entityId: string,
   revision: number,
   input: z.infer<ReturnType<typeof z.json>>,
+  options: { autoApply?: boolean; audioSeconds?: number } = {},
 ) {
   if (!(await availableCapabilities(ctx)).includes(capability))
     throw new AppError('ai_unavailable');
-  const { model, maxOutputTokens, estimate } = await chooseModel(ctx, capability, input);
+  if (capability === 'notes.transcribe')
+    return admit(
+      ctx,
+      capability,
+      entityId,
+      revision,
+      input,
+      await transcriptionModel(ctx, options.audioSeconds ?? 0),
+    );
+  return admit(ctx, capability, entityId, revision, input, {
+    ...(await chooseModel(ctx, capability, input)),
+    ...(options.autoApply ? { autoApply: true } : {}),
+  });
+}
+type Chosen = {
+  model: z.infer<typeof AiModel>;
+  maxOutputTokens: number;
+  estimate: number;
+  reserveMicros: number;
+  autoApply?: boolean;
+};
+async function admit(
+  ctx: Context,
+  capability: z.infer<typeof AiCapability>,
+  entityId: string,
+  revision: number,
+  input: z.infer<ReturnType<typeof z.json>>,
+  { model, maxOutputTokens, estimate, reserveMicros, autoApply }: Chosen,
+) {
   const locale = await getSetting(ctx.db, 'user.locale', ctx.user.id);
   const payload = AiPayload.parse({
     capability,
@@ -86,11 +118,8 @@ export async function admitAi(
     contentHash: contentHash(input),
     maxOutputTokens,
     reservedTokens: 2 * (estimate + maxOutputTokens),
-    // ADR 0033: the most two attempts can cost at the selected model's catalog prices (dollars per
-    // token), in micro-dollars. The estimate is released when the job ends and its calls count.
-    reservedCostMicros: Math.ceil(
-      2 * 1000000 * (model.inputPrice * estimate + model.outputPrice * maxOutputTokens),
-    ),
+    reservedCostMicros: reserveMicros,
+    ...(autoApply ? { autoApply } : {}),
   });
   // Admission runs inside the request's immediate transaction (ADR 0029): the active-job read,
   // the usage count and the enqueue cannot interleave with another admission.
@@ -123,6 +152,18 @@ export async function admitAi(
   return { id: job.id };
 }
 
+// ADR 0070: a speech-to-text model is priced by the second, not by the token, and is not in the
+// chat catalog: the payload names it and reserves a ceiling for the audio's length, both attempts.
+async function transcriptionModel(ctx: Context, audioSeconds: number): Promise<Chosen> {
+  const id = await getSetting(ctx.db, 'ai.model.transcription');
+  return {
+    model: { id, name: id, contextLength: 0, maxOutputTokens: 1, inputPrice: 0, outputPrice: 0 },
+    maxOutputTokens: 1,
+    estimate: 0,
+    reserveMicros:
+      2 * Math.max(1, audioSeconds) * aiExecutionLimits.transcription.reserveMicrosPerSecond,
+  };
+}
 async function chooseModel(
   ctx: Context,
   capability: z.infer<typeof AiCapability>,
@@ -143,5 +184,10 @@ async function chooseModel(
   const estimate = Buffer.byteLength(framedInput(input)) + 8192;
   if (estimate + maxOutputTokens > model.contextLength)
     throw new AppError('ai_unavailable', { reason: 'context' });
-  return { model, maxOutputTokens, estimate };
+  // ADR 0033: the most two attempts can cost at the selected model's catalog prices (dollars per
+  // token), in micro-dollars. The estimate is released when the job ends and its calls count.
+  const reserveMicros = Math.ceil(
+    2 * 1000000 * (model.inputPrice * estimate + model.outputPrice * maxOutputTokens),
+  );
+  return { model, maxOutputTokens, estimate, reserveMicros };
 }

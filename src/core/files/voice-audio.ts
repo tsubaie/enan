@@ -15,6 +15,9 @@ const extensions: Record<VoiceAudioMime, string> = {
   'audio/wav': 'wav',
   'audio/ogg': 'ogg',
 };
+// ADR 0070: the container format a transcription request names is the extension of the real type.
+const formats = new Map<string, string>(Object.entries(extensions));
+export const audioFormat = (mime: string) => formats.get(mime) ?? null;
 const ascii = (bytes: Uint8Array, offset: number, length: number) =>
   String.fromCharCode(...bytes.subarray(offset, offset + length));
 // An ISO media file whose brand names a still image (HEIC, AVIF) is a picture, not a recording.

@@ -20,11 +20,13 @@ const featureKey: Record<
   | 'aiFeature_tasks_breakdown'
   | 'aiFeature_notes_refine'
   | 'aiFeature_notes_suggest_tags'
+  | 'aiFeature_notes_transcribe'
   | 'aiFeature_kpis_narrative'
 > = {
   'tasks.breakdown': 'aiFeature_tasks_breakdown',
   'notes.refine': 'aiFeature_notes_refine',
   'notes.suggest_tags': 'aiFeature_notes_suggest_tags',
+  'notes.transcribe': 'aiFeature_notes_transcribe',
   'kpis.narrative': 'aiFeature_kpis_narrative',
 };
 // ADMIN-B45: which AI features are on, each one switch that saves at once, the monthly limit in

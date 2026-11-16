@@ -1,4 +1,6 @@
 'use client';
+import { useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
 import { ErrorPanel } from '@/ui/layout/ErrorPanel';
 import { useAiReview } from '@/ui/ai/queries';
@@ -13,6 +15,13 @@ const maxPerNote = 20;
 export function NoteVoiceMemos({ note }: { note: NoteDetail }) {
   const t = useTranslations('notes');
   const review = useAiReview('notes.refine', note.id, note.revision, `/notes/${note.id}/refine`);
+  const client = useQueryClient();
+  const finished = review.job?.status === 'succeeded' ? review.job.id : null;
+  // A refinement a transcription started writes itself into the note (NOTES-B37).
+  // sync: the server's refine job; once it has finished, the note is read again.
+  useEffect(() => {
+    if (finished) void client.invalidateQueries({ queryKey: ['notes', 'detail', note.id] });
+  }, [finished, client, note.id]);
   const upload = useVoiceUpload(note.id, t('voiceSaveFailed'));
   const recorder = useVoiceRecorder((recording) => {
     void upload.attach(recordingFile(recording, t('voiceMemoFile')), recording.seconds);

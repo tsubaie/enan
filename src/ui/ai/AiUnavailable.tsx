@@ -29,10 +29,15 @@ import { type AiReview } from './queries';
 // next-intl would read as a path, so the detail line is looked up through a map of literal keys.
 const detail: Record<
   z.infer<typeof AiCapability>,
-  'unavailableRefine' | 'unavailableTags' | 'unavailableBreakdown' | 'unavailableNarrative'
+  | 'unavailableRefine'
+  | 'unavailableTags'
+  | 'unavailableTranscribe'
+  | 'unavailableBreakdown'
+  | 'unavailableNarrative'
 > = {
   'notes.refine': 'unavailableRefine',
   'notes.suggest_tags': 'unavailableTags',
+  'notes.transcribe': 'unavailableTranscribe',
   'tasks.breakdown': 'unavailableBreakdown',
   'kpis.narrative': 'unavailableNarrative',
 };

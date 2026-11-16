@@ -3,6 +3,7 @@ export const AiCapability = z.enum([
   'tasks.breakdown',
   'notes.refine',
   'notes.suggest_tags',
+  'notes.transcribe',
   'kpis.narrative',
 ]);
 // `canConfigure` is whether this reader can turn the missing capability on, so the interface can

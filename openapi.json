@@ -199,6 +199,7 @@
               "tasks.breakdown",
               "notes.refine",
               "notes.suggest_tags",
+              "notes.transcribe",
               "kpis.narrative"
             ],
             "type": "string"
@@ -214,7 +215,7 @@
                 "items": {
                   "$ref": "#/$defs/__schema0"
                 },
-                "maxItems": 4,
+                "maxItems": 5,
                 "type": "array"
               },
               "monthlyBudgetMicros": {
@@ -327,6 +328,40 @@
         "type": "object"
       },
       "getAdminAiModelsResponse": {
+        "$defs": {
+          "__schema0": {
+            "additionalProperties": false,
+            "properties": {
+              "contextLength": {
+                "type": "number"
+              },
+              "id": {
+                "type": "string"
+              },
+              "inputPrice": {
+                "type": "number"
+              },
+              "maxOutputTokens": {
+                "type": "number"
+              },
+              "name": {
+                "type": "string"
+              },
+              "outputPrice": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "contextLength",
+              "maxOutputTokens",
+              "inputPrice",
+              "outputPrice"
+            ],
+            "type": "object"
+          }
+        },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "properties": {
@@ -341,36 +376,17 @@
               },
               "models": {
                 "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "contextLength": {
-                      "type": "number"
-                    },
-                    "id": {
-                      "type": "string"
-                    },
-                    "inputPrice": {
-                      "type": "number"
-                    },
-                    "maxOutputTokens": {
-                      "type": "number"
-                    },
-                    "name": {
-                      "type": "string"
-                    },
-                    "outputPrice": {
-                      "type": "number"
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "name",
-                    "contextLength",
-                    "maxOutputTokens",
-                    "inputPrice",
-                    "outputPrice"
-                  ],
-                  "type": "object"
+                  "$ref": "#/$defs/__schema0"
+                },
+                "type": "array"
+              },
+              "transcriptionModel": {
+                "type": "string"
+              },
+              "transcriptionModels": {
+                "default": [],
+                "items": {
+                  "$ref": "#/$defs/__schema0"
                 },
                 "type": "array"
               }
@@ -378,7 +394,9 @@
             "required": [
               "models",
               "defaultModel",
-              "fastModel"
+              "fastModel",
+              "transcriptionModels",
+              "transcriptionModel"
             ],
             "type": "object"
           }
@@ -1411,6 +1429,7 @@
                     "tasks.breakdown",
                     "notes.refine",
                     "notes.suggest_tags",
+                    "notes.transcribe",
                     "kpis.narrative"
                   ],
                   "type": "string"
@@ -8815,6 +8834,10 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "properties": {
+          "ai": {
+            "default": false,
+            "type": "boolean"
+          },
           "appendToNote": {
             "default": false,
             "type": "boolean"
@@ -11341,6 +11364,7 @@
               "tasks.breakdown",
               "notes.refine",
               "notes.suggest_tags",
+              "notes.transcribe",
               "kpis.narrative"
             ],
             "type": "string"
@@ -11353,7 +11377,7 @@
             "items": {
               "$ref": "#/$defs/__schema0"
             },
-            "maxItems": 4,
+            "maxItems": 5,
             "type": "array"
           },
           "monthlyBudgetMicros": {
@@ -11406,6 +11430,9 @@
             "$ref": "#/$defs/__schema0"
           },
           "fastModel": {
+            "$ref": "#/$defs/__schema0"
+          },
+          "transcriptionModel": {
             "$ref": "#/$defs/__schema0"
           }
         },
@@ -15790,6 +15817,7 @@
                 "tasks.breakdown",
                 "notes.refine",
                 "notes.suggest_tags",
+                "notes.transcribe",
                 "kpis.narrative"
               ],
               "type": "string"

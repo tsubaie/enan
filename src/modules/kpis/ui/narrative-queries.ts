@@ -1,8 +1,8 @@
 'use client';
+import { useAiCapable } from '@/ui/ai/queries';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import { request } from '@/core/http/client';
-import { AiAvailability } from '@/core/config/ai-capabilities';
 import { NarrativeView, type NarrativeScope } from '../schema/validation';
 export type BriefScope = Pick<NarrativeScope, 'kpiId' | 'locale' | 'period'>;
 const query = (scope: BriefScope) =>
@@ -36,14 +36,7 @@ export function useStartNarrative(scope: BriefScope) {
   });
 }
 // Whether this reader can ask for a brief at all; the same answer every AI control reads.
-export function useNarrativeAvailable() {
-  const availability = useQuery({
-    queryKey: ['ai', 'availability'],
-    queryFn: () => request('/ai/availability', z.object({ data: AiAvailability })),
-    refetchInterval: 30000,
-  });
-  return availability.data?.data.capabilities.includes('kpis.narrative') ?? false;
-}
+export const useNarrativeAvailable = () => useAiCapable('kpis.narrative');
 // "Save as note": the brief becomes an ordinary note, tagged so the briefs can be found together.
 export function useSaveBriefAsNote() {
   const client = useQueryClient();

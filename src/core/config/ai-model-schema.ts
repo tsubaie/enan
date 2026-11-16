@@ -15,10 +15,14 @@ export const AiModels = z.object({
   models: z.array(AiModel),
   defaultModel: z.string(),
   fastModel: z.string(),
+  // ADR 0070: speech-to-text models are a catalog of their own; empty when it could not be read.
+  transcriptionModels: z.array(AiModel).default([]),
+  transcriptionModel: z.string(),
 });
 export const AiModelSelection = z.strictObject({
   defaultModel: ModelId,
   fastModel: ModelId,
+  transcriptionModel: ModelId.optional(),
 });
 
 export function supportsModelSlot(model: z.infer<typeof AiModel>, slot: 'default' | 'fast') {

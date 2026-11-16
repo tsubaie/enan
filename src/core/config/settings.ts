@@ -58,6 +58,7 @@ export const settingsRegistry = {
   'auth.sign_in_methods': entry(SignInMethods, ['password', 'code', 'google']),
   'ai.model.default': entry(ModelId, defaults.models.default),
   'ai.model.fast': entry(ModelId, defaults.models.fast),
+  'ai.model.transcription': entry(ModelId, defaults.models.transcription),
   'ai.enabled_capabilities': entry(z.array(AiCapability), AiCapability.options),
   // ADR 0033: the monthly AI limit in US dollars, held as integer micro-dollars like every stored
   // cost; null is no limit. The retired `ai.monthly_token_budget` row, if any, is no longer read.

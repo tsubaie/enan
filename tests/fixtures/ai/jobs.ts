@@ -19,6 +19,7 @@ export async function finishedJob(
   revision: number,
   output: z.infer<ReturnType<typeof z.json>>,
   input: z.infer<ReturnType<typeof z.json>> = {},
+  extra: { autoApply?: boolean } = {},
 ) {
   const payload = AiPayload.parse({
     capability,
@@ -32,6 +33,7 @@ export async function finishedJob(
     contentHash: 'fixture',
     maxOutputTokens: 4096,
     reservedTokens: 10000,
+    ...extra,
   });
   const [row] = await database
     .insert(jobs)

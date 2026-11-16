@@ -132,6 +132,8 @@ export const VoiceTranscribe = z.strictObject({
   transcript: Transcript.optional(),
   appendToNote: z.boolean().default(false),
   refine: z.boolean().default(false),
+  // ADR 0070: ask AI for the transcript instead of supplying one.
+  ai: z.boolean().default(false),
 });
 export const NoteDetail = Note.extend({
   tasks: z.array(NoteTask).default([]),
