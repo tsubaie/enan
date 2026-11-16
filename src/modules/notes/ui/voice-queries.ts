@@ -27,7 +27,7 @@ export function useVoiceMutations() {
     createFromVoice: (form: FormData) =>
       write(async () => {
         const created = await upload('/notes/voice', response, form);
-        client.setQueryData(['notes', 'detail', created.data.id, false], created.data);
+        client.setQueryData(['notes', 'detail', created.data.id, false], created);
         return created;
       }),
     remove: (noteId: string, memoId: string) =>
