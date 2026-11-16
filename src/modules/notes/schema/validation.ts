@@ -219,11 +219,10 @@ export const SuggestedTask = z.object({
   owner_name: z.string().nullable(),
   source_snippet: z.string().nullable(),
 });
-// A blank tag from the model is dropped, not a failure of the paid call.
-const ModelTags = z
-  .array(z.string().trim().max(50))
-  .max(5)
-  .transform((tags) => tags.filter(Boolean));
+// A blank tag from the model is accepted here and dropped by the job, not a failure of the paid
+// call. No transform: this schema is sent to the model as JSON Schema, which cannot express one.
+const ModelTags = z.array(z.string().trim().max(50)).max(5);
+export const modelTags = (tags: string[]) => Tags.parse(tags.filter(Boolean));
 export const RefinementOutput = z.object({
   refined_content: z.string().max(50000),
   suggested_tasks: z.array(SuggestedTask).max(15),

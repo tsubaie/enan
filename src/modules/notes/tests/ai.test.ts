@@ -12,7 +12,7 @@ import suggestedTags from '../../../../tests/fixtures/ai/notes.tags.v1.en.json';
 import { harness, actorId } from './fixtures';
 import { startNoteAi } from '../ai/service';
 import { refinePrompt } from '../ai/prompts/select';
-import { NoteAiApply, RefinementOutput, TagOutput } from '../schema/validation';
+import { NoteAiApply } from '../schema/validation';
 import { insertRefinement } from '../repo';
 import { id } from '@/core/db/ids';
 import { AiPayload } from '@/core/ai/job-schema';
@@ -407,12 +407,6 @@ it('NOTES-B18 restoring a discarded proposal is refused with 409 while a newer o
     sql`select status from note_refinements where job_id = ${first.id}`,
   );
   expect(rows[0]?.status).toBe('discarded');
-});
-it('NOTES-B17 a blank tag from the model is dropped by the output schema instead of failing the job', () => {
-  expect(TagOutput.parse({ tags: ['', ' ', 'board'] })).toEqual({ tags: ['board'] });
-  expect(
-    RefinementOutput.parse({ ...refinement, suggested_tags: ['', ' ', 'board'] }).suggested_tags,
-  ).toEqual(['board']);
 });
 it('ADMIN-B36 a direct note apply that fails after creating a task leaves no task and no change', async () => {
   const note = await harness.note('Plan', { content: 'draft content' });
