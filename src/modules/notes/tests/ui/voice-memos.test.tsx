@@ -4,6 +4,7 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { NoteDetail, RefinementOutput } from '../../schema/validation';
 import { NoteVoiceMemos } from '../../ui/NoteVoiceMemos';
 import { QuickVoiceNoteBar } from '../../ui/QuickVoiceNoteBar';
+import en from '@/core/i18n/messages/en.json';
 import { mount } from './harness';
 const spies = vi.hoisted(() => ({
   attach: vi.fn(),
@@ -12,12 +13,14 @@ const spies = vi.hoisted(() => ({
   patch: vi.fn(),
   createTask: vi.fn(),
   createFromVoice: vi.fn(),
+  transcribeAvailable: vi.fn(() => false),
   review: {} as object,
 }));
 vi.mock('@/ui/ai/queries', () => ({ useAiReview: () => spies.review }));
 vi.mock('../../ui/voice-queries', () => ({
   useVoiceUpload: () => ({ saving: false, error: null, attach: spies.attach }),
   useVoiceMutations: () => ({ transcribe: spies.transcribe, remove: spies.remove }),
+  useTranscribeAvailable: () => spies.transcribeAvailable(),
   useVoiceCreate: (fields: object) => ({
     saving: false,
     error: null,
@@ -145,6 +148,7 @@ beforeEach(() => {
   for (const spy of [spies.attach, spies.transcribe, spies.remove, spies.patch, spies.createTask])
     spy.mockReset().mockResolvedValue({});
   spies.createFromVoice.mockReset().mockResolvedValue({ id: noteId });
+  spies.transcribeAvailable.mockReset().mockReturnValue(false);
   spies.review = review();
   media.frames = [];
   media.reduced = false;
@@ -360,6 +364,24 @@ describe('voice memo review card', () => {
     expect(spies.transcribe).toHaveBeenCalledWith(noteId, memoId, {
       transcript: 'Call the auditors.',
     });
+  });
+  it('NOTES-B37 a memo AI is transcribing says so, and a failed one offers Transcribe with AI again', () => {
+    mount(
+      <NoteVoiceMemos
+        note={noteWith({ voiceMemos: [memo({ transcriptionStatus: 'pending' })] })}
+      />,
+    );
+    expect(screen.getByRole('status').textContent).toBe(en.notes.voiceTranscribingHint);
+    expect(screen.queryByRole('textbox', { name: 'Verbatim Transcript' })).toBeNull();
+    spies.transcribeAvailable.mockReturnValue(true);
+    mount(
+      <NoteVoiceMemos note={noteWith({ voiceMemos: [memo({ transcriptionStatus: 'failed' })] })} />,
+    );
+    expect(screen.getByText(en.notes.voiceFailedHint)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: en.notes.transcribeVoice }));
+    expect(spies.transcribe).toHaveBeenCalledWith(noteId, memoId, { ai: true });
+    // Typing it in stays possible.
+    expect(screen.getByRole('textbox', { name: 'Verbatim Transcript' })).toBeTruthy();
   });
   it('NOTES-B31 the brief tab shows the refinement and inserts it after the note’s own text, never over it', () => {
     spies.review = review(finished);

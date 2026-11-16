@@ -45,13 +45,14 @@ function ModelForm({ data }: { data: z.infer<typeof Models> }) {
   const c = useTranslations('common');
   const [defaultModel, setDefaultModel] = useState(data.defaultModel);
   const [fastModel, setFastModel] = useState(data.fastModel);
+  const [transcriptionModel, setTranscriptionModel] = useState(data.transcriptionModel);
   const save = useSaveAiModels();
   return (
     <form
       className="space-y-4"
       onSubmit={(event) => {
         event.preventDefault();
-        save.mutate({ defaultModel, fastModel });
+        save.mutate({ defaultModel, fastModel, transcriptionModel });
       }}
     >
       <AiModelPicker
@@ -66,6 +67,14 @@ function ModelForm({ data }: { data: z.infer<typeof Models> }) {
         setValue={setFastModel}
         label={t('aiFastModel')}
       />
+      {data.transcriptionModels.length > 0 && (
+        <AiModelPicker
+          models={data.transcriptionModels}
+          value={transcriptionModel}
+          setValue={setTranscriptionModel}
+          label={t('aiTranscriptionModel')}
+        />
+      )}
       <Button
         type="submit"
         disabled={

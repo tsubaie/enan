@@ -214,6 +214,8 @@ export const voiceTranscribe = defineHandler({
   enqueues: true,
   handler: async (input, ctx, params) => {
     const context = authenticated(ctx);
+    if (input.ai)
+      return { data: await voice.transcribeWithAi(context, noteId(params), memoId(params)) };
     const note = await voice.transcribeVoiceMemo(context, noteId(params), memoId(params), input);
     if (!input.refine) return { data: note };
     await startNoteAi(context, note.id, note.revision, 'notes.refine');

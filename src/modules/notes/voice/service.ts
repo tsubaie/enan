@@ -14,13 +14,15 @@ import { NoteCreate, VoiceCreate, VoiceTranscribe, VoiceUpload } from '../schema
 import { selectNote } from '../repo';
 import { createNote, getNote, patchNote } from '../service';
 import { startNoteAi } from '../ai/service';
+import { admitAi } from '@/core/ai/admission';
 import * as voiceRepo from './repo';
 type StoredAudio = Awaited<ReturnType<typeof storeVoiceAudio>>;
 type MemoFields = { durationSeconds: number; transcript?: string | undefined };
 // NOTES-B29: the audio is checked and stored before the write lock (ADR 0054), then the file and
-// memo rows go in one short transaction. No AI call is made, so the upload succeeds whether or
-// not AI is configured: a memo without a transcript is `skipped`. A failed transaction keeps the
-// binary, since its key is the content's hash and another memo may already name it.
+// memo rows go in one short transaction. No AI call is made in the request, so the upload
+// succeeds whether or not AI is configured: a memo without a transcript is queued for
+// transcription when AI can take it (NOTES-B37) and `skipped` otherwise. A failed transaction
+// keeps the binary, since its key is the content's hash and another memo may already name it.
 async function storeVoiceAudio(file: File) {
   if (file.size > voiceAudioLimits.maxBytes)
     throw new AppError('rule_violation', {
@@ -65,6 +67,34 @@ async function attachVoiceMemo(
     noteId,
     fileId,
     durationSeconds: input.durationSeconds,
+  });
+  if (!input.transcript)
+    await startTranscription(ctx, noteId, memoId, input.durationSeconds).catch((error: unknown) => {
+      if (!(error instanceof AppError && error.code === 'ai_unavailable')) throw error;
+    });
+}
+// NOTES-B37 (ADR 0070): the memo waits on a transcription job keyed by the memo, so each of a
+// note's recordings is transcribed on its own. AI that cannot take it (off, unconfigured, over
+// budget or rate) answers `ai_unavailable` and the memo stays as it was.
+async function startTranscription(
+  ctx: Context,
+  noteId: string,
+  memoId: string,
+  durationSeconds: number,
+) {
+  const note = await getNote(ctx, noteId);
+  const job = await admitAi(
+    ctx,
+    'notes.transcribe',
+    memoId,
+    note.revision,
+    { noteId, memoId },
+    { audioSeconds: durationSeconds },
+  );
+  await voiceRepo.updateVoiceMemo(ctx.db, memoId, {
+    transcriptionStatus: 'pending',
+    transcriptionJobId: job.id,
+    transcriptionError: null,
   });
 }
 export async function uploadVoiceMemo(
@@ -170,6 +200,19 @@ export const transcribeVoiceMemo = transactional(async function transcribeVoiceM
     if (content.length > 50000) throw new AppError('rule_violation', { rule: 'NOTES-I01' });
     await patchNote(ctx, noteId, { content, revision: note.revision });
   }
+  return getNote(ctx, noteId);
+});
+// NOTES-B37: Transcribe with AI, for a memo with no transcript yet or whose last try failed; a
+// memo already waiting on its job is left to it.
+export const transcribeWithAi = transactional(async function transcribeWithAi(
+  ctx: Context,
+  noteId: string,
+  memoId: string,
+) {
+  const { memo } = await requireMemo(ctx, noteId, memoId);
+  if (memo.transcript) throw new AppError('conflict', { reason: 'state' });
+  if (memo.transcriptionStatus !== 'pending')
+    await startTranscription(ctx, noteId, memoId, memo.durationSeconds);
   return getNote(ctx, noteId);
 });
 // NOTES-B32: the audio of a live memo on a live note, for any signed-in member.

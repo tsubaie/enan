@@ -5,6 +5,18 @@ import { request } from '@/core/http/client';
 import { AiAvailability, AiCapability } from '@/core/config/ai-capabilities';
 import { AiJobView } from '@/core/config/ai-review-schema';
 const applyResponse = z.object({ data: z.object({ ids: z.array(z.uuid()) }) });
+// The one availability read every AI control shares, refreshed every half minute.
+export function useAiAvailability() {
+  return useQuery({
+    queryKey: ['ai', 'availability'],
+    queryFn: () => request('/ai/availability', z.object({ data: AiAvailability })),
+    refetchInterval: 30000,
+  });
+}
+// Whether AI can take this capability for this reader now.
+export function useAiCapable(capability: z.infer<typeof AiCapability>) {
+  return useAiAvailability().data?.data.capabilities.includes(capability) ?? false;
+}
 // What the availability answer means for this one capability, kept out of the hook so the hook does
 // not carry two more branches for it.
 function availabilityOf(
@@ -24,11 +36,7 @@ export function useAiReview(
   path: string,
 ) {
   const client = useQueryClient();
-  const availability = useQuery({
-    queryKey: ['ai', 'availability'],
-    queryFn: () => request('/ai/availability', z.object({ data: AiAvailability })),
-    refetchInterval: 30000,
-  });
+  const availability = useAiAvailability();
   const job = useQuery({
     queryKey: ['ai', capability, entityId],
     queryFn: () =>

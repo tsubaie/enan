@@ -18,6 +18,8 @@ export const AiPayload = z.object({
   // queued before the dollar limit carry none and reserve nothing against it.
   reservedCostMicros: z.number().int().nonnegative().default(0),
   maxOutputTokens: z.number().int().positive(),
+  // ADR 0070: a refinement started by a voice memo's transcription writes itself into the note.
+  autoApply: z.boolean().optional(),
 });
 export type AiPayload = z.infer<typeof AiPayload>;
 export const AiOutput = z.object({

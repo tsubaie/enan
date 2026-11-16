@@ -1,6 +1,6 @@
 # ADR 0065 — Voice memos save their audio first and take their transcripts from the reader
 
-**Status:** accepted (2026-10-27). Extends ADR 0054 and ADR 0034.
+**Status:** accepted (2026-10-27); its transcript decision is superseded by ADR 0070. Extends ADR 0054 and ADR 0034.
 
 ## Context
 

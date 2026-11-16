@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { useAiCapable } from '@/ui/ai/queries';
 import { z } from 'zod';
 import { request, upload } from '@/core/http/client';
 import { NoteDetail } from '../schema/validation';
@@ -34,7 +35,7 @@ export function useVoiceMutations() {
     transcribe: (
       noteId: string,
       memoId: string,
-      body: { transcript?: string; appendToNote?: boolean; refine?: boolean },
+      body: { transcript?: string; appendToNote?: boolean; refine?: boolean; ai?: boolean },
     ) =>
       write(
         () =>
@@ -78,3 +79,5 @@ function useVoiceSave(send: (form: FormData) => Promise<NoteDetail>, fallback: s
   }
   return { saving, error, attach };
 }
+// NOTES-B37: whether AI can transcribe a recording now.
+export const useTranscribeAvailable = () => useAiCapable('notes.transcribe');

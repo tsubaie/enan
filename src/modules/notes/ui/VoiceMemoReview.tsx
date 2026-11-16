@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import type { z } from 'zod';
-import { TextCursorInput, WandSparkles } from 'lucide-react';
+import { AudioLines, LoaderCircle, TextCursorInput, WandSparkles } from 'lucide-react';
 import { Button } from '@/ui/primitives/button';
 import { Textarea } from '@/ui/primitives/textarea';
 import { Segmented } from '@/ui/primitives/segmented';
@@ -11,7 +11,7 @@ import { reviewReady } from '@/ui/ai/AiReviewStatus';
 import type { AiReview } from '@/ui/ai/queries';
 import { RefinementOutput, type NoteDetail, type NoteVoiceMemo } from '../schema/validation';
 import { useNoteMutations } from './queries';
-import { useVoiceMutations } from './voice-queries';
+import { useTranscribeAvailable, useVoiceMutations } from './voice-queries';
 import { BriefActionItems } from './BriefActionItems';
 export type Run = (action: () => Promise<object>) => void;
 type Tab = 'brief' | 'transcript';
@@ -55,6 +55,7 @@ function useMemoReview(note: NoteDetail, memo: NoteVoiceMemo, review: AiReview, 
         }),
       ),
     save: (transcript: string) => run(() => voice.transcribe(note.id, memo.id, { transcript })),
+    transcribe: () => run(() => voice.transcribe(note.id, memo.id, { ai: true })),
   };
 }
 // NOTES-B31: the brief and the verbatim transcript as two tabs. Nothing reaches the note until
@@ -105,6 +106,7 @@ export function VoiceMemoReview({
         brief={state.brief}
         pending={review.pending}
         save={state.save}
+        transcribe={state.transcribe}
       />
     </div>
   );
@@ -116,6 +118,7 @@ function ReviewBody({
   brief,
   pending,
   save,
+  transcribe,
 }: {
   tab: Tab;
   note: NoteDetail;
@@ -123,9 +126,11 @@ function ReviewBody({
   brief: Brief | null;
   pending: boolean;
   save: (transcript: string) => void;
+  transcribe: () => void;
 }) {
   const t = useTranslations('notes');
-  if (tab === 'transcript') return <TranscriptView memo={memo} save={save} />;
+  if (tab === 'transcript')
+    return <TranscriptView memo={memo} save={save} transcribe={transcribe} />;
   if (pending)
     return (
       <p role="status" className="text-sm text-text-muted">
@@ -140,21 +145,49 @@ function ReviewBody({
     </div>
   );
 }
-// The words as spoken, or, when none came with the audio, a place to paste or type them.
+// The words as spoken; while AI transcribes, a line saying so; otherwise AI on request, or a
+// place to paste or type them (NOTES-B31, B37).
 function TranscriptView({
   memo,
   save,
+  transcribe,
 }: {
   memo: NoteVoiceMemo;
   save: (transcript: string) => void;
+  transcribe: () => void;
 }) {
   const t = useTranslations('notes');
+  const available = useTranscribeAvailable();
   if (memo.transcript)
     return (
       <p dir="auto" className="text-sm whitespace-pre-wrap">
         {memo.transcript}
       </p>
     );
+  if (memo.transcriptionStatus === 'pending')
+    return (
+      <p role="status" className="flex items-center gap-2 text-sm text-text-muted">
+        <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
+        {t('voiceTranscribingHint')}
+      </p>
+    );
+  return (
+    <div className="grid gap-3">
+      {memo.transcriptionStatus === 'failed' && (
+        <p className="text-sm text-text-muted">{t('voiceFailedHint')}</p>
+      )}
+      {available && (
+        <Button size="sm" className="justify-self-start" onClick={transcribe}>
+          <AudioLines aria-hidden />
+          {t('transcribeVoice')}
+        </Button>
+      )}
+      <TranscriptForm save={save} />
+    </div>
+  );
+}
+function TranscriptForm({ save }: { save: (transcript: string) => void }) {
+  const t = useTranslations('notes');
   return (
     <form
       className="grid gap-2"

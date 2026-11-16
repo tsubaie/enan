@@ -107,7 +107,37 @@ export async function modelSettings(database: Database = db()) {
     models: await loadModels(),
     defaultModel: await getSetting(database, 'ai.model.default'),
     fastModel: await getSetting(database, 'ai.model.fast'),
+    transcriptionModels: await loadTranscriptionModels(),
+    transcriptionModel: await getSetting(database, 'ai.model.transcription'),
   };
+}
+// ADR 0070: the provider's speech-to-text models, read for the settings page only. They are priced
+// by the second, which the token prices here cannot say, so the picker lists them by name.
+const SpeechCatalog = z.object({ data: z.array(z.object({ id: z.string(), name: z.string() })) });
+async function loadTranscriptionModels() {
+  const client = await aiClient(10_000);
+  if (!client) return [];
+  try {
+    const raw: unknown = await client.get('/v1/models', {
+      headers: { 'anthropic-version': null },
+      query: { output_modalities: 'transcription' },
+    });
+    return SpeechCatalog.parse(raw)
+      .data.filter((model) => ModelId.safeParse(model.id).success)
+      .map((model) =>
+        AiModel.parse({
+          id: model.id,
+          name: model.name,
+          contextLength: 0,
+          maxOutputTokens: 0,
+          inputPrice: 0,
+          outputPrice: 0,
+        }),
+      )
+      .sort((a, b) => a.name.localeCompare(b.name));
+  } catch {
+    return [];
+  }
 }
 export async function selectModels(database: Database = db(), actor: string, input: unknown) {
   const selection = AiModelSelection.parse(input);
@@ -122,8 +152,20 @@ export async function selectModels(database: Database = db(), actor: string, inp
     throw new AppError('ai_unavailable', { reason: 'model' });
   await writeSetting(database, 'ai.model.default', selection.defaultModel, actor);
   await writeSetting(database, 'ai.model.fast', selection.fastModel, actor);
-  await writeAudit(database, actor, 'ai.models.update', 'settings', null, selection);
-  return { models, ...selection };
+  const { transcriptionModel, ...chat } = selection;
+  if (transcriptionModel)
+    await writeSetting(database, 'ai.model.transcription', transcriptionModel, actor);
+  await writeAudit(database, actor, 'ai.models.update', 'settings', null, {
+    ...chat,
+    ...(transcriptionModel ? { transcriptionModel } : {}),
+  });
+  return {
+    models,
+    defaultModel: selection.defaultModel,
+    fastModel: selection.fastModel,
+    transcriptionModels: [],
+    transcriptionModel: await getSetting(database, 'ai.model.transcription'),
+  };
 }
 
 async function catalogEntries(client: NonNullable<Awaited<ReturnType<typeof aiClient>>>) {

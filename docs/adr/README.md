@@ -68,10 +68,11 @@ One decision per file. Format: **Status**, **Context**, **Decision**, **Conseque
 | 0062 | The updater replaces itself through a helper | accepted; its separate action on the page superseded by 0063 |
 | 0063 | One Install now for the updater and the app | accepted |
 | 0064 | Passkeys through Better Auth | accepted |
-| 0065 | Voice memos save their audio first and take their transcripts from the reader | accepted |
+| 0065 | Voice memos save their audio first and take their transcripts from the reader | accepted; transcripts superseded by 0070 |
 | 0066 | Internal people link to workspace logins by their address | accepted |
 | 0067 | Reads run outside the write lock | accepted |
 | 0068 | Node 26 is the runtime | accepted |
 | 0069 | oxfmt replaces Prettier, and formatting is checked | accepted |
+| 0070 | Voice memos are transcribed by OpenRouter speech-to-text and write themselves into the note | accepted |
 
 Open decisions awaiting an ADR: license (see roadmap); chart library confirmation (`recharts`).

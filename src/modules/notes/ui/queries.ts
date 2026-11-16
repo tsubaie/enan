@@ -46,6 +46,11 @@ export function useNote(id: string | null, trash: boolean) {
     queryKey: ['notes', 'detail', id, trash],
     enabled: Boolean(id),
     queryFn: () => request(`/notes/${id}?includeDeleted=${trash}`, response),
+    // NOTES-B37: while a voice memo is being transcribed, the note is read again until it lands.
+    refetchInterval: (query) =>
+      query.state.data?.data.voiceMemos.some((memo) => memo.transcriptionStatus === 'pending')
+        ? 2000
+        : false,
   });
   return {
     data: detail.data?.data,

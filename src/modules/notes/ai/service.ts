@@ -12,6 +12,7 @@ export const startNoteAi = transactional(async function startNoteAi(
   noteId: string,
   revision: number,
   capability: 'notes.refine' | 'notes.suggest_tags',
+  options: { autoApply?: boolean } = {},
 ) {
   if (!(await availableCapabilities(ctx)).includes(capability))
     throw new AppError('ai_unavailable');
@@ -24,17 +25,24 @@ export const startNoteAi = transactional(async function startNoteAi(
     return { id: pending.jobId };
   }
   const tags = await listTags(ctx);
-  return admitAi(ctx, capability, noteId, revision, {
-    content: note.content,
-    title: note.title,
-    type: note.type,
-    tags: note.tags,
-    existingTags: tags.data.map((tag) => tag.tag),
-    assignablePeople:
-      capability === 'notes.refine'
-        ? (await peopleForAi(ctx))
-            .filter((person) => person.isAssignable)
-            .map((person) => person.name)
-        : [],
-  });
+  return admitAi(
+    ctx,
+    capability,
+    noteId,
+    revision,
+    {
+      content: note.content,
+      title: note.title,
+      type: note.type,
+      tags: note.tags,
+      existingTags: tags.data.map((tag) => tag.tag),
+      assignablePeople:
+        capability === 'notes.refine'
+          ? (await peopleForAi(ctx))
+              .filter((person) => person.isAssignable)
+              .map((person) => person.name)
+          : [],
+    },
+    options,
+  );
 });

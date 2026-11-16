@@ -2,7 +2,7 @@ import { AiControls, AiControlsWrite } from '@/core/config/ai-controls-schema';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import { AiCredentialStatus, AiCredentialWrite } from '@/core/config/ai-schema';
-import { AiModels, AiModelSelection } from '@/core/config/ai-model-schema';
+import { AiModels } from '@/core/config/ai-model-schema';
 import { request } from '@/core/http/client';
 const response = z.object({ data: AiCredentialStatus });
 export function useAiCredentials() {
@@ -42,7 +42,7 @@ export function useAiModels(enabled = true) {
 export function useSaveAiModels() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (input: z.infer<typeof AiModelSelection>) =>
+    mutationFn: (input: { defaultModel: string; fastModel: string; transcriptionModel: string }) =>
       request('/admin/ai/models', z.object({ data: AiModels }), { method: 'PUT', body: input }),
     onSuccess: () =>
       Promise.all([

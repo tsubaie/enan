@@ -2,8 +2,9 @@ import 'server-only';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import type { Database } from '@/core/db/client';
 import { id } from '@/core/db/ids';
-import { files } from '@/core/db/system-schema';
+import { files, jobs } from '@/core/db/system-schema';
 import { noteVoiceMemos } from '../schema/db';
+const stalled = sql`${noteVoiceMemos.transcriptionStatus} = 'pending' and coalesce(${jobs.status}, 'failed') in ('failed', 'cancelled')`;
 // NOTES-I08: a note's voice memos with their files, oldest first.
 const memoColumns = {
   id: noteVoiceMemos.id,
@@ -14,9 +15,13 @@ const memoColumns = {
   sizeBytes: files.sizeBytes,
   durationSeconds: noteVoiceMemos.durationSeconds,
   transcript: noteVoiceMemos.transcript,
-  transcriptionStatus: noteVoiceMemos.transcriptionStatus,
+  // ADR 0070: a memo waits on its transcription job; once that job has stopped without a
+  // transcript (or is gone), the memo reads as failed, with the job's reason.
+  transcriptionStatus: sql<string>`case when ${stalled} then 'failed' else ${noteVoiceMemos.transcriptionStatus} end`,
   transcriptionJobId: noteVoiceMemos.transcriptionJobId,
-  transcriptionError: noteVoiceMemos.transcriptionError,
+  transcriptionError: sql<
+    string | null
+  >`case when ${stalled} then coalesce(${jobs.lastError}, 'provider') else ${noteVoiceMemos.transcriptionError} end`,
   createdAt: noteVoiceMemos.createdAt,
   createdBy: noteVoiceMemos.createdBy,
 };
@@ -25,6 +30,7 @@ export async function selectVoiceMemos(database: Database, noteId: string) {
     .select(memoColumns)
     .from(noteVoiceMemos)
     .innerJoin(files, eq(files.id, noteVoiceMemos.fileId))
+    .leftJoin(jobs, eq(jobs.id, noteVoiceMemos.transcriptionJobId))
     .where(and(eq(noteVoiceMemos.noteId, noteId), isNull(noteVoiceMemos.deletedAt)))
     .orderBy(noteVoiceMemos.createdAt, noteVoiceMemos.id);
   return rows.map((row) => ({ ...row, audioUrl: `/api/v1/notes/${noteId}/voice/${row.id}/audio` }));
@@ -34,6 +40,7 @@ export async function selectVoiceMemo(database: Database, noteId: string, memoId
     .select({ ...memoColumns, storageKey: files.storageKey })
     .from(noteVoiceMemos)
     .innerJoin(files, eq(files.id, noteVoiceMemos.fileId))
+    .leftJoin(jobs, eq(jobs.id, noteVoiceMemos.transcriptionJobId))
     .where(
       and(
         eq(noteVoiceMemos.id, memoId),

@@ -54,3 +54,43 @@ export async function completeStructured<S extends z.ZodType>(
     throw new AppError('ai_failed', { reason: 'invalid_output', ...usageDetail });
   }
 }
+// ADR 0070: OpenRouter's speech-to-text endpoint, reached through the same client (its key and
+// base URL) as every other call. The audio goes inline as base64 with its container format.
+const Transcription = z.object({
+  text: z.string(),
+  usage: z
+    .object({
+      cost: z.number().nonnegative(),
+      input_tokens: z.number().int().nonnegative(),
+      output_tokens: z.number().int().nonnegative(),
+    })
+    .partial()
+    .optional(),
+});
+export async function transcribeAudio(
+  model: string,
+  audio: { bytes: Uint8Array; format: string },
+  signal: AbortSignal,
+) {
+  const timeoutMs = aiExecutionLimits.transcription.timeoutMs;
+  const client = await aiClient(timeoutMs);
+  if (!client) throw new AppError('ai_unavailable');
+  const deadline = AbortSignal.timeout(timeoutMs);
+  const raw: unknown = await client
+    .post('/v1/audio/transcriptions', {
+      body: {
+        model,
+        input_audio: { data: Buffer.from(audio.bytes).toString('base64'), format: audio.format },
+      },
+      headers: { 'anthropic-version': null },
+      signal: AbortSignal.any([signal, deadline]),
+    })
+    .catch((error) => {
+      if (deadline.aborted && !signal.aborted)
+        throw new AppError('ai_failed', { reason: 'timeout' });
+      throw error;
+    });
+  const parsed = Transcription.safeParse(raw);
+  if (!parsed.success) throw new AppError('ai_failed', { reason: 'invalid_output' });
+  return parsed.data;
+}

@@ -5,7 +5,12 @@ export const defaults = {
   locale: Locale.enum.en,
   timezone: 'UTC',
   workspaceName: 'Enan',
-  models: { default: 'anthropic/claude-opus-5', fast: 'anthropic/claude-sonnet-5' },
+  models: {
+    default: 'anthropic/claude-opus-5',
+    fast: 'anthropic/claude-sonnet-5',
+    // ADR 0070: speech to text through OpenRouter's transcription endpoint.
+    transcription: 'openai/whisper-large-v3',
+  },
   appUrl: 'http://localhost:3000',
   filesDir: '/var/lib/enan/files',
   backupDir: '/var/lib/enan/backups',
