@@ -23,6 +23,7 @@ export function EntityFacets<T extends Entity, P extends object, C>({
             <span>{filter.label}</span>
             <DatePicker
               label={filter.label}
+              clearable
               value={c.facets[filter.key] || null}
               onChange={(day) => change({ [filter.key]: day ?? '' })}
             />
