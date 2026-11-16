@@ -4,8 +4,7 @@ import { type JobHandler } from '@/core/jobs/types';
 import { executeAi } from '@/core/ai/execute';
 import { AiPayload, AiOutput } from '@/core/ai/job-schema';
 import { id } from '@/core/db/ids';
-import { RefinementOutput, TagOutput } from './schema/validation';
-import { Tags } from './schema/validation';
+import { RefinementOutput, TagOutput, modelTags } from './schema/validation';
 import { TAG_PROMPT } from './ai/prompts/refine.v1';
 import { refinePrompt } from './ai/prompts/select';
 import { lockNote, insertRefinement } from './repo';
@@ -44,7 +43,7 @@ export const noteJobs: Record<string, JobHandler> = {
           return { ...task, owner_name, due_date, source_snippet };
         });
       return {
-        output: { ...output, suggested_tasks, suggested_tags: Tags.parse(output.suggested_tags) },
+        output: { ...output, suggested_tasks, suggested_tags: modelTags(output.suggested_tags) },
         warnings,
       };
     },
@@ -74,7 +73,7 @@ export const noteJobs: Record<string, JobHandler> = {
     schema: AiPayload,
     run: async (job, signal) => {
       const output = await executeAi(job, TAG_PROMPT, TagOutput, signal);
-      return { output: { tags: Tags.parse(output.tags) }, warnings: [] };
+      return { output: { tags: modelTags(output.tags) }, warnings: [] };
     },
     publish: async () => {},
   },
