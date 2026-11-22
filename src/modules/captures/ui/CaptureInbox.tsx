@@ -15,6 +15,7 @@ import { InboxEducation } from './InboxEducation';
 import type { Layout } from './SuggestionCard';
 import { useApprovedMessage } from './suggestion-text';
 import { useReviewToast } from './review-toast';
+import { useReviewAction } from './review-action';
 type Inbox = { groups: Group[]; layout: Layout; scope: CaptureScope };
 const InboxContext = createContext<Inbox | null>(null);
 function useInbox() {
@@ -43,19 +44,23 @@ function Root({
   const t = useTranslations('captures');
   const query = useCaptures(scope, initial);
   const groups = query.data?.data ?? [];
+  const approval = useReviewAction<'ready'>();
   return (
     <InboxContext value={{ groups, layout, scope }}>
-      <div className="grid gap-4">
+      <div className="grid gap-4" data-inbox>
         <header className="flex flex-wrap items-start gap-3">
           <div className="grid flex-1 gap-0.5">
-            <h1 className="font-display text-2xl">{t('review')}</h1>
+            <h1 tabIndex={-1} className="font-display text-2xl">
+              {t('review')}
+            </h1>
             <p className="text-sm text-text-muted">
               {t('waiting', { count: pendingOf(groups).length })}
             </p>
           </div>
-          {groups.length > 0 && <ApproveReadyButton />}
+          {groups.length > 0 && <ApproveReadyButton approval={approval} />}
           {actions}
         </header>
+        {approval.error && <ErrorPanel error={approval.error} />}
         {query.isPending ? (
           <Loading />
         ) : query.error ? (
@@ -68,7 +73,11 @@ function Root({
   );
 }
 // S23: every draft shown with nothing required left to settle; a type flag never holds one back.
-export function ApproveReadyButton() {
+export function ApproveReadyButton({
+  approval: { busy, run },
+}: {
+  approval: ReturnType<typeof useReviewAction<'ready'>>;
+}) {
   const t = useTranslations('captures');
   const { groups } = useInbox();
   const mutations = useReviewMutations();
@@ -83,8 +92,11 @@ export function ApproveReadyButton() {
     );
   return (
     <Button
+      aria-busy={busy === 'ready' || undefined}
+      aria-disabled={busy === 'ready' || undefined}
       onClick={() =>
-        void mutations.approveReady(ready.map((draft) => draft.id)).then(({ data }) => {
+        run('ready', async () => {
+          const { data } = await mutations.approveReady(ready.map((draft) => draft.id));
           const [only] = data.approved;
           toast.approved(
             only && data.approved.length === 1
@@ -146,7 +158,7 @@ function Scope() {
   const { scope } = useInbox();
   return (
     <Link
-      className="text-sm underline underline-offset-4"
+      className="inline-flex min-h-6 items-center text-sm underline underline-offset-4 pointer-coarse:min-h-11"
       href={scope === 'all' ? routes.captures() : routes.captures({ scope: 'all' })}
     >
       {scope === 'all' ? t('showMine') : t('showEveryone')}

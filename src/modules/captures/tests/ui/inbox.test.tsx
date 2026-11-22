@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { fireEvent, screen, within } from '@testing-library/react';
+import { act, fireEvent, screen, within } from '@testing-library/react';
 import en from '@/core/i18n/messages/en.json';
 import ar from '@/core/i18n/messages/ar.json';
 import { CaptureGroup } from '../../schema/validation';
@@ -14,26 +14,40 @@ const spies = vi.hoisted(() => ({
   approveReady: vi.fn(),
   discard: vi.fn(),
   undo: vi.fn(),
+  merge: vi.fn(),
   toast: vi.fn(),
   list: { data: [] as object[], meta: { nextCursor: null } },
+  // The inbox re-reads after a review action, as the real query does once it is invalidated.
+  listeners: new Set<() => void>(),
 }));
-vi.mock('../../ui/capture-queries', () => ({
-  useCaptures: () => ({ data: spies.list, isPending: false, error: null }),
-  useReviewMutations: () => ({
-    patch: spies.patch,
-    approve: spies.approve,
-    approveReady: spies.approveReady,
-    discard: spies.discard,
-    undo: spies.undo,
-    merge: vi.fn(),
-    typeTranscript: vi.fn(),
-  }),
-  useAssignablePeople: () => [
-    { id: '01a08a9f-1991-760a-b73a-568f6f8665a1', fullName: 'Finance Lead', displayName: null },
-  ],
-  useRetryCapture: () => ({ mutate: vi.fn(), isPending: false, error: null }),
-  useRemoveCapture: () => ({ mutate: vi.fn(), isPending: false, error: null }),
-}));
+vi.mock('../../ui/capture-queries', async () => {
+  const { useSyncExternalStore } = await import('react');
+  const subscribe = (listener: () => void) => {
+    spies.listeners.add(listener);
+    return () => spies.listeners.delete(listener);
+  };
+  return {
+    useCaptures: () => ({
+      data: useSyncExternalStore(subscribe, () => spies.list),
+      isPending: false,
+      error: null,
+    }),
+    useReviewMutations: () => ({
+      patch: spies.patch,
+      approve: spies.approve,
+      approveReady: spies.approveReady,
+      discard: spies.discard,
+      undo: spies.undo,
+      merge: spies.merge,
+      typeTranscript: vi.fn(),
+    }),
+    useAssignablePeople: () => [
+      { id: '01a08a9f-1991-760a-b73a-568f6f8665a1', fullName: 'Finance Lead', displayName: null },
+    ],
+    useRetryCapture: () => ({ mutate: vi.fn(), isPending: false, error: null }),
+    useRemoveCapture: () => ({ mutate: vi.fn(), isPending: false, error: null }),
+  };
+});
 vi.mock('@/modules/committees/ui', () => ({
   useCommitteeChoices: () => ({ data: { data: [] } }),
   CommitteePicker: () => <div data-testid="committee-picker" />,
@@ -52,7 +66,7 @@ const captureId = '01a08a9f-1991-760a-b73a-568f6f866600';
 const transcript =
   'Send the updated supplier quote before Thursday. And a note for the projects committee: review the timeline.';
 const sentence = 'And a note for the projects committee: review the timeline.';
-const draft = (fields: object) => ({
+const draft = <Fields extends object>(fields: Fields) => ({
   revision: 1,
   captureId,
   fieldStates: {},
@@ -109,7 +123,14 @@ const group = CaptureGroup.parse({
 });
 const play = vi.fn();
 beforeEach(() => {
-  for (const spy of [spies.patch, spies.approve, spies.approveReady, spies.discard, spies.toast])
+  for (const spy of [
+    spies.patch,
+    spies.approve,
+    spies.approveReady,
+    spies.discard,
+    spies.merge,
+    spies.toast,
+  ])
     spy.mockReset().mockResolvedValue({ data: {} });
   spies.list = { data: [group], meta: { nextCursor: null } };
   localStorage.clear();
@@ -216,4 +237,117 @@ it('CAPTURES-B09 in Arabic the inbox uses the approved copy and keeps the clock 
   expect(screen.getAllByText(ar.captures.discard).length).toBe(2);
   expect(screen.getByText(ar.captures.blocked_committeeId)).toBeTruthy();
   expect(screen.getByText('01:12').getAttribute('dir')).toBe('ltr');
+});
+const secondTaskId = '01a08a9f-1991-760a-b73a-568f6f866604';
+const secondTask = draft({
+  id: secondTaskId,
+  kind: 'task',
+  payload: { title: 'Book the venue', ownerId: null },
+});
+let shown: { id: string }[] = [];
+const withDrafts = (...suggestions: { id: string }[]) => {
+  shown = suggestions;
+  spies.list = { data: [{ ...group, suggestions }], meta: { nextCursor: null } };
+  for (const listener of spies.listeners) listener();
+};
+const cardOf = (id: string) => document.querySelector(`[data-draft="${id}"]`);
+function deferred() {
+  let resolve: (value: object) => void = () => {};
+  let reject: (error: Error) => void = () => {};
+  const promise = new Promise<object>((done, fail) => {
+    resolve = done;
+    reject = fail;
+  });
+  return { promise, resolve, reject };
+}
+it('CAPTURES-B10 Approve and Discard move focus to the next draft, else the previous, else the heading', async () => {
+  withDrafts(task, secondTask, committeeNote);
+  page();
+  const approval = { suggestion: secondTask, live: { type: 'task', id: secondTaskId } };
+  spies.approve.mockImplementation(async () => {
+    withDrafts(task, committeeNote);
+    return { data: approval };
+  });
+  spies.discard.mockImplementation(async (gone: { id: string }) => {
+    withDrafts(...shown.filter((item) => item.id !== gone.id));
+    return { data: {} };
+  });
+  const second = cardOf(secondTaskId);
+  if (!second) throw new Error('no second card');
+  await act(async () => {
+    fireEvent.click(
+      within(second as HTMLElement).getByRole('button', { name: en.captures.approve }),
+    );
+  });
+  expect(document.activeElement).toBe(cardOf(committeeNote.id));
+  const last = cardOf(committeeNote.id) as HTMLElement;
+  await act(async () => {
+    fireEvent.click(within(last).getByRole('button', { name: en.captures.discard }));
+  });
+  expect(document.activeElement).toBe(cardOf(taskId));
+  await act(async () => {
+    fireEvent.click(
+      within(cardOf(taskId) as HTMLElement).getByRole('button', { name: en.captures.discard }),
+    );
+  });
+  expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1 }));
+});
+it('CAPTURES-B10 a draft being approved is busy, a second click sends nothing, and a failure is shown', async () => {
+  page();
+  const pending = deferred();
+  spies.approve.mockReturnValue(pending.promise);
+  const card = cardOf(taskId) as HTMLElement;
+  const approve = within(card).getByRole('button', { name: en.captures.approve });
+  fireEvent.click(approve);
+  fireEvent.click(approve);
+  fireEvent.click(within(card).getByRole('button', { name: en.captures.discard }));
+  expect(spies.approve).toHaveBeenCalledTimes(1);
+  expect(spies.discard).not.toHaveBeenCalled();
+  expect(approve.getAttribute('aria-busy')).toBe('true');
+  expect(approve.querySelector('.motion-safe\\:animate-spin')).toBeTruthy();
+  await act(async () => pending.reject(new Error('The server is not answering.')));
+  expect(within(card).getByRole('alert').textContent).toContain('The server is not answering.');
+  expect(approve.getAttribute('aria-busy')).toBeNull();
+});
+it('CAPTURES-B10 Approve N ready is busy while it is sent, fires once, and says why it failed', async () => {
+  page();
+  const pending = deferred();
+  spies.approveReady.mockReturnValue(pending.promise);
+  const ready = screen.getByRole('button', {
+    name: en.captures.approveReady.replace('{count, number, integer}', '1'),
+  });
+  fireEvent.click(ready);
+  fireEvent.click(ready);
+  expect(spies.approveReady).toHaveBeenCalledTimes(1);
+  expect(ready.getAttribute('aria-busy')).toBe('true');
+  expect(ready.getAttribute('aria-disabled')).toBe('true');
+  await act(async () => pending.reject(new Error('The server is not answering.')));
+  expect(screen.getByRole('alert').textContent).toContain('The server is not answering.');
+  expect(ready.getAttribute('aria-busy')).toBeNull();
+});
+it('CAPTURES-B10 after a merge the kept draft has focus', async () => {
+  withDrafts(task, secondTask, committeeNote);
+  page();
+  spies.merge.mockImplementation(async () => {
+    withDrafts(secondTask, committeeNote);
+    return { data: secondTask };
+  });
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: en.captures.merge }));
+  });
+  const sheet = screen.getByRole('dialog');
+  fireEvent.click(within(sheet).getByRole('radio', { name: /Book the venue/u }));
+  await act(async () => {
+    fireEvent.click(within(sheet).getByRole('button', { name: en.captures.merge }));
+  });
+  expect(spies.merge).toHaveBeenCalledWith(captureId, secondTaskId, [taskId]);
+  await vi.waitFor(() => expect(document.activeElement).toBe(cardOf(secondTaskId)));
+});
+it('CAPTURES-B10 across kinds Merge says why beside it, not only in a tooltip', () => {
+  page();
+  const merge = screen.getByRole('button', { name: en.captures.merge });
+  expect(merge.getAttribute('aria-disabled')).toBe('true');
+  expect(merge.getAttribute('title')).toBeNull();
+  const hint = document.getElementById(merge.getAttribute('aria-describedby') ?? '');
+  expect(hint?.textContent).toBe(en.captures.mergeKindOnly);
 });

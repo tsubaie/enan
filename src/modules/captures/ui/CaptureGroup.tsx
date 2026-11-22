@@ -27,7 +27,7 @@ export function CaptureGroup({ group, layout }: { group: Group; layout: Layout }
       >
         <Header group={group} drafts={pending.length} />
         {pending.length > 1 && (
-          <div className="flex justify-end">
+          <div className="flex items-center justify-end gap-2">
             <MergeSheet group={group} drafts={pending} />
           </div>
         )}

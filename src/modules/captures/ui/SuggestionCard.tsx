@@ -1,8 +1,7 @@
 'use client';
-import { createContext, use, useId, useState, type ReactNode } from 'react';
+import { useId, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
-import { Building2, Check, Info, ListChecks, NotebookPen } from 'lucide-react';
-import { Button } from '@/ui/primitives/button';
+import { Building2, Info, ListChecks, NotebookPen } from 'lucide-react';
 import { NativeSelect, NativeSelectOption } from '@/ui/primitives/native-select';
 import { Dialog, DialogContent, DialogTitle } from '@/ui/primitives/dialog';
 import { ErrorPanel } from '@/ui/layout/ErrorPanel';
@@ -13,35 +12,17 @@ import {
   payloadFields,
   type CaptureGroup,
   type PayloadFields,
-  type RequiredField,
   type Suggestion,
 } from '../schema/validation';
 import { useReviewMutations } from './capture-queries';
-import { DraftState, Meta, useApprovedMessage } from './suggestion-text';
+import { DraftState, Meta } from './suggestion-text';
 import { CaptureListen } from './CaptureListen';
-import { SuggestionFields, type Edit } from './SuggestionFields';
-import { useReviewToast } from './review-toast';
-// S18–S22: one draft. `layout` is explicit: `compact` on a phone's list (Edit opens the draft full
-// screen), `panel` inline in the desktop inbox, `screen` the phone's full-screen draft.
-export type Layout = 'compact' | 'panel' | 'screen';
-type Card = {
-  draft: Suggestion;
-  group: CaptureGroup;
-  layout: Layout;
-  missing: RequiredField[];
-  editing: boolean;
-  setEditing: (editing: boolean) => void;
-  edit: Edit;
-  changeKind: (kind: SuggestionKind) => void;
-  error: Error | null;
-  run: (action: () => Promise<void>) => void;
-};
-const CardContext = createContext<Card | null>(null);
-function useCard() {
-  const card = use(CardContext);
-  if (!card) throw new Error('SuggestionCard.Root is missing');
-  return card;
-}
+import { SuggestionFields } from './SuggestionFields';
+import { focusAfterLeaving, useReviewAction } from './review-action';
+import { CardContext, useCard, type Busy, type Card, type Layout } from './suggestion-card-context';
+import { ApproveButton, DiscardButton } from './SuggestionButtons';
+import { Button } from '@/ui/primitives/button';
+export type { Layout } from './suggestion-card-context';
 const kindIcons = { task: ListChecks, meeting_note: NotebookPen, committee_note: Building2 };
 function Root({
   draft: given,
@@ -63,13 +44,10 @@ function Root({
     missing.length > 0 ||
     Object.values(draft.fieldStates).some((entry) => entry.state !== 'confident');
   const [toggled, setEditing] = useState<boolean | null>(null);
-  const [error, setError] = useState<Error | null>(null);
-  const run = (action: () => Promise<void>) => {
-    setError(null);
-    action().catch((failure: Error) => setError(failure));
-  };
+  const { error, busy, run } = useReviewAction<Busy>();
+  const cardRef = useRef<HTMLElement>(null);
   const save = (change: { kind?: SuggestionKind; payload?: PayloadFields }) =>
-    run(async () => setLatest((await mutations.patch(draft, change)).data));
+    run('save', async () => setLatest((await mutations.patch(draft, change)).data));
   const card: Card = {
     draft,
     group,
@@ -81,11 +59,18 @@ function Root({
     edit: (payload) => save({ payload }),
     changeKind: (kind) => save({ kind }),
     error,
-    run,
+    busy,
+    leave: (kind, action) => {
+      const refocus = focusAfterLeaving(cardRef.current, draft.id);
+      run(kind, () => action().then(refocus));
+    },
   };
   return (
     <CardContext value={card}>
       <article
+        ref={cardRef}
+        tabIndex={-1}
+        data-draft={draft.id}
         aria-label={payloadFields(draft.payload).title?.toString()}
         data-testid="suggestion-card"
         data-kind={draft.kind}
@@ -153,41 +138,17 @@ function Listen() {
   if (!editing) return null;
   return <CaptureListen.Source draft={draft} transcript={group.transcript} />;
 }
-// S18 Approve / Edit / Discard. Approve with a required field unsettled stays focusable and says
-// why under it (S22); Discard has no confirm, its toast offers Undo (S25, S28).
+// S18 Approve / Edit / Discard; the reason Approve waits is said under it (S22).
 function Actions() {
   const t = useTranslations('captures');
-  const { draft, layout, missing, editing, setEditing, run, error } = useCard();
-  const mutations = useReviewMutations();
-  const toast = useReviewToast();
-  const message = useApprovedMessage();
+  const { layout, missing, editing, setEditing, error } = useCard();
   const reason = useId();
   const [screen, setScreen] = useState(false);
   const first = missing[0];
-  const approve = () =>
-    run(async () => {
-      const approval = (await mutations.approve(draft)).data;
-      toast.approved(message(approval), [approval]);
-    });
-  const discard = () =>
-    run(async () => {
-      await mutations.discard(draft);
-      toast.discarded(draft.id);
-    });
   return (
     <div className="grid gap-2">
       <div className="flex flex-wrap items-center gap-2">
-        <Button
-          aria-disabled={first ? true : undefined}
-          aria-describedby={first ? reason : undefined}
-          className={cn(first && 'opacity-60')}
-          onClick={() => {
-            if (!first) approve();
-          }}
-        >
-          <Check aria-hidden />
-          {t('approve')}
-        </Button>
+        <ApproveButton reason={reason} />
         {layout !== 'screen' && (
           <Button
             variant="outline"
@@ -197,9 +158,7 @@ function Actions() {
             {t('edit')}
           </Button>
         )}
-        <Button variant="ghost" className="ms-auto text-danger" onClick={discard}>
-          {t('discard')}
-        </Button>
+        <DiscardButton />
       </div>
       {first && (
         <p id={reason} className="flex items-center gap-1.5 text-sm font-medium">

@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Merge } from 'lucide-react';
 import { Button } from '@/ui/primitives/button';
@@ -13,6 +13,7 @@ import {
 import { ErrorPanel } from '@/ui/layout/ErrorPanel';
 import { payloadFields, type CaptureGroup, type Suggestion } from '../schema/validation';
 import { useReviewMutations } from './capture-queries';
+import { listedDraft, useReviewAction } from './review-action';
 // §9 decision 9: only drafts of one kind merge. The kinds that have a sibling to merge with.
 export function mergeable(drafts: Suggestion[]) {
   return drafts.filter((draft) =>
@@ -26,7 +27,16 @@ export function MergeSheet({ group, drafts }: { group: CaptureGroup; drafts: Sug
   const mutations = useReviewMutations();
   const [open, setOpen] = useState(false);
   const [keepId, setKeepId] = useState<string | null>(null);
-  const [error, setError] = useState<Error | null>(null);
+  const { error, busy, run } = useReviewAction<'merge'>();
+  const merging = busy === 'merge';
+  // After a merge the kept draft takes focus, not the Merge button that opened the sheet.
+  const mergedId = useRef<string | null>(null);
+  // The card itself: an element handed back to the dialog gets its first control focused.
+  const restore = () => {
+    const card = mergedId.current ? listedDraft(mergedId.current) : null;
+    card?.focus();
+    return !card;
+  };
   const choices = mergeable(drafts);
   const kept = choices.find((draft) => draft.id === keepId);
   const submit = () => {
@@ -34,27 +44,24 @@ export function MergeSheet({ group, drafts }: { group: CaptureGroup; drafts: Sug
     const mergeIds = choices
       .filter((draft) => draft.kind === kept.kind && draft.id !== kept.id)
       .map((draft) => draft.id);
-    mutations.merge(group.id, kept.id, mergeIds).then(
-      () => setOpen(false),
-      (failure: unknown) => setError(failure instanceof Error ? failure : null),
-    );
+    run('merge', async () => {
+      await mutations.merge(group.id, kept.id, mergeIds);
+      mergedId.current = kept.id;
+      setOpen(false); // with one draft left the sheet is gone and only this moves focus
+      listedDraft(kept.id)?.focus();
+    });
   };
   return (
     <>
-      <Button
-        variant="outline"
-        size="sm"
-        aria-disabled={choices.length ? undefined : true}
-        title={choices.length ? undefined : t('mergeKindOnly')}
-        onClick={() => {
-          if (choices.length) setOpen(true);
+      <MergeTrigger
+        enabled={choices.length > 0}
+        open={() => {
+          mergedId.current = null;
+          setOpen(true);
         }}
-      >
-        <Merge aria-hidden />
-        {t('merge')}
-      </Button>
+      />
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
+        <DialogContent finalFocus={restore}>
           <DialogTitle>{t('mergeTitle')}</DialogTitle>
           <DialogDescription>{t('mergeBody')}</DialogDescription>
           <MergeChoices group={group} choices={choices} keepId={keepId} choose={setKeepId} />
@@ -64,13 +71,40 @@ export function MergeSheet({ group, drafts }: { group: CaptureGroup; drafts: Sug
             <Button variant="outline" onClick={() => setOpen(false)}>
               {c('cancel')}
             </Button>
-            <Button disabled={!kept} onClick={submit}>
+            <Button disabled={!kept || merging} aria-busy={merging || undefined} onClick={submit}>
               <Merge aria-hidden />
               {t('merge')}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </>
+  );
+}
+// Across kinds Merge stays focusable and says why beside it (§9 decision 9).
+function MergeTrigger({ enabled, open }: { enabled: boolean; open: () => void }) {
+  const t = useTranslations('captures');
+  const hint = useId();
+  return (
+    <>
+      <Button
+        variant="outline"
+        size="sm"
+        aria-disabled={enabled ? undefined : true}
+        aria-describedby={enabled ? undefined : hint}
+        className="aria-disabled:cursor-not-allowed aria-disabled:border-dashed aria-disabled:text-text-muted"
+        onClick={() => {
+          if (enabled) open();
+        }}
+      >
+        <Merge aria-hidden />
+        {t('merge')}
+      </Button>
+      {!enabled && (
+        <p id={hint} className="text-xs text-text-muted">
+          {t('mergeKindOnly')}
+        </p>
+      )}
     </>
   );
 }

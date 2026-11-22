@@ -54,7 +54,13 @@ function ToastList() {
           <ToastTitle />
           {toast.actionProps?.children ? <ToastAction /> : <ToastClose />}
           {view && (
-            <Link href={view.href} className={buttonVariants({ variant: 'ghost' })}>
+            <Link
+              href={view.href}
+              className={buttonVariants({
+                variant: 'ghost',
+                className: 'pointer-coarse:min-h-11 pointer-coarse:min-w-11',
+              })}
+            >
               {view.label}
             </Link>
           )}
