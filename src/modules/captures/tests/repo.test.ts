@@ -25,14 +25,17 @@ const listed = async (
   reader: User,
   limit = 50,
   after: { createdAt: Date; id: string } | null = null,
-) => (await repo.selectCaptures(db(), reader, limit, after)).map((row) => row.id);
-it('CAPTURES-B02 a list shows the recorder their own live captures, an admin every live one, and no one a deleted one', async () => {
+  scope: 'mine' | 'all' = 'mine',
+) => (await repo.selectCaptures(db(), reader, limit, after, scope)).map((row) => row.id);
+it('CAPTURES-B02 a list shows the recorder their own live captures, an admin every live one when asking for all, and no one a deleted one', async () => {
   const own = await capture(recorder, { createdAt: at(1) });
   const theirs = await capture(other, { createdAt: at(2) });
   await capture(recorder, { createdAt: at(3), deletedAt: at(4) });
   expect(await listed(recorder)).toEqual([own.id]);
   expect(await listed(other)).toEqual([theirs.id]);
-  expect(await listed(admin)).toEqual([theirs.id, own.id]);
+  expect(await listed(other, 50, null, 'all')).toEqual([theirs.id]);
+  expect(await listed(admin)).toEqual([]);
+  expect(await listed(admin, 50, null, 'all')).toEqual([theirs.id, own.id]);
 });
 it('CAPTURES-B02 a list is newest first and pages on (created at, id) without repeating or skipping', async () => {
   const same = at(5);
@@ -98,4 +101,15 @@ it('CAPTURES-B09 interpretation replaces only the drafts still pending', async (
   expect((await repo.selectSuggestions(db(), [own.id])).map((row) => row.id).sort()).toEqual(
     [reviewed.id, fresh].sort(),
   );
+});
+it('CAPTURES-B10 Approve all ready takes only the reader’s own live pending drafts, admins included', async () => {
+  const own = await capture(recorder);
+  const waiting = await suggestion(own.id);
+  await suggestion(own.id, { status: 'discarded' });
+  await suggestion(own.id, { deletedAt: at(1) });
+  await suggestion((await capture(recorder, { deletedAt: at(2) })).id);
+  await suggestion((await capture(other)).id);
+  expect(await repo.selectOwnPendingSuggestions(db(), recorder)).toEqual([{ id: waiting.id }]);
+  expect(await repo.selectOwnPendingSuggestions(db(), admin)).toEqual([]);
+  expect((await repo.selectSuggestion(db(), waiting.id))?.createdBy).toBe(recorder.id);
 });
