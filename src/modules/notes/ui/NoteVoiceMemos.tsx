@@ -18,7 +18,7 @@ export function NoteVoiceMemos({ note }: { note: NoteDetail }) {
   }, [finished, client, note.id]);
   if (!note.voiceMemos.length) return null;
   return (
-    <section className="mt-8 grid gap-2">
+    <section data-testid="voice-memos" className="mt-8 grid gap-2">
       <h3 className="text-sm font-medium">{t('voiceMemos')}</h3>
       <ul className="grid gap-3">
         {note.voiceMemos.map((memo) => (

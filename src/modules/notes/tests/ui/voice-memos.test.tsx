@@ -164,7 +164,7 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 describe('voice memo player', () => {
-  it('CAPTURES-B05 a note offers no way to record or upload audio, and one without memos shows nothing', () => {
+  it('CAPTURES-B05 NOTES-B34 a note offers no way to record or upload audio, and one without memos shows nothing', () => {
     const { container } = mount(<NoteVoiceMemos note={noteWith()} />);
     expect(container.textContent).toBe('');
     mount(<NoteVoiceMemos note={noteWith({ voiceMemos: [memo()] })} />);

@@ -128,7 +128,7 @@ Type labels come from `notes.types` per locale; the six defaults have catalog en
 - NOTES-A12 An administrator adds a note type with English and Arabic labels and sets it as the default; the new type appears in the rail and the create form. (en)
 - NOTES-A14 Expand on a note's content opens the expanded view with the content and `focus=content` in the URL; Escape closes it and the record stays open. (en)
 - NOTES-A13 Creating a note with the Meeting template opens it with the template's sections as its content; the administration page lists the built-in templates. (en)
-- NOTES-A15 A voice memo already on a note (attached before the inbox) shows No transcript and a player whose speed steps from 1x to 1.5x; a typed transcript is saved on the memo without changing the note, Insert into Note appends it after the content, the note offers no record or upload control, and the detail has no serious or critical axe violations. (en)
+- NOTES-A15 A voice memo already on a note (attached before the inbox) shows No transcript and a player whose speed steps from 1x to 1.5x; a typed transcript is saved on the memo without changing the note, Insert into Note appends it after the content, the note offers no record or upload control, and the memo section has no serious or critical axe violations. (en)
 - NOTES-A16 Retired with the record-first strip (CAPTURES-B07): the notes list has no strip and `POST /notes/voice` answers 410. (en)
 
 ## Required scenarios
