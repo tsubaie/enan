@@ -9,14 +9,12 @@ import { RefinementOutput, TagOutput, modelTags } from './schema/validation';
 import { TAG_PROMPT } from './ai/prompts/refine.v1';
 import { refinePrompt } from './ai/prompts/select';
 import { lockNote, insertRefinement } from './repo';
-import { executeTranscription } from '@/core/ai/execute';
+import { transcribeStoredAudio } from '@/core/ai/transcribe';
 import { userById } from '@/core/db/auth-repo';
 import { db, type Database } from '@/core/db/client';
 import { getSetting } from '@/core/db/settings-repo';
 import { User } from '@/core/http/user-schema';
 import { AppError } from '@/core/http/errors';
-import { readStoredFile } from '@/core/files/storage';
-import { audioFormat } from '@/core/files/voice-audio';
 import { dayAt } from '@/core/time/notes';
 import { getNote, patchNote } from './service';
 import { startNoteAi } from './ai/service';
@@ -141,11 +139,7 @@ export const noteJobs: Record<string, JobHandler> = {
     run: async (job, signal) => {
       const { noteId, memoId } = TranscribeInput.parse(AiPayload.parse(job.payload).input);
       const memo = await voiceRepo.selectVoiceMemo(db(), noteId, memoId);
-      const format = memo ? audioFormat(memo.mime) : null;
-      if (!memo || !format) throw new AppError('ai_failed', { reason: 'missing_audio' });
-      const audio = { bytes: await readStoredFile(memo.storageKey), format };
-      const transcript = (await executeTranscription(job, audio, signal)).trim();
-      if (!transcript) throw new AppError('ai_failed', { reason: 'no_speech' });
+      const transcript = await transcribeStoredAudio(job, memo, signal);
       return { output: { transcript }, warnings: [] };
     },
     publish: async (database, job, raw) => {

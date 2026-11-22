@@ -1,7 +1,6 @@
 import 'server-only';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import type { Database } from '@/core/db/client';
-import { id } from '@/core/db/ids';
 import { files, jobs } from '@/core/db/system-schema';
 import { noteVoiceMemos } from '../schema/db';
 const stalled = sql`${noteVoiceMemos.transcriptionStatus} = 'pending' and coalesce(${jobs.status}, 'failed') in ('failed', 'cancelled')`;
@@ -57,26 +56,7 @@ export async function countVoiceMemos(database: Database, noteId: string) {
     .where(and(eq(noteVoiceMemos.noteId, noteId), isNull(noteVoiceMemos.deletedAt)));
   return row?.count ?? 0;
 }
-// Content-addressed: the same recording is one `files` row however often it is uploaded.
-export async function upsertAudioFile(
-  database: Database,
-  value: Omit<typeof files.$inferInsert, 'id'>,
-) {
-  const [existing] = await database
-    .select({ id: files.id })
-    .from(files)
-    .where(eq(files.storageKey, value.storageKey));
-  if (existing) {
-    await database
-      .update(files)
-      .set({ availability: 'available', archivedAt: null })
-      .where(eq(files.id, existing.id));
-    return existing.id;
-  }
-  const fileId = id();
-  await database.insert(files).values({ ...value, id: fileId });
-  return fileId;
-}
+export { upsertAudioFile } from '@/core/db/files-repo';
 export async function insertVoiceMemo(
   database: Database,
   value: typeof noteVoiceMemos.$inferInsert,

@@ -1,6 +1,7 @@
 import 'server-only';
 import { createHash } from 'node:crypto';
 import { AppError } from '@/core/http/errors';
+import { writeStoredFile } from './storage';
 // NOTES-I08: a voice memo is at most 25 MB and 15 minutes, and a note holds at most 20.
 export const voiceAudioLimits = {
   maxBytes: 25 * 1024 * 1024,
@@ -67,4 +68,18 @@ export function checkVoiceAudio(bytes: Uint8Array, fileName: string) {
     originalName: voiceFileName(fileName, mime),
     sizeBytes: bytes.byteLength,
   };
+}
+// NOTES-B29 CAPTURES-B01: the audio is checked and stored before any write lock (ADR 0054). A
+// failed transaction afterwards keeps the binary: its key is the content's hash and another row
+// may already name it.
+export async function storeVoiceAudio(file: File) {
+  if (file.size > voiceAudioLimits.maxBytes)
+    throw new AppError('rule_violation', {
+      reason: 'too_large',
+      maxBytes: voiceAudioLimits.maxBytes,
+    });
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const audio = checkVoiceAudio(bytes, file.name);
+  await writeStoredFile(audio.storageKey, bytes);
+  return audio;
 }

@@ -5,8 +5,8 @@ import { db, withTransaction } from '@/core/db/client';
 import { transactional } from '@/core/db/transaction';
 import { id } from '@/core/db/ids';
 import { writeAudit } from '@/core/db/audit-repo';
-import { readStoredFile, writeStoredFile } from '@/core/files/storage';
-import { checkVoiceAudio, voiceAudioLimits } from '@/core/files/voice-audio';
+import { readStoredFile } from '@/core/files/storage';
+import { storeVoiceAudio, voiceAudioLimits } from '@/core/files/voice-audio';
 import { AppError } from '@/core/http/errors';
 import { getSetting } from '@/core/db/settings-repo';
 import { dayAt } from '@/core/time/notes';
@@ -18,22 +18,10 @@ import { admitAi } from '@/core/ai/admission';
 import * as voiceRepo from './repo';
 type StoredAudio = Awaited<ReturnType<typeof storeVoiceAudio>>;
 type MemoFields = { durationSeconds: number; transcript?: string | undefined };
-// NOTES-B29: the audio is checked and stored before the write lock (ADR 0054), then the file and
-// memo rows go in one short transaction. No AI call is made in the request, so the upload
-// succeeds whether or not AI is configured: a memo without a transcript is queued for
-// transcription when AI can take it (NOTES-B37) and `skipped` otherwise. A failed transaction
-// keeps the binary, since its key is the content's hash and another memo may already name it.
-async function storeVoiceAudio(file: File) {
-  if (file.size > voiceAudioLimits.maxBytes)
-    throw new AppError('rule_violation', {
-      reason: 'too_large',
-      maxBytes: voiceAudioLimits.maxBytes,
-    });
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  const audio = checkVoiceAudio(bytes, file.name);
-  await writeStoredFile(audio.storageKey, bytes);
-  return audio;
-}
+// NOTES-B29: the audio is stored first (`storeVoiceAudio`), then the file and memo rows go in one
+// short transaction. No AI call is made in the request, so the upload succeeds whether or not AI
+// is configured: a memo without a transcript is queued for transcription when AI can take it
+// (NOTES-B37) and `skipped` otherwise.
 async function attachVoiceMemo(
   ctx: Context,
   noteId: string,
