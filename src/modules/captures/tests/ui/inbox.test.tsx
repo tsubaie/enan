@@ -431,6 +431,65 @@ it('CAPTURES-B10 when the save before Approve or Discard fails, nothing is sent 
   expect(spies.discard).not.toHaveBeenCalled();
   expect(within(card).getByRole('alert').textContent).toContain('The server is not answering.');
 });
+it('CAPTURES-B10 an edit made while the previous one is saving is sent next with the saved revision, and Approve sends both', async () => {
+  page();
+  const first = deferred();
+  const finalTitle = 'Submit the final Q4 report';
+  const description = 'Bring the figures';
+  const both = draft({
+    id: taskId,
+    kind: 'task',
+    revision: 3,
+    payload: { title: finalTitle, description, ownerId: null, spokenOwner: 'the planning head' },
+  });
+  spies.patch.mockReturnValueOnce(first.promise).mockResolvedValueOnce({ data: both });
+  spies.approve.mockResolvedValue({
+    data: { suggestion: both, live: { type: 'task', id: taskId } },
+  });
+  const card = cardOf(taskId) as HTMLElement;
+  editTitle(card);
+  // Before the first PATCH answers: the description, then the title once more.
+  const field = within(card).getByRole('textbox', { name: /Description/u });
+  fireEvent.change(field, { target: { value: description } });
+  fireEvent.blur(field);
+  const title = titleOf(card);
+  fireEvent.change(title, { target: { value: finalTitle } });
+  fireEvent.blur(title);
+  fireEvent.click(within(card).getByRole('button', { name: en.captures.approve }));
+  expect(spies.patch).toHaveBeenCalledTimes(1);
+  expect(within(card).getByRole('status').textContent).toBe(en.captures.savingChange);
+  await act(async () => first.resolve({ data: edited }));
+  expect(spies.patch).toHaveBeenCalledTimes(2);
+  expect(spies.patch.mock.calls[1]).toEqual([
+    expect.objectContaining({ revision: 2 }),
+    { payload: { description, title: finalTitle } },
+  ]);
+  expect(spies.approve).toHaveBeenCalledTimes(1);
+  expect(spies.approve).toHaveBeenCalledWith(
+    expect.objectContaining({ revision: 3, payload: both.payload }),
+  );
+  expect(spies.patch.mock.invocationCallOrder[1]).toBeLessThan(
+    spies.approve.mock.invocationCallOrder[0] ?? 0,
+  );
+});
+it('CAPTURES-B10 when the first of two queued saves fails, the second is not sent, Approve stops and the failure is shown', async () => {
+  page();
+  const first = deferred();
+  spies.patch.mockReturnValueOnce(first.promise);
+  const card = cardOf(taskId) as HTMLElement;
+  editTitle(card);
+  const field = within(card).getByRole('textbox', { name: /Description/u });
+  fireEvent.change(field, { target: { value: 'Bring the figures' } });
+  fireEvent.blur(field);
+  fireEvent.click(within(card).getByRole('button', { name: en.captures.approve }));
+  await act(async () => first.reject(new Error('The server is not answering.')));
+  expect(spies.patch).toHaveBeenCalledTimes(1);
+  expect(spies.approve).not.toHaveBeenCalled();
+  expect(within(card).getByRole('alert').textContent).toContain('The server is not answering.');
+  // The next edit is a save of its own, not stuck behind the one that was never sent.
+  await act(async () => editTitle(card));
+  expect(spies.patch).toHaveBeenCalledTimes(2);
+});
 const readyButton = () =>
   screen.getByRole('button', {
     name: en.captures.approveReady.replace('{count, number, integer}', '1'),

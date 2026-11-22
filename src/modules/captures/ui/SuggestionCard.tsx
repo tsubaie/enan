@@ -11,14 +11,13 @@ import {
   blockers,
   payloadFields,
   type CaptureGroup,
-  type PayloadFields,
   type Suggestion,
 } from '../schema/validation';
 import { useReviewMutations } from './capture-queries';
 import { DraftState, Meta } from './suggestion-text';
 import { CaptureListen } from './CaptureListen';
 import { SuggestionFields } from './SuggestionFields';
-import { focusAfterLeaving, useReviewAction } from './review-action';
+import { focusAfterLeaving, mergeChange, useReviewAction, type Change } from './review-action';
 import { InboxContext } from './inbox-state';
 import { CardContext, useCard, type Busy, type Card, type Layout } from './suggestion-card-context';
 import { ApproveButton, DiscardButton } from './SuggestionButtons';
@@ -36,12 +35,27 @@ function useDraftReview(given: Suggestion, cardRef: RefObject<HTMLElement | null
   const draft = latest && latest.revision > given.revision ? latest : given;
   const { error, busy, waiting, run } = useReviewAction<Busy>('save');
   const saves = use(InboxContext)?.saves;
-  const save = (change: { kind?: SuggestionKind; payload?: PayloadFields }) => {
+  // B6: an edit made while another is being saved is not dropped. Edits wait here, merged (the
+  // latest value of each field and the latest kind win), for one PATCH chained after the one in
+  // flight, sent with the revision that one answered.
+  const pending = useRef<Change | null>(null);
+  const save = (change: Change) => {
+    const queued = pending.current;
+    pending.current = mergeChange(queued, change);
+    if (queued) return;
     const done = run('save', async () => {
-      saved.current = (await mutations.patch(draft, change)).data;
+      const next = pending.current ?? {};
+      pending.current = null;
+      const fresh = saved.current;
+      const base = fresh && fresh.revision > draft.revision ? fresh : draft;
+      saved.current = (await mutations.patch(base, next)).data;
       setLatest(saved.current);
     });
+    // A save that failed, or was never sent because the one ahead failed, takes its queue along,
+    // so the next edit starts a save of its own.
+    void done?.then((ok) => ok || (pending.current = null));
     if (done) saves?.set(draft.id, done);
+    else pending.current = null;
   };
   const leave: Card['leave'] = (kind, action) => {
     const refocus = focusAfterLeaving(cardRef.current, draft.id);
