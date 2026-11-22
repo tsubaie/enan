@@ -481,6 +481,7 @@ it('ADMIN-B10 the AI page reads the connection status, tests it without credenti
         'notes.suggest_tags',
         'notes.transcribe',
         'kpis.narrative',
+        'captures.interpret',
       ],
       monthlyBudgetMicros: null,
       usedTokens: 0,

@@ -51,12 +51,12 @@ export function VoiceCapture({
   );
 }
 // Keys act on the bar itself, so a focused button still behaves as a button: Space pauses or
-// resumes, Enter stops and attaches; Escape cancels from anywhere inside.
-function recorderKeys(recorder: Recorder) {
+// resumes, Enter stops and attaches; Escape cancels, or does what `escape` says, from anywhere inside.
+export function recorderKeys(recorder: Recorder, escape: () => void = recorder.cancel) {
   return (event: KeyboardEvent<HTMLFormElement>) => {
     const own = event.target === event.currentTarget;
     const actions: Record<string, (() => void) | null> = {
-      Escape: recorder.cancel,
+      Escape: escape,
       ' ': own ? recorder.toggle : null,
       Enter: own ? recorder.stop : null,
     };
@@ -108,7 +108,7 @@ export function VoiceRecorderBar({ recorder }: { recorder: Recorder }) {
   );
 }
 // Each bar registers its element; the recorder's frame loop scales it without a render.
-function RecorderMeter({ bars }: { bars: Recorder['bars'] }) {
+export function RecorderMeter({ bars }: { bars: Recorder['bars'] }) {
   return (
     <div aria-hidden data-testid="voice-meter" className="flex h-8 items-center gap-0.5">
       {barIds.map((bar) => (

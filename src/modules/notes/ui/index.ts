@@ -13,3 +13,8 @@ export const NoteTemplatesAdmin = dynamic(() =>
   import('./NoteTemplatesAdmin').then((module) => module.NoteTemplatesAdmin),
 );
 export const TagsAdmin = dynamic(() => import('./TagsAdmin').then((module) => module.TagsAdmin));
+// CAPTURES-B01: the voice capture recorder reuses the memo recorder, its meter and its clock in
+// place rather than a copy of them.
+export { useVoiceRecorder, recorderLimits, type Recording } from './use-voice-recorder';
+export { RecorderMeter, recorderKeys, recordingFile } from './VoiceCapture';
+export { clock } from './VoiceMemoPlayer';

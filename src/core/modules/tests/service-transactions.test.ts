@@ -12,7 +12,10 @@ declare global {
 // the account's email and password changes wrap one to throw after a recorded failure commits). Everything else a service exports writes and must be atomic.
 const exempt: Record<string, string[]> = {
   account: ['getAccount', 'readerTheme', 'readerLocale', 'changeEmail', 'changePassword'],
-  captures: ['getCapture', 'pendingCaptureCount'],
+  // CAPTURES-B01: a capture's audio is stored before the transaction its rows go in, as a memo's.
+  captures: ['getCapture', 'pendingCaptureCount', 'listCaptures', 'captureAudio', 'createCapture'],
+  // The interpreter's answer checked against its catalogue; it reads and writes nothing.
+  'captures/ai/interpret': ['toSuggestions'],
   committees: [
     'listCommittees',
     'getCommittee',

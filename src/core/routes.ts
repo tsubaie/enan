@@ -37,6 +37,8 @@ export const routes = {
   admin: (page: AdminPage) => `/admin/${page}`,
   account: () => '/account',
   accountPasskeys: () => '/account#passkeys',
+  // The review inbox of voice captures (CAPTURES-B02); reached from its badge, not the navigation.
+  captures: () => '/captures',
   notifications: (query?: Optional<'unread' | 'kind'>) => withQuery('/notifications', query),
   login: () => '/login',
   setup: () => '/setup',

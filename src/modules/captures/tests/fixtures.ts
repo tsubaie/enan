@@ -1,6 +1,9 @@
+import { env } from '@/core/config/env';
+import { createCommittee } from '@/modules/committees/service';
+import { CommitteeCreate } from '@/modules/committees/schema/validation';
 import { db } from '@/core/db/client';
 import { insertUser } from '@/core/db/auth-repo';
-import { files } from '@/core/db/system-schema';
+import { files, jobs } from '@/core/db/system-schema';
 import { id } from '@/core/db/ids';
 import { User } from '@/core/http/user-schema';
 import { captures, captureSuggestions } from '../schema/db';
@@ -58,4 +61,76 @@ export async function suggestion(
     .returning();
   if (!row) throw new Error('suggestion not inserted');
   return row;
+}
+// A WebM recording by its magic bytes; the seed keeps each test's content hash its own.
+export const webm = (seed: number, size = 2048) => {
+  const audio = new Uint8Array(size).map((_, index) => (index * 31 + seed) % 251);
+  audio.set([0x1a, 0x45, 0xdf, 0xa3]);
+  return audio;
+};
+type Handler = (
+  request: Request,
+  route: { params: Promise<Record<string, string>> },
+) => Promise<Response>;
+const headers = (extra: Record<string, string> = {}) => ({
+  Origin: env().APP_URL,
+  'X-Requested-With': 'Enan',
+  'Idempotency-Key': crypto.randomUUID(),
+  ...extra,
+});
+async function respond(handler: Handler, request: Request, params: Record<string, string>) {
+  const response = await handler(request, { params: Promise.resolve(params) });
+  const body = response.headers.get('content-type')?.includes('json')
+    ? await response.json()
+    : null;
+  return { status: response.status, body, response };
+}
+// A handler as its route exports it, with a JSON body (or none for GET and DELETE).
+export function call(
+  handler: Handler,
+  method: string,
+  path: string,
+  params: Record<string, string> = {},
+  body?: object,
+  extra: Record<string, string> = {},
+) {
+  const request = new Request(new URL(`/api/v1${path}`, env().APP_URL), {
+    method,
+    headers: headers({ ...(body ? { 'Content-Type': 'application/json' } : {}), ...extra }),
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+  return respond(handler, request, params);
+}
+// The create route with a real multipart body; the declared type is deliberately wrong.
+export async function record(
+  handler: Handler,
+  bytes: Uint8Array,
+  fields: Record<string, string> = {},
+) {
+  const form = new FormData();
+  form.set('file', new File([new Uint8Array(bytes)], 'Board debrief.webm', { type: 'text/html' }));
+  for (const [key, value] of Object.entries(fields)) form.set(key, value);
+  const encoded = new Response(form);
+  const raw = new Uint8Array(await encoded.arrayBuffer());
+  const request = new Request(new URL('/api/v1/captures', env().APP_URL), {
+    method: 'POST',
+    headers: headers({
+      'Content-Type': encoded.headers.get('content-type') ?? '',
+      'Content-Length': String(raw.byteLength),
+    }),
+    body: raw,
+  });
+  return respond(handler, request, {});
+}
+export async function committee(owner: User, name: string) {
+  return createCommittee(
+    { db: db(), user: owner, requestId: id() },
+    CommitteeCreate.parse({ name }),
+  );
+}
+// A transcription job still in the queue, for a capture that is waiting on it.
+export async function queuedJob() {
+  const jobId = id();
+  await db().insert(jobs).values({ id: jobId, kind: 'ai.captures.transcribe', payload: {} });
+  return jobId;
 }

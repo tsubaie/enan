@@ -2,7 +2,9 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 // NOTES-B34: the browser's own recorder. WebM/Opus where the browser has it (Chromium, Firefox),
 // MP4/AAC where it does not (Safari), at a voice bit rate: two minutes is about a megabyte.
-export const recorderLimits = { maxSeconds: 900, bars: 24 };
+// It stops itself a second before the server's 15-minute cap, so encoder padding past the stop
+// cannot make a full-length recording measure over it.
+export const recorderLimits = { maxSeconds: 900, stopSeconds: 899, bars: 24 };
 const mimes = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'];
 export type Recording = { blob: Blob; seconds: number; extension: string };
 type Bars = RefObject<(HTMLElement | null)[]>;
@@ -154,7 +156,7 @@ export function useVoiceRecorder(onFinish: (recording: Recording) => void) {
       session.current = current;
       current.tick = setInterval(() => {
         setElapsed(secondsOf(current));
-        if (secondsOf(current) >= recorderLimits.maxSeconds) end(true);
+        if (secondsOf(current) >= recorderLimits.stopSeconds) end(true);
       }, 250);
       startMeter(current, bars);
       setState('recording');

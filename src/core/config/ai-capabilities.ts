@@ -5,6 +5,7 @@ export const AiCapability = z.enum([
   'notes.suggest_tags',
   'notes.transcribe',
   'kpis.narrative',
+  'captures.interpret',
 ]);
 // `canConfigure` is whether this reader can turn the missing capability on, so the interface can
 // offer the way to do it to the person who can and stay quiet for everyone else. It belongs here

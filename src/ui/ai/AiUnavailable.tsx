@@ -34,12 +34,14 @@ const detail: Record<
   | 'unavailableTranscribe'
   | 'unavailableBreakdown'
   | 'unavailableNarrative'
+  | 'unavailableInterpret'
 > = {
   'notes.refine': 'unavailableRefine',
   'notes.suggest_tags': 'unavailableTags',
   'notes.transcribe': 'unavailableTranscribe',
   'tasks.breakdown': 'unavailableBreakdown',
   'kpis.narrative': 'unavailableNarrative',
+  'captures.interpret': 'unavailableInterpret',
 };
 // The notice names the five fields it actually reads rather than taking the whole review: it does
 // not depend on the job, and saying so keeps the dependency honest.

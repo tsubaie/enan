@@ -147,7 +147,7 @@ describe('runner drain', () => {
     expect(repo.claim).toHaveBeenCalled();
     await stop();
   });
-  it('NOTIF-B04 an AI job tells whoever asked when it succeeds or fails; a system job tells no one', async () => {
+  it('NOTIF-B04 CAPTURES-B03 an AI job tells whoever asked when it succeeds or fails; a capture job or a system job tells no one', async () => {
     const entityId = '00000000-0000-7000-8000-000000000009';
     const asked = {
       ...job,
@@ -188,6 +188,11 @@ describe('runner drain', () => {
     expect(await effectOf(asked, 'publish')).toEqual(told);
     expect(await effectOf(asked, 'fail')).toEqual(told);
     expect(await effectOf({ ...job, createdBy: 'admin-1' }, 'fail')).toEqual([]);
+    // CAPTURES-B03: a capture's jobs tell nobody, whether they publish drafts or fail.
+    for (const kind of ['ai.captures.transcribe', 'ai.captures.interpret']) {
+      expect(await effectOf({ ...asked, kind }, 'publish')).toEqual([]);
+      expect(await effectOf({ ...asked, kind }, 'fail')).toEqual([]);
+    }
   });
   it('ADR 0067 an idle tick reads which kinds have work and opens no claim transaction', async () => {
     repo.activeKinds.mockResolvedValue([]);

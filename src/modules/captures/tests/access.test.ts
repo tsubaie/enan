@@ -11,7 +11,7 @@ import { assertCaptureAccess, canMutateCapture, canViewCapture } from '../access
 import { visibleCaptures } from '../repo';
 import { captures } from '../schema/db';
 import * as api from '../api';
-import { capture, suggestion, user } from './fixtures';
+import { capture, queuedJob, suggestion, user } from './fixtures';
 // CAPTURES-B02: the handlers as a route would export them, against the real database; the
 // session is the one seam replaced.
 const session = vi.hoisted(() => ({ user: null as User | null }));
@@ -103,7 +103,8 @@ it('CAPTURES-B02 the review count holds only the reader’s own pending drafts a
   await suggestion(ready.id, { status: 'discarded' });
   await suggestion(ready.id, { deletedAt: new Date(), deletedOpId: id() });
   await capture(recorder, { status: 'failed', errorCode: 'no_speech' });
-  await capture(recorder, { status: 'transcribing' });
+  // Still waiting on a live job: not failed, so not counted.
+  await capture(recorder, { status: 'transcribing', transcribeJobId: await queuedJob() });
   const deleted = await capture(recorder, {
     status: 'ready',
     deletedAt: new Date(),

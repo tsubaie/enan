@@ -72,24 +72,27 @@ export async function admitAi(
   entityId: string,
   revision: number,
   input: z.infer<ReturnType<typeof z.json>>,
-  options: { autoApply?: boolean; audioSeconds?: number } = {},
+  options: { autoApply?: boolean; audioSeconds?: number; queue?: Queue } = {},
 ) {
   if (!(await availableCapabilities(ctx)).includes(capability))
     throw new AppError('ai_unavailable');
+  const queue = options.queue ?? {
+    kind: `ai.${capability}`,
+    dedupKey: `${capability}:${entityId}`,
+  };
   if (capability === 'notes.transcribe')
-    return admit(
-      ctx,
-      capability,
-      entityId,
-      revision,
-      input,
-      await transcriptionModel(ctx, options.audioSeconds ?? 0),
-    );
-  return admit(ctx, capability, entityId, revision, input, {
+    return admit(ctx, capability, entityId, revision, input, queue, {
+      ...(await transcriptionModel(ctx, options.audioSeconds ?? 0)),
+    });
+  return admit(ctx, capability, entityId, revision, input, queue, {
     ...(await chooseModel(ctx, capability, input)),
     ...(options.autoApply ? { autoApply: true } : {}),
   });
 }
+// CAPTURES-B05: a capability's budget, model and limits on a job kind of the caller's own, so a
+// capture is transcribed by the transcription capability without entering `ai.notes.transcribe`,
+// whose publish writes into a note.
+type Queue = { kind: `ai.${string}`; dedupKey: string };
 type Chosen = {
   model: z.infer<typeof AiModel>;
   maxOutputTokens: number;
@@ -103,6 +106,7 @@ async function admit(
   entityId: string,
   revision: number,
   input: z.infer<ReturnType<typeof z.json>>,
+  queue: Queue,
   { model, maxOutputTokens, estimate, reserveMicros, autoApply }: Chosen,
 ) {
   const locale = await getSetting(ctx.db, 'user.locale', ctx.user.id);
@@ -123,13 +127,13 @@ async function admit(
   });
   // Admission runs inside the request's immediate transaction (ADR 0029): the active-job read,
   // the usage count and the enqueue cannot interleave with another admission.
-  const active = await latestAiJob(ctx.db, ctx.user.id, entityId, `ai.${capability}`);
+  const active = await latestAiJob(ctx.db, ctx.user.id, entityId, queue.kind);
   if (active && ['queued', 'running'].includes(active.status)) return { id: active.id };
   const budget = await getSetting(ctx.db, 'ai.monthly_budget_micros');
   const usage = await aiAdmissionUsage(
     ctx.db,
     ctx.user.id,
-    `ai.${capability}`,
+    queue.kind,
     monthStart(await getSetting(ctx.db, 'workspace.timezone')),
   );
   if (env().AI_RATE_LIMIT_ENABLED && usage.count >= (capability === 'notes.suggest_tags' ? 60 : 30))
@@ -142,9 +146,9 @@ async function admit(
     throw new AppError('ai_unavailable', { reason: 'budget' });
   const job = await enqueue(
     ctx.db,
-    `ai.${capability}`,
+    queue.kind,
     z.json().parse(payload),
-    `${capability}:${entityId}`,
+    queue.dedupKey,
     ctx.user.id,
   );
   if (job.createdBy !== ctx.user.id) throw new AppError('conflict', { reason: 'state' });

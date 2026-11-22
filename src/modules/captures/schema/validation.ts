@@ -110,3 +110,44 @@ export const Capture = z.object({
 });
 export type Capture = z.infer<typeof Capture>;
 export const CaptureCount = z.object({ pending: z.number().int().nonnegative() });
+// CAPTURES-B01 CAPTURES-B12: a recording or an uploaded file. The type is read from its bytes
+// and its size capped at 25 MB by the shared voice audio check; the length is at most 15 minutes.
+export const CaptureCreate = z.strictObject({
+  file: z.file(),
+  durationSeconds: z.coerce.number().int().min(0).max(durationLimit).default(0),
+  transcript: z.string().trim().max(50000).optional(),
+  committeeId: z.uuid().nullable().optional(),
+  type: NoteType.nullable().optional(),
+});
+export const CaptureTranscript = z.strictObject({
+  transcript: z.string().trim().min(1).max(50000),
+});
+export const CaptureListQuery = z.strictObject({
+  cursor: z.string().max(200).optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+export const Suggestion = z.object({
+  id: z.uuid(),
+  revision: z.number().int(),
+  captureId: z.uuid(),
+  kind: SuggestionKind,
+  payload: z.json(),
+  fieldStates: FieldStates,
+  sourceSpans: SourceSpans,
+  typeFlag: SuggestionKind.nullable(),
+  status: SuggestionStatus,
+  liveEntityType: LiveEntityType.nullable(),
+  liveEntityId: z.uuid().nullable(),
+  createdAt: timestamp,
+  updatedAt: timestamp,
+});
+export type Suggestion = z.infer<typeof Suggestion>;
+export const CaptureGroup = Capture.extend({
+  audioUrl: z.string(),
+  suggestions: z.array(Suggestion),
+});
+export type CaptureGroup = z.infer<typeof CaptureGroup>;
+export const CaptureList = z.object({
+  data: z.array(CaptureGroup),
+  meta: z.object({ nextCursor: z.string().nullable() }),
+});

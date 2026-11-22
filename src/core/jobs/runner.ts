@@ -70,7 +70,9 @@ function failure(
 function finished(job: Claimed) {
   const payload = AiPayload.safeParse(job.payload);
   return async (database: Database) => {
-    if (!job.createdBy || !payload.success) return;
+    // CAPTURES-B03: a capture's jobs tell nobody anything; the Review badge is how the recorder
+    // learns their drafts are ready, and nothing is notified before Approve.
+    if (!job.createdBy || !payload.success || job.kind.startsWith('ai.captures.')) return;
     const [subjectType = ''] = payload.data.capability.split('.');
     await emitUnattended(database, [
       { kind: 'job.finished', subjectType, subjectId: payload.data.entityId, to: [job.createdBy] },
