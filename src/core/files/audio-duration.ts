@@ -5,6 +5,19 @@ import 'server-only';
 type Reader = (bytes: Uint8Array, view: DataView) => number | null;
 const text = (bytes: Uint8Array, offset: number, length: number) =>
   String.fromCharCode(...bytes.subarray(offset, offset + length));
+// F2: an upload may be 25 MB of tiny elements or repeated marker bytes, and is parsed on the shared
+// event loop. Each reader may take this many steps (elements, boxes, chunks, scan candidates or
+// bytes) before it gives up and the capped size estimate applies.
+const visitBudget = 10_000;
+let visitsLeft = visitBudget;
+function visit() {
+  visitsLeft -= 1;
+  if (visitsLeft < 0) throw new RangeError('audio header visit budget spent');
+}
+function first<T>(items: Iterable<T>, match: (item: T) => boolean) {
+  for (const item of items) if (match(item)) return item;
+  return undefined;
+}
 
 // EBML variable-length integer: the leading zero bits give its length. An id keeps its marker
 // bit; a size drops it, and a size of all ones is "unknown".
@@ -30,6 +43,7 @@ function element(bytes: Uint8Array, offset: number) {
 }
 function* children(bytes: Uint8Array, start: number, end: number) {
   for (let offset = start; offset < end;) {
+    visit();
     const child = element(bytes, offset);
     if (!child) return;
     yield child;
@@ -37,13 +51,14 @@ function* children(bytes: Uint8Array, start: number, end: number) {
     offset = child.end;
   }
 }
+// An unsigned integer is at most 8 bytes; a longer field is not read past that.
 const uint = (bytes: Uint8Array, start: number, end: number) =>
-  bytes.subarray(start, end).reduce((value, byte) => value * 256 + byte, 0);
+  bytes.subarray(start, Math.min(end, start + 8)).reduce((value, byte) => value * 256 + byte, 0);
 
 // WebM: the Segment Info's Duration in TimecodeScale units, or (a recording still being written
 // has none) the last Cluster's Timecode plus its latest block.
 const webm: Reader = (bytes, view) => {
-  const segment = [...children(bytes, 0, bytes.length)].find((item) => item.id === 0x18538067);
+  const segment = first(children(bytes, 0, bytes.length), (item) => item.id === 0x18538067);
   if (!segment) return null;
   let scale = 1_000_000;
   let duration = 0;
@@ -64,8 +79,10 @@ const webm: Reader = (bytes, view) => {
 function find(bytes: Uint8Array, sequence: readonly number[], from: number) {
   const [head = 0] = sequence;
   const next = (at: number) => (at > 0 ? bytes.lastIndexOf(head, at - 1) : -1);
-  for (let at = from < 0 ? -1 : bytes.lastIndexOf(head, from); at >= 0; at = next(at))
+  for (let at = from < 0 ? -1 : bytes.lastIndexOf(head, from); at >= 0; at = next(at)) {
+    visit();
     if (sequence.every((byte, index) => bytes[at + index] === byte)) return at;
+  }
   return -1;
 }
 const clusterId = [0x1f, 0x43, 0xb6, 0x75];
@@ -96,6 +113,7 @@ function latestBlock(bytes: Uint8Array, view: DataView, start: number) {
 // MP4/M4A: the movie header's duration over its timescale, version 0 (32-bit) or 1 (64-bit).
 function* boxes(bytes: Uint8Array, view: DataView, start: number, end: number) {
   for (let offset = start; offset + 8 <= end;) {
+    visit();
     let size = view.getUint32(offset);
     let header = 8;
     if (size === 1) [size, header] = [Number(view.getBigUint64(offset + 8)), 16];
@@ -106,10 +124,11 @@ function* boxes(bytes: Uint8Array, view: DataView, start: number, end: number) {
   }
 }
 const mp4: Reader = (bytes, view) => {
-  const moov = [...boxes(bytes, view, 0, bytes.length)].find((box) => box.type === 'moov');
+  const moov = first(boxes(bytes, view, 0, bytes.length), (box) => box.type === 'moov');
   const mvhd =
     moov &&
-    [...boxes(bytes, view, moov.start, Math.min(moov.end, bytes.length))].find(
+    first(
+      boxes(bytes, view, moov.start, Math.min(moov.end, bytes.length)),
       (box) => box.type === 'mvhd',
     );
   if (!mvhd) return null;
@@ -144,6 +163,7 @@ const ogg: Reader = (bytes, view) => {
 const wav: Reader = (bytes, view) => {
   let byteRate = 0;
   for (let offset = 12; offset + 8 <= bytes.length;) {
+    visit();
     const id = text(bytes, offset, 4);
     const size = view.getUint32(offset + 4, true);
     if (id === 'fmt ') byteRate = view.getUint32(offset + 16, true);
@@ -183,8 +203,13 @@ function frameStart(bytes: Uint8Array) {
       10 +
       ((bytes[5] ?? 0) & 0x10 ? 10 : 0) +
       bytes.subarray(6, 10).reduce((size, byte) => size * 128 + byte, 0);
-  while (at + 4 <= bytes.length && !(bytes[at] === 0xff && ((bytes[at + 1] ?? 0) & 0xe0) === 0xe0))
+  while (
+    at + 4 <= bytes.length &&
+    !(bytes[at] === 0xff && ((bytes[at + 1] ?? 0) & 0xe0) === 0xe0)
+  ) {
+    visit();
     at += 1;
+  }
   return at;
 }
 function layer3(header: number) {
@@ -213,6 +238,7 @@ const readers = { 'audio/webm': webm, 'audio/mp4': mp4, 'audio/ogg': ogg, 'audio
 export type DurationMime = keyof typeof readers | 'audio/mpeg';
 // A header that is cut short or malformed says nothing, rather than throwing.
 export function audioDurationSeconds(bytes: Uint8Array, mime: DurationMime) {
+  visitsLeft = visitBudget;
   try {
     const seconds = (mime === 'audio/mpeg' ? mp3 : readers[mime])(
       bytes,

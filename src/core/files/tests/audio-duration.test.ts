@@ -65,3 +65,59 @@ it('CAPTURES-B12 a length the header does not give is estimated from the size, n
   expect(checkVoiceAudio(junk(1_000_000), 'open').durationSeconds).toBe(500);
   expect(checkVoiceAudio(junk(voiceAudioLimits.maxBytes), 'open').durationSeconds).toBe(900);
 });
+// CAPTURES-B12 (F2): 25 MB of tiny elements, boxes, chunks or marker bytes is parsed on the shared
+// event loop. The bound is generous so a busy test runner does not flake; unbounded, these took
+// over 700 ms and up to a gigabyte of heap.
+it('CAPTURES-B12 a 25 MB header of tiny parts gives up within a bounded time and memory', () => {
+  const size = voiceAudioLimits.maxBytes;
+  const repeat = (head: number[], unit: number[]) => {
+    const bytes = new Uint8Array(size);
+    for (let at = head.length; at + unit.length <= size; at += unit.length) bytes.set(unit, at);
+    bytes.set(head);
+    return bytes;
+  };
+  const ebml = [0x1a, 0x45, 0xdf, 0xa3];
+  for (const [name, bytes, mime] of [
+    ['webm of 2-byte elements', repeat(ebml, [0x81, 0x80]), 'audio/webm'],
+    ['mp4 of free boxes', repeat([], [0, 0, 0, 8, 0x66, 0x72, 0x65, 0x65]), 'audio/mp4'],
+    [
+      'wav of empty junk chunks',
+      repeat(
+        [0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x41, 0x56, 0x45],
+        [0x6a, 0x75, 0x6e, 0x6b, 0, 0, 0, 0],
+      ),
+      'audio/wav',
+    ],
+    [
+      'webm of Cluster ids with no Timecode',
+      repeat([...ebml, 0x80, 0x18, 0x53, 0x80, 0x67, 0x80], [0x1f, 0x43, 0xb6, 0x75]),
+      'audio/webm',
+    ],
+    ['webm of 0x1f bytes', new Uint8Array(size).fill(0x1f), 'audio/webm'],
+    [
+      'ogg of pages with no granule',
+      repeat(
+        [
+          0x4f,
+          0x67,
+          0x67,
+          0x53,
+          ...new Array<number>(23).fill(0),
+          ...[...'OpusHead'].map((c) => c.charCodeAt(0)),
+        ],
+        [0x4f, 0x67, 0x67, 0x53, ...new Array<number>(10).fill(0)],
+      ),
+      'audio/ogg',
+    ],
+    ['mp3 with no frame sync', new Uint8Array(size), 'audio/mpeg'],
+  ] as const) {
+    globalThis.gc?.();
+    const heap = process.memoryUsage().heapUsed;
+    const started = performance.now();
+    const seconds = audioDurationSeconds(bytes, mime);
+    const elapsed = performance.now() - started;
+    expect({ name, seconds }).toEqual({ name, seconds: null });
+    expect(elapsed, name).toBeLessThan(250);
+    expect(process.memoryUsage().heapUsed - heap, name).toBeLessThan(16 * 1024 * 1024);
+  }
+});
