@@ -49,7 +49,10 @@ function CaptureReviewLink() {
     <Link
       href={routes.captures()}
       aria-label={count ? t('reviewCount', { count }) : t('review')}
-      className={buttonVariants({ variant: 'ghost', className: 'gap-2' })}
+      className={buttonVariants({
+        variant: 'ghost',
+        className: 'gap-2 pointer-coarse:min-h-11 pointer-coarse:min-w-11',
+      })}
     >
       <Inbox aria-hidden className="size-4" />
       <span aria-hidden className="hidden sm:inline">

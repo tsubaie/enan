@@ -22,6 +22,11 @@ export function stageOf(
   if (capture.status === 'failed') return 'failed';
   return 'working';
 }
+// The recorder form that held focus unmounts on Stop and Enter (WCAG 2.4.3), so the panel's
+// primary action takes focus when it mounts, unless the reader has already moved elsewhere.
+const focusIfLost = (node: HTMLElement | null) => {
+  if (node && (!document.activeElement || document.activeElement === document.body)) node.focus();
+};
 type Step = 'done' | 'active' | 'waiting';
 function Line({ step, children }: { step: Step; children: React.ReactNode }) {
   const Icon = step === 'done' ? Check : step === 'active' ? LoaderCircle : CircleDashed;
@@ -78,16 +83,22 @@ function ReviewLink({
   label,
   primary,
   done,
+  ref,
 }: {
   label: string;
   primary: boolean;
   done: () => void;
+  ref?: React.Ref<HTMLAnchorElement>;
 }) {
   return (
     <Link
+      ref={ref}
       href={routes.captures()}
       onClick={done}
-      className={buttonVariants({ variant: primary ? 'default' : 'outline' })}
+      className={buttonVariants({
+        variant: primary ? 'default' : 'outline',
+        className: 'pointer-coarse:min-h-11',
+      })}
     >
       {label}
     </Link>
@@ -105,7 +116,9 @@ function Offline({ done, retry }: Props) {
       <p>{t('offlineStatus')}</p>
       <p className="text-text-muted">{t('offlineSession')}</p>
       <div className="flex gap-2">
-        <Button onClick={retry}>{t('retry')}</Button>
+        <Button ref={focusIfLost} onClick={retry}>
+          {t('retry')}
+        </Button>
         <Button variant="ghost" onClick={done}>
           {t('done')}
         </Button>
@@ -122,7 +135,7 @@ function Ready({ done }: Props) {
         {t('readyTitle')}
       </p>
       <div className="flex gap-2">
-        <ReviewLink label={t('reviewNow')} primary done={done} />
+        <ReviewLink ref={focusIfLost} label={t('reviewNow')} primary done={done} />
         <Button variant="ghost" onClick={done}>
           {t('later')}
         </Button>
@@ -150,7 +163,9 @@ function Saved({ stage, capture, seconds, done }: Props) {
         />
       )}
       <div className="flex gap-2">
-        <Button onClick={done}>{t('done')}</Button>
+        <Button ref={focusIfLost} onClick={done}>
+          {t('done')}
+        </Button>
         <ReviewLink label={t('review')} primary={false} done={done} />
       </div>
     </>

@@ -91,7 +91,7 @@ All copy in `en` and `ar` under a `captures` namespace. Waveform, timer and micr
 ## Required scenarios
 
 - Unit: `captures/tests/schema.test.ts` (CAPTURES-I01, CAPTURES-B09 contracts and catalog; the migration on a database with voice memos), `constraints.test.ts` (CAPTURES-I01 duration and enum CHECKs, audio restrict, draft cascade), `access.test.ts` (CAPTURES-B02 row check, list predicate, count, `not_found`).
-- Recording: `captures/tests/service.test.ts` (CAPTURES-B01, B05), `api.test.ts` (CAPTURES-B01, B02 across every route, list, count and audio, B12), `jobs.test.ts` (CAPTURES-B01, B02 publish fences, B03, B05, B09), `ui/recorder.test.tsx` (CAPTURES-B01 recorder timing, keys, RTL, pre-permission), `core/jobs/tests/runner.test.ts` (CAPTURES-B03 no `job.finished`).
+- Recording: `captures/tests/service.test.ts` (CAPTURES-B01, B05), `api.test.ts` (CAPTURES-B01, B02 across every route, list, count and audio, B12), `jobs.test.ts` (CAPTURES-B01, B02 publish fences, B03, B05, B09), `ui/recorder.test.tsx` (CAPTURES-B01 recorder timing, keys, RTL, pre-permission), `ui/processing.test.tsx` (CAPTURES-B01 focus after Stop), `core/jobs/tests/runner.test.ts` (CAPTURES-B03 no `job.finished`).
 - Inbox and end-to-end scenarios for CAPTURES-B04, B06–B08, B10, B11 and CAPTURES-A01–A06 arrive with the inbox.
 - Mutation-test targets: `canViewCapture`, `visibleCaptures`, the Approve transaction.
 
