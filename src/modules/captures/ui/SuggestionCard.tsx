@@ -1,7 +1,7 @@
 'use client';
-import { useId, useRef, useState, type ReactNode } from 'react';
+import { use, useId, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useTranslations } from 'next-intl';
-import { Building2, Info, ListChecks, NotebookPen } from 'lucide-react';
+import { Building2, Info, ListChecks, LoaderCircle, NotebookPen } from 'lucide-react';
 import { NativeSelect, NativeSelectOption } from '@/ui/primitives/native-select';
 import { Dialog, DialogContent, DialogTitle } from '@/ui/primitives/dialog';
 import { ErrorPanel } from '@/ui/layout/ErrorPanel';
@@ -19,11 +19,39 @@ import { DraftState, Meta } from './suggestion-text';
 import { CaptureListen } from './CaptureListen';
 import { SuggestionFields } from './SuggestionFields';
 import { focusAfterLeaving, useReviewAction } from './review-action';
+import { InboxContext } from './inbox-state';
 import { CardContext, useCard, type Busy, type Card, type Layout } from './suggestion-card-context';
 import { ApproveButton, DiscardButton } from './SuggestionButtons';
 import { Button } from '@/ui/primitives/button';
 export type { Layout } from './suggestion-card-context';
 const kindIcons = { task: ListChecks, meeting_note: NotebookPen, committee_note: Building2 };
+// The draft as last saved, its edits, and Approve or Discard. Either one asked for while an edit
+// is being saved waits for it and is sent with the revision the save answered (CAPTURES-B10).
+function useDraftReview(given: Suggestion, cardRef: RefObject<HTMLElement | null>) {
+  const mutations = useReviewMutations();
+  // The answer of the last edit, until the inbox's own read catches up with it; the ref is read
+  // by an action queued behind the save.
+  const [latest, setLatest] = useState<Suggestion | null>(null);
+  const saved = useRef<Suggestion | null>(null);
+  const draft = latest && latest.revision > given.revision ? latest : given;
+  const { error, busy, waiting, run } = useReviewAction<Busy>('save');
+  const saves = use(InboxContext)?.saves;
+  const save = (change: { kind?: SuggestionKind; payload?: PayloadFields }) => {
+    const done = run('save', async () => {
+      saved.current = (await mutations.patch(draft, change)).data;
+      setLatest(saved.current);
+    });
+    if (done) saves?.set(draft.id, done);
+  };
+  const leave: Card['leave'] = (kind, action) => {
+    const refocus = focusAfterLeaving(cardRef.current, draft.id);
+    run(kind, () => {
+      const fresh = saved.current;
+      return action(fresh && fresh.revision > draft.revision ? fresh : draft).then(refocus);
+    });
+  };
+  return { draft, error, busy, waiting, save, leave };
+}
 function Root({
   draft: given,
   group,
@@ -35,19 +63,13 @@ function Root({
   layout: Layout;
   children: ReactNode;
 }) {
-  const mutations = useReviewMutations();
-  // The answer of the last edit, until the inbox's own read catches up with it.
-  const [latest, setLatest] = useState<Suggestion | null>(null);
-  const draft = latest && latest.revision > given.revision ? latest : given;
+  const cardRef = useRef<HTMLElement>(null);
+  const { draft, error, busy, waiting, save, leave } = useDraftReview(given, cardRef);
   const missing = blockers(draft);
   const unsettled =
     missing.length > 0 ||
     Object.values(draft.fieldStates).some((entry) => entry.state !== 'confident');
   const [toggled, setEditing] = useState<boolean | null>(null);
-  const { error, busy, run } = useReviewAction<Busy>();
-  const cardRef = useRef<HTMLElement>(null);
-  const save = (change: { kind?: SuggestionKind; payload?: PayloadFields }) =>
-    run('save', async () => setLatest((await mutations.patch(draft, change)).data));
   const card: Card = {
     draft,
     group,
@@ -60,10 +82,8 @@ function Root({
     changeKind: (kind) => save({ kind }),
     error,
     busy,
-    leave: (kind, action) => {
-      const refocus = focusAfterLeaving(cardRef.current, draft.id);
-      run(kind, () => action().then(refocus));
-    },
+    waiting,
+    leave,
   };
   return (
     <CardContext value={card}>
@@ -141,7 +161,7 @@ function Listen() {
 // S18 Approve / Edit / Discard; the reason Approve waits is said under it (S22).
 function Actions() {
   const t = useTranslations('captures');
-  const { layout, missing, editing, setEditing, error } = useCard();
+  const { layout, missing, editing, setEditing, error, waiting } = useCard();
   const reason = useId();
   const [screen, setScreen] = useState(false);
   const first = missing[0];
@@ -160,11 +180,18 @@ function Actions() {
         )}
         <DiscardButton />
       </div>
-      {first && (
-        <p id={reason} className="flex items-center gap-1.5 text-sm font-medium">
-          <Info aria-hidden className="size-4" />
-          {t(`blocked_${first}`)}
+      {waiting ? (
+        <p role="status" className="flex items-center gap-1.5 text-sm font-medium">
+          <LoaderCircle aria-hidden className="size-4 motion-safe:animate-spin" />
+          {t('savingChange')}
         </p>
+      ) : (
+        first && (
+          <p id={reason} className="flex items-center gap-1.5 text-sm font-medium">
+            <Info aria-hidden className="size-4" />
+            {t(`blocked_${first}`)}
+          </p>
+        )
       )}
       {error && <ErrorPanel error={error} />}
       {layout === 'compact' && <DraftScreen open={screen} close={() => setScreen(false)} />}

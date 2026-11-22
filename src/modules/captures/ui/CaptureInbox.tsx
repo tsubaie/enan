@@ -1,8 +1,8 @@
 'use client';
-import { createContext, use, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { CheckCheck, Inbox, Mic } from 'lucide-react';
+import { CheckCheck, Inbox, LoaderCircle, Mic } from 'lucide-react';
 import { routes } from '@/core/routes';
 import { Button } from '@/ui/primitives/button';
 import { ErrorPanel } from '@/ui/layout/ErrorPanel';
@@ -16,15 +16,10 @@ import type { Layout } from './SuggestionCard';
 import { useApprovedMessage } from './suggestion-text';
 import { useReviewToast } from './review-toast';
 import { useReviewAction } from './review-action';
-type Inbox = { groups: Group[]; layout: Layout; scope: CaptureScope };
-const InboxContext = createContext<Inbox | null>(null);
-function useInbox() {
-  const inbox = use(InboxContext);
-  if (!inbox) throw new Error('CaptureInbox.Root is missing');
-  return inbox;
-}
+import { InboxContext, useInbox } from './inbox-state';
 const pendingOf = (groups: Group[]) =>
   groups.flatMap((group) => group.suggestions.filter((draft) => draft.status === 'pending'));
+const readyOf = (groups: Group[]) => pendingOf(groups).filter((draft) => !blockers(draft).length);
 // S14: the reader's recordings, newest first, each with its drafts. The page hands in what the
 // server already read; the panel reads it here. `actions` sits beside Approve N ready (the
 // panel's expand and close).
@@ -45,8 +40,10 @@ function Root({
   const query = useCaptures(scope, initial);
   const groups = query.data?.data ?? [];
   const approval = useReviewAction<'ready'>();
+  const [saves] = useState(() => new Map<string, Promise<boolean>>());
+  const reread = async () => (await query.refetch()).data?.data ?? [];
   return (
-    <InboxContext value={{ groups, layout, scope }}>
+    <InboxContext value={{ groups, layout, scope, saves, reread }}>
       <div className="grid gap-4" data-inbox>
         <header className="flex flex-wrap items-start gap-3">
           <div className="grid flex-1 gap-0.5">
@@ -73,17 +70,19 @@ function Root({
   );
 }
 // S23: every draft shown with nothing required left to settle; a type flag never holds one back.
+// An edit still being saved is waited for, then the list is read again, so the batch is what the
+// fields show; a draft whose latest save failed is left out.
 export function ApproveReadyButton({
   approval: { busy, run },
 }: {
   approval: ReturnType<typeof useReviewAction<'ready'>>;
 }) {
   const t = useTranslations('captures');
-  const { groups } = useInbox();
+  const { groups, saves, reread } = useInbox();
   const mutations = useReviewMutations();
   const toast = useReviewToast();
   const message = useApprovedMessage();
-  const ready = pendingOf(groups).filter((draft) => !blockers(draft).length);
+  const ready = readyOf(groups);
   if (!ready.length)
     return (
       <Button variant="secondary" aria-disabled>
@@ -96,7 +95,17 @@ export function ApproveReadyButton({
       aria-disabled={busy === 'ready' || undefined}
       onClick={() =>
         run('ready', async () => {
-          const { data } = await mutations.approveReady(ready.map((draft) => draft.id));
+          const ids = [...saves.keys()];
+          const outcomes = await Promise.allSettled(saves.values());
+          const failed = new Set(
+            ids.filter((_, at) => {
+              const outcome = outcomes[at];
+              return outcome?.status !== 'fulfilled' || !outcome.value;
+            }),
+          );
+          const fresh = readyOf(await reread()).filter((draft) => !failed.has(draft.id));
+          if (!fresh.length) return;
+          const { data } = await mutations.approveReady(fresh.map((draft) => draft.id));
           const [only] = data.approved;
           toast.approved(
             only && data.approved.length === 1
@@ -107,7 +116,11 @@ export function ApproveReadyButton({
         })
       }
     >
-      <CheckCheck aria-hidden />
+      {busy === 'ready' ? (
+        <LoaderCircle aria-hidden className="motion-safe:animate-spin" />
+      ) : (
+        <CheckCheck aria-hidden />
+      )}
       {t('approveReady', { count: ready.length })}
     </Button>
   );

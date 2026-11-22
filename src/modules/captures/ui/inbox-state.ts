@@ -1,5 +1,23 @@
 'use client';
-import { useSyncExternalStore } from 'react';
+import { createContext, use, useSyncExternalStore } from 'react';
+import type { CaptureGroup } from '../schema/validation';
+import type { CaptureScope } from './capture-queries';
+import type { Layout } from './suggestion-card-context';
+// The inbox as its parts read it. `saves` holds each draft's latest save (whether it succeeded), so
+// Approve N ready can wait for an edit still being sent; `reread` reads the list again.
+export type Inbox = {
+  groups: CaptureGroup[];
+  layout: Layout;
+  scope: CaptureScope;
+  saves: Map<string, Promise<boolean>>;
+  reread: () => Promise<CaptureGroup[]>;
+};
+export const InboxContext = createContext<Inbox | null>(null);
+export function useInbox() {
+  const inbox = use(InboxContext);
+  if (!inbox) throw new Error('CaptureInbox.Root is missing');
+  return inbox;
+}
 // Small client stores for the inbox: whether the reader has dismissed the S30 line (on this
 // device, §9 decision 4), whether the desktop side panel is open, and whether the screen is wide
 // enough for it. The server renders as if dismissed, closed and narrow, so nothing flashes.

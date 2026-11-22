@@ -1435,6 +1435,7 @@
     "keyEnter": "Enter",
     "waiting": "{count, plural, =0 {لا مسودات} one {مسودة واحدة بانتظار المراجعة} two {مسودتان بانتظار المراجعة} few {{count, number, integer} مسودات بانتظار المراجعة} many {{count, number, integer} مسودة بانتظار المراجعة} other {{count, number, integer} مسودة بانتظار المراجعة}}",
     "approveReady": "اعتماد {count, number, integer} جاهزة",
+    "savingChange": "جارٍ حفظ التعديل…",
     "noneReady": "لا مسودات جاهزة بعد",
     "recordingTitle": "تسجيل {time}",
     "fullTranscript": "النص الكامل",

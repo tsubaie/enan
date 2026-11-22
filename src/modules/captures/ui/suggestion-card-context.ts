@@ -17,8 +17,11 @@ export type Card = {
   changeKind: (kind: SuggestionKind) => void;
   error: Error | null;
   busy: Busy | null;
-  // Approve and Discard take the draft out of the list; focus moves on once it is gone.
-  leave: (kind: Busy, action: () => Promise<void>) => void;
+  // An action is queued behind a save still being sent.
+  waiting: boolean;
+  // Approve and Discard take the draft out of the list; focus moves on once it is gone. The
+  // action is handed the draft as last saved.
+  leave: (kind: Busy, action: (draft: Suggestion) => Promise<void>) => void;
 };
 export const CardContext = createContext<Card | null>(null);
 export function useCard() {

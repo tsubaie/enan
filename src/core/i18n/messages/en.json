@@ -1435,6 +1435,7 @@
     "keyEnter": "Enter",
     "waiting": "{count, plural, =0 {No drafts} one {# draft waiting for review} other {# drafts waiting for review}}",
     "approveReady": "Approve {count, number, integer} ready",
+    "savingChange": "Saving your change…",
     "noneReady": "No drafts are ready yet",
     "recordingTitle": "{time} recording",
     "fullTranscript": "Full transcript",

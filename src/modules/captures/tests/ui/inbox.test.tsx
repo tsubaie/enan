@@ -31,6 +31,7 @@ vi.mock('../../ui/capture-queries', async () => {
       data: useSyncExternalStore(subscribe, () => spies.list),
       isPending: false,
       error: null,
+      refetch: async () => ({ data: spies.list }),
     }),
     useReviewMutations: () => ({
       patch: spies.patch,
@@ -318,7 +319,8 @@ it('CAPTURES-B10 Approve N ready is busy while it is sent, fires once, and says 
   });
   fireEvent.click(ready);
   fireEvent.click(ready);
-  expect(spies.approveReady).toHaveBeenCalledTimes(1);
+  // It first waits for any edit still being saved and reads the list again.
+  await vi.waitFor(() => expect(spies.approveReady).toHaveBeenCalledTimes(1));
   expect(ready.getAttribute('aria-busy')).toBe('true');
   expect(ready.getAttribute('aria-disabled')).toBe('true');
   await act(async () => pending.reject(new Error('The server is not answering.')));
@@ -350,4 +352,116 @@ it('CAPTURES-B10 across kinds Merge says why beside it, not only in a tooltip', 
   expect(merge.getAttribute('title')).toBeNull();
   const hint = document.getElementById(merge.getAttribute('aria-describedby') ?? '');
   expect(hint?.textContent).toBe(en.captures.mergeKindOnly);
+});
+const editedTitle = 'Submit the Q4 report';
+const edited = draft({
+  id: taskId,
+  kind: 'task',
+  revision: 2,
+  payload: { title: editedTitle, ownerId: null, spokenOwner: 'the planning head' },
+});
+const titleOf = (card: HTMLElement) => within(card).getByRole('textbox', { name: /Title/u });
+// The reader edits the title and goes straight to an action: the field's blur starts the save.
+function editTitle(card: HTMLElement) {
+  const title = titleOf(card);
+  fireEvent.change(title, { target: { value: editedTitle } });
+  fireEvent.blur(title);
+}
+const sentAfterPatch = (spy: typeof spies.approve) =>
+  expect(spies.patch.mock.invocationCallOrder[0]).toBeLessThan(
+    spy.mock.invocationCallOrder[0] ?? 0,
+  );
+it('CAPTURES-B10 Approve right after an edit waits for the save, says so, then approves the edited draft once', async () => {
+  page();
+  const saving = deferred();
+  spies.patch.mockReturnValue(saving.promise);
+  spies.approve.mockResolvedValue({
+    data: { suggestion: edited, live: { type: 'task', id: taskId } },
+  });
+  const card = cardOf(taskId) as HTMLElement;
+  editTitle(card);
+  const approve = within(card).getByRole('button', { name: en.captures.approve });
+  fireEvent.click(approve);
+  fireEvent.click(approve);
+  expect(spies.patch).toHaveBeenCalledWith(expect.objectContaining({ revision: 1 }), {
+    payload: { title: editedTitle },
+  });
+  expect(spies.approve).not.toHaveBeenCalled();
+  expect(approve.getAttribute('aria-busy')).toBe('true');
+  expect(approve.querySelector('.motion-safe\\:animate-spin')).toBeTruthy();
+  expect(within(card).getByRole('status').textContent).toBe(en.captures.savingChange);
+  await act(async () => saving.resolve({ data: edited }));
+  expect(spies.approve).toHaveBeenCalledTimes(1);
+  expect(spies.approve).toHaveBeenCalledWith(
+    expect.objectContaining({ id: taskId, revision: 2, payload: edited.payload }),
+  );
+  sentAfterPatch(spies.approve);
+  expect(screen.queryByText(en.captures.savingChange)).toBeNull();
+});
+it('CAPTURES-B10 Discard right after an edit waits for the save, then discards with the saved revision', async () => {
+  page();
+  const saving = deferred();
+  spies.patch.mockReturnValue(saving.promise);
+  const card = cardOf(taskId) as HTMLElement;
+  editTitle(card);
+  const discard = within(card).getByRole('button', { name: en.captures.discard });
+  fireEvent.click(discard);
+  expect(spies.discard).not.toHaveBeenCalled();
+  expect(discard.getAttribute('aria-busy')).toBe('true');
+  expect(within(card).getByRole('status').textContent).toBe(en.captures.savingChange);
+  await act(async () => saving.resolve({ data: edited }));
+  expect(spies.discard).toHaveBeenCalledTimes(1);
+  expect(spies.discard).toHaveBeenCalledWith(expect.objectContaining({ id: taskId, revision: 2 }));
+  sentAfterPatch(spies.discard);
+});
+it('CAPTURES-B10 when the save before Approve or Discard fails, nothing is sent and the failure is shown', async () => {
+  page();
+  spies.patch.mockRejectedValue(new Error('The server is not answering.'));
+  const card = cardOf(taskId) as HTMLElement;
+  editTitle(card);
+  await act(async () => {
+    fireEvent.click(within(card).getByRole('button', { name: en.captures.approve }));
+  });
+  editTitle(card);
+  await act(async () => {
+    fireEvent.click(within(card).getByRole('button', { name: en.captures.discard }));
+  });
+  expect(spies.patch).toHaveBeenCalledTimes(2);
+  expect(spies.approve).not.toHaveBeenCalled();
+  expect(spies.discard).not.toHaveBeenCalled();
+  expect(within(card).getByRole('alert').textContent).toContain('The server is not answering.');
+});
+const readyButton = () =>
+  screen.getByRole('button', {
+    name: en.captures.approveReady.replace('{count, number, integer}', '1'),
+  });
+it('CAPTURES-B10 Approve N ready waits for an edit being saved, then approves from the list read again', async () => {
+  page();
+  const saving = deferred();
+  spies.patch.mockReturnValue(saving.promise);
+  spies.approveReady.mockResolvedValue({ data: { approved: [] } });
+  editTitle(cardOf(taskId) as HTMLElement);
+  const ready = readyButton();
+  fireEvent.click(ready);
+  expect(spies.approveReady).not.toHaveBeenCalled();
+  expect(ready.getAttribute('aria-busy')).toBe('true');
+  expect(ready.querySelector('.motion-safe\\:animate-spin')).toBeTruthy();
+  // The save answers; the list as read again now holds the edited task and a second ready draft.
+  spies.list = {
+    data: [{ ...group, suggestions: [edited, secondTask] }],
+    meta: { nextCursor: null },
+  };
+  await act(async () => saving.resolve({ data: edited }));
+  expect(spies.approveReady).toHaveBeenCalledTimes(1);
+  expect(spies.approveReady).toHaveBeenCalledWith([taskId, secondTaskId]);
+  sentAfterPatch(spies.approveReady);
+});
+it('CAPTURES-B10 Approve N ready leaves out a draft whose latest save failed', async () => {
+  page();
+  spies.patch.mockRejectedValue(new Error('The server is not answering.'));
+  editTitle(cardOf(taskId) as HTMLElement);
+  await act(async () => {
+    fireEvent.click(readyButton());
+  });
+  expect(spies.approveReady).not.toHaveBeenCalled();
 });
