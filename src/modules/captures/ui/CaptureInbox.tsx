@@ -15,7 +15,7 @@ import { InboxEducation } from './InboxEducation';
 import type { Layout } from './SuggestionCard';
 import { useApprovedMessage } from './suggestion-text';
 import { useReviewToast } from './review-toast';
-import { useReviewAction } from './review-action';
+import { listedDraft, useReviewAction } from './review-action';
 import { InboxContext, useInbox } from './inbox-state';
 const pendingOf = (groups: Group[]) =>
   groups.flatMap((group) => group.suggestions.filter((draft) => draft.status === 'pending'));
@@ -69,9 +69,21 @@ function Root({
     </InboxContext>
   );
 }
+// The drafts whose latest save failed, once every save in flight has answered.
+async function failedSaves(saves: Map<string, Promise<boolean>>) {
+  const ids = [...saves.keys()];
+  const outcomes = await Promise.allSettled(saves.values());
+  return new Set(
+    ids.filter((_, at) => {
+      const outcome = outcomes[at];
+      return outcome?.status !== 'fulfilled' || !outcome.value;
+    }),
+  );
+}
 // S23: every draft shown with nothing required left to settle; a type flag never holds one back.
 // An edit still being saved is waited for, then the list is read again, so the batch is what the
-// fields show; a draft whose latest save failed is left out.
+// fields show; a draft whose latest save failed is left out. What was ready at the click and is
+// not approved is said (its save failed, or it is no longer ready), and focus goes to the first.
 export function ApproveReadyButton({
   approval: { busy, run },
 }: {
@@ -89,32 +101,37 @@ export function ApproveReadyButton({
         {t('noneReady')}
       </Button>
     );
+  async function approveReady() {
+    const clicked = ready.map((draft) => draft.id);
+    const failed = await failedSaves(saves);
+    const fresh = readyOf(await reread()).filter((draft) => !failed.has(draft.id));
+    const { data } = fresh.length
+      ? await mutations.approveReady(fresh.map((draft) => draft.id))
+      : { data: { approved: [] } };
+    const approved = new Set(data.approved.map((item) => item.suggestion.id));
+    const skipped = clicked.filter((id) => !approved.has(id));
+    const unsaved = skipped.filter((id) => failed.has(id)).length;
+    const notReady = skipped.length - unsaved;
+    const [only] = data.approved;
+    if (only)
+      toast.approved(
+        data.approved.length === 1
+          ? message(only)
+          : t('approvedMany', { count: data.approved.length }),
+        data.approved,
+        [
+          ...(unsaved ? [t('skippedUnsaved', { count: unsaved })] : []),
+          ...(notReady ? [t('skippedNotReady', { count: notReady })] : []),
+        ],
+      );
+    else toast.notice(t('noneApproved'));
+    if (skipped[0]) listedDraft(skipped[0])?.focus();
+  }
   return (
     <Button
       aria-busy={busy === 'ready' || undefined}
       aria-disabled={busy === 'ready' || undefined}
-      onClick={() =>
-        run('ready', async () => {
-          const ids = [...saves.keys()];
-          const outcomes = await Promise.allSettled(saves.values());
-          const failed = new Set(
-            ids.filter((_, at) => {
-              const outcome = outcomes[at];
-              return outcome?.status !== 'fulfilled' || !outcome.value;
-            }),
-          );
-          const fresh = readyOf(await reread()).filter((draft) => !failed.has(draft.id));
-          if (!fresh.length) return;
-          const { data } = await mutations.approveReady(fresh.map((draft) => draft.id));
-          const [only] = data.approved;
-          toast.approved(
-            only && data.approved.length === 1
-              ? message(only)
-              : t('approvedMany', { count: data.approved.length }),
-            data.approved,
-          );
-        })
-      }
+      onClick={() => run('ready', approveReady)}
     >
       {busy === 'ready' ? (
         <LoaderCircle aria-hidden className="motion-safe:animate-spin" />

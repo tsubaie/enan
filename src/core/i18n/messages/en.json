@@ -1514,6 +1514,9 @@
     "back": "Back",
     "tooLong": "This recording is longer than 15 minutes, so it can’t be added. Trim it or split it into shorter parts, then upload it again.",
     "tooLarge": "This file is larger than 25 MB, so it can’t be added. Save it in a smaller format such as M4A or MP3, then upload it again.",
-    "unsupportedType": "This file isn’t a supported audio format. Upload M4A, MP3, WAV, WebM or OGG."
+    "unsupportedType": "This file isn’t a supported audio format. Upload M4A, MP3, WAV, WebM or OGG.",
+    "skippedUnsaved": "{count, plural, one {# draft was left out because its last change didn’t save. It’s still in Review.} other {# drafts were left out because their last change didn’t save. They’re still in Review.}}",
+    "skippedNotReady": "{count, plural, one {# draft still needs a choice and stayed in Review.} other {# drafts still need a choice and stayed in Review.}}",
+    "noneApproved": "No drafts were approved. Check the drafts marked in Review, then try again."
   }
 }

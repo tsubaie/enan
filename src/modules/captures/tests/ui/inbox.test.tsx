@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { act, fireEvent, screen, within } from '@testing-library/react';
+import { createTranslator } from 'next-intl';
 import en from '@/core/i18n/messages/en.json';
 import ar from '@/core/i18n/messages/ar.json';
 import { CaptureGroup } from '../../schema/validation';
@@ -515,7 +516,16 @@ it('CAPTURES-B10 Approve N ready waits for an edit being saved, then approves fr
   expect(spies.approveReady).toHaveBeenCalledWith([taskId, secondTaskId]);
   sentAfterPatch(spies.approveReady);
 });
-it('CAPTURES-B10 Approve N ready leaves out a draft whose latest save failed', async () => {
+const plural = (message: string, count: number) =>
+  message
+    .match(new RegExp(`${count === 1 ? 'one' : 'other'} \\{([^}]*)\\}`, 'u'))?.[1]
+    ?.replace('#', String(count));
+const approvalOf = (suggestion: { id: string }) => ({
+  suggestion: { ...suggestion, status: 'approved' },
+  live: { type: 'task', id: suggestion.id },
+});
+const lastToast = () => spies.toast.mock.calls.at(-1)?.[0];
+it('CAPTURES-B10 Approve N ready with nothing left to approve sends nothing, says so at high priority and focuses the draft', async () => {
   page();
   spies.patch.mockRejectedValue(new Error('The server is not answering.'));
   editTitle(cardOf(taskId) as HTMLElement);
@@ -523,4 +533,78 @@ it('CAPTURES-B10 Approve N ready leaves out a draft whose latest save failed', a
     fireEvent.click(readyButton());
   });
   expect(spies.approveReady).not.toHaveBeenCalled();
+  expect(lastToast()).toEqual({ title: en.captures.noneApproved, priority: 'high' });
+  expect(document.activeElement).toBe(cardOf(taskId));
+});
+it('CAPTURES-B10 Approve N ready approves the draft that saved, says the one whose save failed was left out, and focuses it', async () => {
+  withDrafts(task, secondTask);
+  page();
+  spies.patch.mockRejectedValue(new Error('The server is not answering.'));
+  spies.approveReady.mockResolvedValue({ data: { approved: [approvalOf(secondTask)] } });
+  editTitle(cardOf(taskId) as HTMLElement);
+  await act(async () => {
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: en.captures.approveReady.replace('{count, number, integer}', '2'),
+      }),
+    );
+  });
+  expect(spies.approveReady).toHaveBeenCalledTimes(1);
+  expect(spies.approveReady).toHaveBeenCalledWith([secondTaskId]);
+  const toast = lastToast();
+  expect(toast.priority).toBe('high');
+  expect(toast.title).toContain(plural(en.captures.skippedUnsaved, 1));
+  expect(toast.title).not.toContain(plural(en.captures.skippedNotReady, 1));
+  expect(document.activeElement).toBe(cardOf(taskId));
+});
+it('CAPTURES-B10 Approve N ready says a draft no longer ready after the list is read again stayed in Review', async () => {
+  withDrafts(task, secondTask);
+  page();
+  spies.approveReady.mockResolvedValue({ data: { approved: [approvalOf(task)] } });
+  const blocked = { ...secondTask, revision: 2, payload: { title: '', ownerId: null } };
+  spies.list = { data: [{ ...group, suggestions: [task, blocked] }], meta: { nextCursor: null } };
+  await act(async () => {
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: en.captures.approveReady.replace('{count, number, integer}', '2'),
+      }),
+    );
+  });
+  expect(spies.approveReady).toHaveBeenCalledWith([taskId]);
+  const toast = lastToast();
+  expect(toast.priority).toBe('high');
+  expect(toast.title).toContain(plural(en.captures.skippedNotReady, 1));
+  expect(toast.title).not.toContain(plural(en.captures.skippedUnsaved, 1));
+  expect(document.activeElement).toBe(cardOf(secondTaskId));
+});
+it('CAPTURES-B10 Approve N ready with nothing skipped keeps the receipt at its usual priority', async () => {
+  withDrafts(task, secondTask);
+  page();
+  spies.approveReady.mockResolvedValue({
+    data: { approved: [approvalOf(task), approvalOf(secondTask)] },
+  });
+  await act(async () => {
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: en.captures.approveReady.replace('{count, number, integer}', '2'),
+      }),
+    );
+  });
+  expect(lastToast()).toMatchObject({ title: '2 drafts were approved.', priority: 'low' });
+});
+it('CAPTURES-B10 the Arabic lines for skipped drafts take every Arabic plural form, with Arabic digits', () => {
+  // As the workspace's Arabic numerals setting configures `integer`.
+  const t = createTranslator({
+    locale: 'ar',
+    messages: ar,
+    namespace: 'captures',
+    formats: { number: { integer: { numberingSystem: 'arab', maximumFractionDigits: 0 } } },
+  });
+  for (const key of ['skippedUnsaved', 'skippedNotReady'] as const) {
+    expect(t(key, { count: 1 })).toContain('مسودة واحدة');
+    expect(t(key, { count: 2 })).toContain('مسودتان');
+    expect(t(key, { count: 3 })).toContain('٣ مسودات');
+    expect(t(key, { count: 11 })).toContain('١١ مسودة');
+    expect(t(key, { count: 100 })).toContain('١٠٠ مسودة');
+  }
 });
