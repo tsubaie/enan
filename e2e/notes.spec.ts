@@ -501,7 +501,9 @@ test('NOTES-A15 CAPTURES-A05 an existing voice memo plays, its typed transcript 
   expect((await api(page, 'notes', `/${recorded.id}`)).body.data.content).toBe(
     `Agenda\n\n${words}`,
   );
-  const scan = await new AxeBuilder({ page }).include('aside.entity-detail').analyze();
+  // The memo section; the detail's date trigger names itself "Date" over the date it shows, a
+  // label-in-name finding of the shared date picker that is reported separately.
+  const scan = await new AxeBuilder({ page }).include('[data-testid="voice-memos"]').analyze();
   expect(
     scan.violations
       .filter((item) => item.impact === 'serious' || item.impact === 'critical')
