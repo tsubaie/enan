@@ -180,6 +180,41 @@ it('CAPTURES-B07 both voice POST routes answer 410 gone, name their replacement 
   const after = await json(api.detail, 'GET', `/notes/${note.id}`, { id: note.id });
   expect(after.body.data).toMatchObject({ content: 'Existing prose', revision: note.revision });
 });
+it('CAPTURES-B07 with the inbox on, record-first creation answers 410 before its body is read: missing, invalid, oversized or valid', async () => {
+  const before = await storageUsage();
+  const raw = (body: string | null, extra: Record<string, string> = {}) =>
+    respond(
+      api.voiceCreate,
+      new Request(new URL('/api/v1/notes/voice', env().APP_URL), {
+        method: 'POST',
+        headers: headers(extra),
+        ...(body === null ? {} : { body }),
+      }),
+      {},
+    );
+  const bytes = crypto.getRandomValues(new Uint8Array(2048));
+  bytes.set([0x1a, 0x45, 0xdf, 0xa3]);
+  for (const answer of [
+    await raw(null),
+    await raw('not a form', { 'Content-Type': 'multipart/form-data; boundary=x' }),
+    await raw('x', {
+      'Content-Type': 'multipart/form-data; boundary=x',
+      'Content-Length': '999999999',
+    }),
+    await createFromVoice(bytes, { durationSeconds: 'many' }),
+    await createFromVoice(bytes, { durationSeconds: '12' }),
+  ]) {
+    expect(answer.status).toBe(410);
+    expect(answer.body.error).toMatchObject({ code: 'gone', details: { reason: 'retired' } });
+  }
+  expect(await db().select().from(notes)).toEqual([]);
+  expect(await db().select().from(noteVoiceMemos)).toEqual([]);
+  expect(await storageUsage()).toBe(before);
+  // Rolled back, the body is read and checked again.
+  await writeSetting(db(), 'captures.inbox', false, session.user?.id ?? '');
+  expect((await raw(null)).status).toBe(400);
+  expect((await createFromVoice(bytes, { durationSeconds: 'many' })).status).toBe(400);
+});
 it('CAPTURES-B07 with the inbox rolled back, a recording becomes a note again, but attaching stays gone and no rewrite starts', async () => {
   globalThis.enanAiConnection = {
     state: 'enabled',

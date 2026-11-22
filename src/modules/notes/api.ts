@@ -196,10 +196,13 @@ export const voiceCreate = defineHandler({
   response,
   transaction: false,
   enqueues: true,
-  handler: async (input, ctx) => {
+  // The setting is read before the body, so with the inbox on nothing is parsed or buffered.
+  before: async (ctx) => {
     if (await getSetting(ctx.db, 'captures.inbox')) throw retired();
-    return { data: await voice.createNoteFromVoice(authenticated(ctx), input) };
   },
+  handler: async (input, ctx) => ({
+    data: await voice.createNoteFromVoice(authenticated(ctx), input),
+  }),
 });
 export const voiceRemove = defineHandler({
   guard: 'session',
