@@ -17,6 +17,7 @@ import { AccountMenu } from './AccountMenu';
 import { LanguageToggle } from './LanguageToggle';
 import { HEADER_TITLE_SLOT } from './shell-slot';
 import { NotificationBell } from '@/modules/notifications/ui';
+import { CaptureHeaderControls } from '@/modules/captures/ui';
 // 05 § Layout shell: the header carries search, the language, notifications and the account. It
 // used to carry the workspace name, which the sidebar foot already says in a heavier weight on the
 // same screen. A band that spans every page at every width has to earn it; the language does,
@@ -59,6 +60,7 @@ export function ShellHeader({ user }: { user: { name: string; email: string; rol
             {t(apple ? 'searchShortcutMac' : 'searchShortcut')}
           </kbd>
         </Button>
+        <CaptureHeaderControls />
         {/* On a phone the language is chosen in the bar's More sheet (MobileNav), not up here. */}
         <div className="hidden lg:block">
           <LanguageToggle />

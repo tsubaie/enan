@@ -1,11 +1,12 @@
 'use client';
-import { type ReactNode } from 'react';
+import { Suspense, type ReactNode } from 'react';
 import Link from 'next/link';
 import { ShellLinks } from './ShellLinks';
 import { MobileNav } from './MobileNav';
 import { Logo } from './Logo';
 import { ShellHeader } from './ShellHeader';
 import { routes } from '@/core/routes';
+import { CaptureFab, CaptureHost } from '@/modules/captures/ui';
 type ShellUser = { id: string; name: string; email: string; role: string };
 export function AppShell({
   children,
@@ -38,6 +39,12 @@ export function AppShell({
           {children}
         </main>
       </div>
+      {/* CAPTURES-B01: the one recorder, its phone button and its Alt/Option+V chord. It reads the
+          page's committee from the address, which needs a boundary of its own. */}
+      <Suspense fallback={null}>
+        <CaptureHost />
+      </Suspense>
+      <CaptureFab />
       <nav className="mobile-navigation fixed inset-x-3 bottom-[var(--mobile-nav-bottom)] z-30 flex gap-0.5 rounded-[28px] border p-1 lg:hidden">
         <MobileNav role={user.role} />
       </nav>
