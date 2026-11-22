@@ -1,12 +1,16 @@
 import 'server-only';
 import { createHash } from 'node:crypto';
 import { AppError } from '@/core/http/errors';
+import { audioDurationSeconds } from './audio-duration';
 import { writeStoredFile } from './storage';
 // NOTES-I08: a voice memo is at most 25 MB and 15 minutes, and a note holds at most 20.
 export const voiceAudioLimits = {
   maxBytes: 25 * 1024 * 1024,
   maxDurationSeconds: 900,
   maxPerNote: 20,
+  // A length the header does not give is estimated at this low bitrate (bytes per second), so a
+  // client that declares 0 seconds still reserves for what the file could hold.
+  minBytesPerSecond: 2000,
 };
 export type VoiceAudioMime = 'audio/webm' | 'audio/mp4' | 'audio/mpeg' | 'audio/wav' | 'audio/ogg';
 const extensions: Record<VoiceAudioMime, string> = {
@@ -50,7 +54,7 @@ export function voiceFileName(fileName: string, mime: VoiceAudioMime) {
   const extension = `.${extensions[mime]}`;
   return `${(base || 'Voice memo').slice(0, 160 - extension.length)}${extension}`;
 }
-// Checked by size, then by its first bytes; the storage key is the content's hash, so the same
+// Checked by size, then by its first bytes, then by the length its header gives (CAPTURES-B12); the storage key is the content's hash, so the same
 // recording uploaded twice is one binary.
 export function checkVoiceAudio(bytes: Uint8Array, fileName: string) {
   if (bytes.byteLength > voiceAudioLimits.maxBytes)
@@ -60,9 +64,23 @@ export function checkVoiceAudio(bytes: Uint8Array, fileName: string) {
     });
   const mime = audioTypeOf(bytes);
   if (!mime) throw new AppError('rule_violation', { reason: 'unsupported_type' });
+  const measured = audioDurationSeconds(bytes, mime);
+  if (measured !== null && measured > voiceAudioLimits.maxDurationSeconds)
+    throw new AppError('rule_violation', {
+      reason: 'too_long',
+      maxSeconds: voiceAudioLimits.maxDurationSeconds,
+    });
   const sha256 = createHash('sha256').update(bytes).digest('hex');
   return {
     mime,
+    // F1: what the header says, or the estimate, never more than the cap the header could prove.
+    durationSeconds: Math.ceil(
+      measured ??
+        Math.min(
+          bytes.byteLength / voiceAudioLimits.minBytesPerSecond,
+          voiceAudioLimits.maxDurationSeconds,
+        ),
+    ),
     sha256,
     storageKey: `voice-${sha256}`,
     originalName: voiceFileName(fileName, mime),

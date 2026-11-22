@@ -170,6 +170,8 @@ export async function createCapture(ctx: Context, input: z.output<typeof Capture
   await requireCommittee(ctx, committeeId);
   const audio = await storeVoiceAudio(input.file);
   const transcript = input.transcript || null;
+  // F1: the declared length is the client's word; the reservation and the row take the longer.
+  const durationSeconds = Math.max(input.durationSeconds, audio.durationSeconds);
   return withTransaction(ctx.db, async (database) => {
     const scoped = { ...ctx, db: database };
     const fileId = await upsertAudioFile(database, {
@@ -184,7 +186,7 @@ export async function createCapture(ctx: Context, input: z.output<typeof Capture
     await repo.insertCapture(database, {
       id: captureId,
       fileId,
-      durationSeconds: input.durationSeconds,
+      durationSeconds,
       transcript,
       status: 'needs_transcript',
       contextCommitteeId: committeeId,
@@ -194,7 +196,7 @@ export async function createCapture(ctx: Context, input: z.output<typeof Capture
     });
     await writeAudit(database, ctx.user.id, 'create', 'capture', captureId, {
       fileId,
-      durationSeconds: input.durationSeconds,
+      durationSeconds,
     });
     const stored = await repo.selectStoredCapture(database, captureId);
     if (!stored) throw new AppError('internal');

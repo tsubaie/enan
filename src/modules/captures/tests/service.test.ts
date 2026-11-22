@@ -10,6 +10,7 @@ import { AiPayload } from '@/core/ai/job-schema';
 import type { User } from '@/core/http/user-schema';
 import { notes, noteVoiceMemos } from '@/modules/notes/schema/db';
 import { fixtureModel } from '../../../../tests/fixtures/ai/jobs';
+import { oggAudio } from '../../../../tests/fixtures/audio';
 import { captures } from '../schema/db';
 import { CaptureCreate } from '../schema/validation';
 import { createCapture, getCapture } from '../service';
@@ -73,6 +74,20 @@ it('CAPTURES-B01 CAPTURES-B05 with AI on the capture is transcribed by the trans
   });
   expect(payload.model.id).toBe('openai/whisper-large-v3');
   expect(payload.reservedCostMicros).toBe(2 * 30 * 100);
+});
+it('CAPTURES-B12 a client that declares 0 or 30 seconds for a longer file is held to the length its header gives', async () => {
+  ai.state = 'enabled';
+  await writeSetting(db(), 'ai.model.transcription', 'openai/whisper-large-v3', recorder.id);
+  const created = await recordAudio(oggAudio(600), { durationSeconds: '0' });
+  expect(created.durationSeconds).toBe(600);
+  const [queued] = await db().select().from(jobs);
+  expect(AiPayload.parse(queued?.payload).reservedCostMicros).toBe(2 * 600 * 100);
+  await expect(recordAudio(oggAudio(1200), { durationSeconds: '30' })).rejects.toMatchObject({
+    code: 'rule_violation',
+    details: { reason: 'too_long', maxSeconds: 900 },
+  });
+  expect(await db().select().from(captures)).toHaveLength(1);
+  expect(await db().select().from(jobs)).toHaveLength(1);
 });
 it('CAPTURES-B01 a transcription that found no speech or timed out leaves the capture, failed with its reason', async () => {
   ai.state = 'enabled';

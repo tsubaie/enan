@@ -44,7 +44,7 @@ A required field may be held as null while it is unresolved; a field whose state
 - CAPTURES-B09 Field states are `confident`, `several` or `unknown`, shown as text and icon, never as a percentage or by colour alone.
 - CAPTURES-B10 Approve creates the live task or note from the edited payload in one transaction, then records the live pointer and the live record's revision on the draft.
 - CAPTURES-B11 Undo of an approval soft-deletes the live record and returns the draft to pending only while the live record is unedited and within 60 seconds of Approve; otherwise it answers `rule_violation` and the record stays.
-- CAPTURES-B12 Uploads are capped at 25 MB and checked by their magic bytes, not their name or declared type; a recording is at most 15 minutes (900 seconds).
+- CAPTURES-B12 Uploads are capped at 25 MB and checked by their magic bytes, not their name or declared type; a recording is at most 15 minutes (900 seconds). The server reads the length from the container header (WebM Segment Info Duration or last Cluster, MP4 `mvhd`, Ogg last granule, WAV data over byte rate, MP3 Xing frame count or constant bitrate), with no decoder and no subprocess. A file its header proves longer than 900 seconds is refused with `422 rule_violation {reason: 'too_long', maxSeconds: 900}`, whatever the client declared. The capture stores, and transcription reserves for, the longer of the declared and the measured length; a file whose header gives no length is estimated at 16 kbps of its size, at most 900 seconds.
 
 ## API
 
@@ -91,7 +91,7 @@ All copy in `en` and `ar` under a `captures` namespace. Waveform, timer and micr
 ## Required scenarios
 
 - Unit: `captures/tests/schema.test.ts` (CAPTURES-I01, CAPTURES-B09 contracts and catalog; the migration on a database with voice memos), `constraints.test.ts` (CAPTURES-I01 duration and enum CHECKs, audio restrict, draft cascade), `access.test.ts` (CAPTURES-B02 row check, list predicate, count, `not_found`).
-- Recording: `captures/tests/service.test.ts` (CAPTURES-B01, B05), `api.test.ts` (CAPTURES-B01, B02 across every route, list, count and audio, B12), `jobs.test.ts` (CAPTURES-B01, B02 publish fences, B03, B05, B09), `ui/recorder.test.tsx` (CAPTURES-B01 recorder timing, keys, RTL, pre-permission), `ui/processing.test.tsx` (CAPTURES-B01 focus after Stop), `core/jobs/tests/runner.test.ts` (CAPTURES-B03 no `job.finished`).
+- Recording: `captures/tests/service.test.ts` (CAPTURES-B01, B05), `api.test.ts` (CAPTURES-B01, B02 across every route, list, count and audio, B12), `repo.test.ts` (CAPTURES-B02 list, paging, count and deleted rows; B09 replacement), `core/files/tests/audio-duration.test.ts` (CAPTURES-B12 header lengths per format, the cap and the size estimate), `jobs.test.ts` (CAPTURES-B01, B02 publish fences, B03, B05, B09), `ui/recorder.test.tsx` (CAPTURES-B01 recorder timing, keys, RTL, pre-permission), `ui/processing.test.tsx` (CAPTURES-B01 focus after Stop), `core/jobs/tests/runner.test.ts` (CAPTURES-B03 no `job.finished`).
 - Inbox and end-to-end scenarios for CAPTURES-B04, B06–B08, B10, B11 and CAPTURES-A01–A06 arrive with the inbox.
 - Mutation-test targets: `canViewCapture`, `visibleCaptures`, the Approve transaction.
 
