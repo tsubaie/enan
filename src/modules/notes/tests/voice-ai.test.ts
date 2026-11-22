@@ -13,12 +13,17 @@ import { noteJobs } from '../jobs';
 import { getNote, patchNote } from '../service';
 import { createNoteFromVoice, transcribeWithAi } from '../voice/service';
 import { VoiceCreate } from '../schema/validation';
+import { notes, noteVoiceMemos } from '../schema/db';
+import { startRunner } from '@/core/jobs/runner';
+import { logger } from '@/core/config/logger';
 // The network is the only stand-in: admission, the job's handlers and the note's own rules run
 // against the real database, and the transcription request goes through the real provider code.
 const sdk = vi.hoisted(() => ({ post: vi.fn() }));
 vi.mock('@/core/ai/sdk', () => ({ aiClient: async () => ({ post: sdk.post }) }));
 vi.mock('@/core/ai/models', () => ({ loadModels: async () => [fixtureModel] }));
 vi.mock('@/core/ai/client', () => ({ aiConnection: () => ({ state: 'enabled' }) }));
+// The runner claims only the jobs a scenario queues; no scheduled job joins them.
+vi.mock('@/core/jobs/scheduler', () => ({ scheduleDue: async () => {} }));
 beforeAll(() => migrateDatabase());
 beforeEach(async () => {
   await harness.reset();
@@ -156,4 +161,62 @@ it('NOTES-B37 a recording with no speech fails its job instead of writing an emp
     code: 'ai_failed',
     details: { reason: 'no_speech' },
   });
+});
+// Jobs queued before this release carry the old shape: a record-first note still titled by its
+// day, and flags the old routes took. The real runner parses, runs and publishes them.
+async function settle(...jobIds: string[]) {
+  const stop = startRunner();
+  for (let tries = 0; tries < 100; tries += 1) {
+    const rows = await Promise.all(jobIds.map(jobRow));
+    if (rows.every((row) => row.status === 'succeeded' || row.status === 'failed')) break;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  await stop();
+  return Promise.all(jobIds.map(jobRow));
+}
+it('CAPTURES-B05 a transcription queued before this release finishes on its memo or fails cleanly, and never writes the note', async () => {
+  const errors = vi.spyOn(logger, 'error');
+  sdk.post.mockResolvedValue({ text: 'Approve the budget.', usage: { cost: 0.0002, seconds: 30 } });
+  const legacy = await recordedNote();
+  await db()
+    .update(notes)
+    .set({ title: 'Voice Memo · 2026-09-10' })
+    .where(eq(notes.id, legacy.note.id));
+  const { input, ...payload } = AiPayload.parse(legacy.job.payload);
+  await db()
+    .update(jobs)
+    .set({
+      payload: {
+        ...payload,
+        input: { ...z.object({}).loose().parse(input), appendToNote: true, refine: true },
+      },
+    })
+    .where(eq(jobs.id, legacy.job.id));
+  // A memo removed since it was queued, and a payload missing its memo.
+  const removed = await recordedNote();
+  await db()
+    .update(noteVoiceMemos)
+    .set({ deletedAt: new Date() })
+    .where(eq(noteVoiceMemos.id, removed.memo.id));
+  const broken = await recordedNote();
+  await db()
+    .update(jobs)
+    .set({ payload: { ...payload, input: { noteId: broken.note.id } } })
+    .where(eq(jobs.id, broken.job.id));
+  const [done, gone, malformed] = await settle(legacy.job.id, removed.job.id, broken.job.id);
+  expect(done?.status).toBe('succeeded');
+  expect(gone).toMatchObject({ status: 'failed', lastError: 'missing_audio' });
+  expect(malformed?.status).toBe('failed');
+  const note = await harness.run((ctx) => getNote(ctx, legacy.note.id));
+  expect(note).toMatchObject({
+    content: '',
+    title: 'Voice Memo · 2026-09-10',
+    revision: legacy.note.revision,
+  });
+  expect(note.voiceMemos[0]).toMatchObject({
+    transcriptionStatus: 'done',
+    transcript: 'Approve the budget.',
+  });
+  expect(await db().select().from(jobs).where(eq(jobs.kind, 'ai.notes.refine'))).toEqual([]);
+  expect(errors).not.toHaveBeenCalled();
 });
