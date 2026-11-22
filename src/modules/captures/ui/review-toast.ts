@@ -45,7 +45,7 @@ export function useReviewToast() {
     const toastId: string = manager.add({
       title: [message, ...more].join(' '),
       priority: more.length ? 'high' : 'low',
-      timeout: shown,
+      timeout: more.length ? 15000 : shown,
       data: view ? { view: { href: view, label: t('view') } } : {},
       actionProps: { children: c('undo'), onClick: () => undo(toastId, ids, done) },
     });

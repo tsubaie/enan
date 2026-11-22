@@ -6,6 +6,7 @@ import en from '@/core/i18n/messages/en.json';
 import ar from '@/core/i18n/messages/ar.json';
 import { CaptureGroup } from '../../schema/validation';
 import { CapturesPage } from '../../ui/CapturesPage';
+import { useReviewToast } from '../../ui/review-toast';
 import { mount } from '../../../../../tests/fixtures/mount';
 // CAPTURES-B08 CAPTURES-B09 CAPTURES-B10: the inbox as the page renders it, with the review
 // actions as spies; nothing reaches a server.
@@ -607,4 +608,23 @@ it('CAPTURES-B10 the Arabic lines for skipped drafts take every Arabic plural fo
     expect(t(key, { count: 11 })).toContain('١١ مسودة');
     expect(t(key, { count: 100 })).toContain('١٠٠ مسودة');
   }
+});
+it('CAPTURES-B10 a receipt that names skipped drafts stays fifteen seconds; without them, and for Discard, five', () => {
+  let toast: ReturnType<typeof useReviewToast> | undefined;
+  function Probe() {
+    toast = useReviewToast();
+    return null;
+  }
+  mount(<Probe />);
+  if (!toast) throw new Error('no toast');
+  toast.approved(
+    '1 draft was approved.',
+    [approvalOf(task) as never],
+    ['1 draft stayed in Review.'],
+  );
+  expect(lastToast()).toMatchObject({ priority: 'high', timeout: 15000 });
+  toast.approved('1 draft was approved.', [approvalOf(task) as never]);
+  expect(lastToast()).toMatchObject({ priority: 'low', timeout: 5000 });
+  toast.discarded(taskId);
+  expect(lastToast()).toMatchObject({ title: en.captures.discarded, timeout: 5000 });
 });
