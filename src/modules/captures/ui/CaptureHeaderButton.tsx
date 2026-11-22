@@ -67,6 +67,8 @@ function CaptureReviewLink() {
       <span aria-hidden className="hidden sm:inline">
         {t('review')}
       </span>
+      {/* A real space, so the visible words read "Review 3", as the name does (WCAG 2.5.3). */}
+      {count > 0 && ' '}
       {count > 0 && (
         <span aria-hidden>
           <CountCircle current>{count}</CountCircle>

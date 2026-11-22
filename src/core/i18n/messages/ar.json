@@ -1371,7 +1371,7 @@
     "recordNote": "تسجيل ملاحظة",
     "shortcutMac": "على macOS: ⌥V",
     "review": "مراجعة",
-    "reviewCount": "مسودات بانتظار المراجعة: {count, number, integer}",
+    "reviewCount": "مراجعة {count, number, integer} — مسودات بانتظار المراجعة",
     "recorderLabel": "مسجّل الملاحظات الصوتية",
     "processingLabel": "حالة التسجيل",
     "permissionTitle": "السماح بالميكروفون",
