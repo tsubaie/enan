@@ -57,6 +57,7 @@ describe('module registry', () => {
       'users',
       'settings',
       'account',
+      'captures',
     ]);
   });
   it('ADMIN-B15 the job registry has the system kinds and refuses a kind registered twice', () => {
