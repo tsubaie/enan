@@ -7,6 +7,9 @@ import { jobs, notifications } from '@/core/db/system-schema';
 import type { User } from '@/core/http/user-schema';
 import { notes } from '@/modules/notes/schema/db';
 import { tasks } from '@/modules/tasks/schema/db';
+import { id } from '@/core/db/ids';
+import { people } from '@/modules/people/schema/db';
+import { patchCommittee, removeCommittee } from '@/modules/committees/service';
 import * as api from '../api';
 import { captureSuggestions } from '../schema/db';
 import { call, capture, committee, person, suggestion, user } from './fixtures';
@@ -230,4 +233,39 @@ it('CAPTURES-B10 an edit is checked against its kind, a stale revision conflicts
   });
   const blocked = await approve(draft.id, 2);
   expect(blocked.body.error.details).toMatchObject({ fields: ['type', 'noteDate'] });
+});
+it('CAPTURES-B10 a draft edited to a person who cannot be assigned, a missing, deleted or archived committee, or an unknown participant is refused at Approve and stays pending', async () => {
+  const ctx = { db: db(), user: recorder, requestId: id() };
+  const unassignable = await person('Former Staff', colleague);
+  await db().update(people).set({ isAssignable: false }).where(eq(people.id, unassignable.id));
+  const archived = await committee(recorder, 'Old Committee');
+  await patchCommittee(ctx, archived.id, { revision: archived.revision, status: 'archived' });
+  const deleted = await committee(recorder, 'Gone Committee');
+  await removeCommittee(ctx, deleted.id, deleted.revision);
+  const note = { title: 'Minutes', noteDate: '2026-11-22', body: 'Body' };
+  const recording = await capture(recorder, { status: 'ready' });
+  const cases = [
+    ['task', { title: 'Owned', ownerId: null }, { ownerId: unassignable.id }],
+    ['task', { title: 'Filed' }, { committeeId: id() }],
+    ['committee_note', { ...note, committeeId: null }, { committeeId: archived.id }],
+    ['committee_note', { ...note, committeeId: null }, { committeeId: deleted.id }],
+    ['committee_note', { ...note, committeeId: null }, { committeeId: id() }],
+    ['meeting_note', { ...note, type: 'other' }, { participantIds: [id()] }],
+  ] as const;
+  for (const [kind, payload, edit] of cases) {
+    const draft = await suggestion(recording.id, { kind, payload });
+    const edited = await patch(draft.id, { revision: 1, payload: edit });
+    expect(edited.status, JSON.stringify(edit)).toBe(200);
+    const refused = await approve(draft.id, 2);
+    expect(refused.status, JSON.stringify(edit)).toBeGreaterThanOrEqual(400);
+    expect(refused.status, JSON.stringify(edit)).toBeLessThan(500);
+    const [row] = await db()
+      .select()
+      .from(captureSuggestions)
+      .where(eq(captureSuggestions.id, draft.id));
+    expect(row).toMatchObject({ status: 'pending', liveEntityId: null, approvedAt: null });
+  }
+  expect(await db().select().from(tasks)).toEqual([]);
+  expect(await db().select().from(notes)).toEqual([]);
+  expect(await db().select().from(notifications)).toEqual([]);
 });
