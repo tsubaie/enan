@@ -1,9 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import { NoteDetail, RefinementOutput } from '../../schema/validation';
 import { NoteVoiceMemos } from '../../ui/NoteVoiceMemos';
-import { QuickVoiceNoteBar } from '../../ui/QuickVoiceNoteBar';
 import en from '@/core/i18n/messages/en.json';
 import { mount } from './harness';
 const spies = vi.hoisted(() => ({
@@ -18,14 +17,8 @@ const spies = vi.hoisted(() => ({
 }));
 vi.mock('@/ui/ai/queries', () => ({ useAiReview: () => spies.review }));
 vi.mock('../../ui/voice-queries', () => ({
-  useVoiceUpload: () => ({ saving: false, error: null, attach: spies.attach }),
   useVoiceMutations: () => ({ transcribe: spies.transcribe, remove: spies.remove }),
   useTranscribeAvailable: () => spies.transcribeAvailable(),
-  useVoiceCreate: (fields: object) => ({
-    saving: false,
-    error: null,
-    attach: (file: File, seconds: number) => spies.createFromVoice(fields, file, seconds),
-  }),
 }));
 const ownerId = '01a08a9f-1991-760a-b73a-568f6f866540';
 vi.mock('../../ui/queries', () => ({
@@ -170,126 +163,16 @@ beforeEach(() => {
   });
 });
 afterEach(() => vi.unstubAllGlobals());
-async function startRecording() {
-  mount(<NoteVoiceMemos note={noteWith()} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Record voice memo' }));
-  return screen.findByRole('form', { name: 'Voice recorder' });
-}
-describe('voice memo recorder', () => {
-  it('NOTES-B34 shows the live 24-bar meter, keeps the screen awake and pauses, resumes and attaches by key', async () => {
-    const bar = await startRecording();
-    expect(await screen.findByText('WakeLock: Active')).toBeTruthy();
-    expect(screen.getByText('00:00 / 15:00')).toBeTruthy();
-    const bars = [...screen.getByTestId('voice-meter').children];
-    expect(bars).toHaveLength(24);
-    act(() => media.frames.shift()?.(0));
-    expect(bars.every((item) => (item as HTMLElement).style.transform === 'scaleY(1)')).toBe(true);
-    expect(document.activeElement).toBe(bar);
-    fireEvent.keyDown(bar, { key: ' ' });
-    expect(within(bar).getByRole('status').textContent).toBe('Paused');
-    expect(media.recorder?.state).toBe('paused');
-    expect(within(bar).getByRole('button', { name: 'Resume' })).toBeTruthy();
-    fireEvent.keyDown(bar, { key: ' ' });
-    expect(within(bar).getByRole('status').textContent).toBe('Recording');
-    expect(spies.attach).not.toHaveBeenCalled();
-    fireEvent.keyDown(bar, { key: 'Enter' });
-    expect(spies.attach).toHaveBeenCalledTimes(1);
-    const [file, seconds] = spies.attach.mock.calls[0] ?? [];
-    expect(file).toBeInstanceOf(File);
-    expect(file.name).toBe('Voice memo.webm');
-    expect(seconds).toBe(0);
-    expect(media.stop).toHaveBeenCalled();
-    expect(media.release).toHaveBeenCalled();
-    expect(screen.queryByRole('form', { name: 'Voice recorder' })).toBeNull();
+describe('voice memo player', () => {
+  it('CAPTURES-B05 NOTES-B34 a note offers no way to record or upload audio, and one without memos shows nothing', () => {
+    const { container } = mount(<NoteVoiceMemos note={noteWith()} />);
+    expect(container.textContent).toBe('');
+    mount(<NoteVoiceMemos note={noteWith({ voiceMemos: [memo()] })} />);
+    expect(screen.queryByRole('button', { name: /record/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /upload/i })).toBeNull();
+    expect(document.querySelector('input[type="file"]')).toBeNull();
   });
-  it('NOTES-B34 Escape cancels the recording and attaches nothing', async () => {
-    const bar = await startRecording();
-    fireEvent.keyDown(bar, { key: 'Escape' });
-    expect(screen.queryByRole('form', { name: 'Voice recorder' })).toBeNull();
-    expect(spies.attach).not.toHaveBeenCalled();
-    expect(media.stop).toHaveBeenCalled();
-  });
-  it('NOTES-B34 a recorder that already stopped on its own is attached and releases the microphone', async () => {
-    // A recorder stopped by an interruption ignores stop() and fires no stop event again.
-    class InterruptedRecorder extends FakeRecorder {
-      override stop() {}
-    }
-    vi.stubGlobal('MediaRecorder', InterruptedRecorder);
-    const bar = await startRecording();
-    act(() => {
-      if (media.recorder) media.recorder.state = 'inactive';
-    });
-    media.release.mockClear();
-    fireEvent.click(within(bar).getByRole('button', { name: 'Stop & Attach' }));
-    expect(spies.attach).toHaveBeenCalledTimes(1);
-    expect(media.stop).toHaveBeenCalled();
-    expect(media.release).toHaveBeenCalled();
-  });
-  it('NOTES-B34 keeps the microphone until the recorder has stopped, so Safari’s MP4 is not empty', async () => {
-    // Safari finishes an MP4 after stop() returns, and only with the microphone still live.
-    class SafariRecorder extends FakeRecorder {
-      override stop() {
-        this.state = 'inactive';
-        queueMicrotask(() => {
-          if (!media.stop.mock.calls.length)
-            this.ondataavailable?.({ data: new Blob(['spoken words']) });
-          this.onstop?.();
-        });
-      }
-    }
-    vi.stubGlobal('MediaRecorder', SafariRecorder);
-    const bar = await startRecording();
-    fireEvent.click(within(bar).getByRole('button', { name: 'Stop & Attach' }));
-    await waitFor(() => expect(spies.attach).toHaveBeenCalledTimes(1));
-    const [file] = spies.attach.mock.calls[0] ?? [];
-    expect((file as File).size).toBeGreaterThan(0);
-    expect(media.stop).toHaveBeenCalled();
-  });
-  it('NOTES-B34 Stop & Attach attaches what was said; with less motion asked for the bars stand still', async () => {
-    media.reduced = true;
-    const bar = await startRecording();
-    expect(media.frames).toEqual([]);
-    fireEvent.click(within(bar).getByRole('button', { name: 'Stop & Attach' }));
-    expect(spies.attach).toHaveBeenCalledTimes(1);
-  });
-});
-describe('record-first voice note', () => {
-  it('NOTES-B36 a finished recording becomes a new note, with the committee and type of the form, and it opens', async () => {
-    const onCreated = vi.fn();
-    const committeeId = '01a08a9f-1991-760a-b73a-568f6f866543';
-    mount(<QuickVoiceNoteBar committeeId={committeeId} type="one_on_one" onCreated={onCreated} />);
-    expect(screen.getByRole('group', { name: 'New note from a recording' })).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Record voice memo' }));
-    const bar = await screen.findByRole('form', { name: 'Voice recorder' });
-    expect(await screen.findByText('WakeLock: Active')).toBeTruthy();
-    fireEvent.keyDown(bar, { key: 'Enter' });
-    expect(spies.createFromVoice).toHaveBeenCalledTimes(1);
-    const [fields, file] = spies.createFromVoice.mock.calls[0] ?? [];
-    expect(fields).toEqual({ committeeId, type: 'one_on_one' });
-    expect(file.name).toBe('Voice memo.webm');
-    await vi.waitFor(() => expect(onCreated).toHaveBeenCalledWith(noteId));
-  });
-  it('NOTES-B36 an uploaded file becomes a new note and opens; a failed save opens nothing', async () => {
-    const onCreated = vi.fn();
-    mount(<QuickVoiceNoteBar onCreated={onCreated} />);
-    const file = new File(['ID3'], 'Call.mp3', { type: 'audio/mpeg' });
-    fireEvent.change(screen.getByTestId('voice-file'), { target: { files: [file] } });
-    expect(spies.createFromVoice).toHaveBeenCalledWith({ committeeId: null, type: null }, file, 0);
-    await vi.waitFor(() => expect(onCreated).toHaveBeenCalledWith(noteId));
-    spies.createFromVoice.mockResolvedValueOnce(undefined);
-    fireEvent.change(screen.getByTestId('voice-file'), { target: { files: [file] } });
-    await vi.waitFor(() => expect(spies.createFromVoice).toHaveBeenCalledTimes(2));
-    expect(onCreated).toHaveBeenCalledTimes(1);
-  });
-});
-describe('voice memo player and upload', () => {
-  it('NOTES-B29 a chosen audio file is attached as it is', () => {
-    mount(<NoteVoiceMemos note={noteWith()} />);
-    const file = new File(['ID3'], 'Call.mp3', { type: 'audio/mpeg' });
-    fireEvent.change(screen.getByTestId('voice-file'), { target: { files: [file] } });
-    expect(spies.attach).toHaveBeenCalledWith(file, 0);
-  });
-  it('NOTES-B30 plays, seeks, steps 1x, 1.5x and 2x, downloads and deletes', () => {
+  it('CAPTURES-B06 NOTES-B30 an existing memo plays, seeks, steps 1x, 1.5x and 2x, downloads and deletes', () => {
     const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue();
     mount(<NoteVoiceMemos note={noteWith({ voiceMemos: [memo()] })} />);
     expect(screen.getByText('No transcript')).toBeTruthy();

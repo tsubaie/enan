@@ -78,7 +78,7 @@ export async function listCaptures(ctx: Context, query: z.output<typeof CaptureL
     if (!parsed.success) throw new AppError('validation_failed', { field: 'cursor' });
     after = { createdAt: new Date(parsed.data.at), id: parsed.data.id };
   }
-  const rows = await repo.selectCaptures(ctx.db, ctx.user, query.limit + 1, after);
+  const rows = await repo.selectCaptures(ctx.db, ctx.user, query.limit + 1, after, query.scope);
   const page = rows.slice(0, query.limit);
   const last = page.at(-1);
   return {

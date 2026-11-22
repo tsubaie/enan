@@ -16,6 +16,9 @@ import { notes, noteVoiceMemos } from '../schema/db';
 import { fixtureModel } from '../../../../tests/fixtures/ai/jobs';
 import * as api from '../api';
 import { voiceNoteTitle } from '../voice/service';
+import { insertVoiceMemo } from '../voice/repo';
+import { upsertAudioFile } from '@/core/db/files-repo';
+import { storeVoiceAudio } from '@/core/files/voice-audio';
 // NOTES-B29–B32: the voice memo handlers as their routes export them, with real multipart and
 // JSON requests against the real database and the test files directory. The session is the one
 // seam replaced. AI is off unless a test turns it on, so every upload proves it needs none.
@@ -46,10 +49,38 @@ async function respond(handler: Handler, request: Request, params: Record<string
   const response = await handler(request, route(params));
   return { status: response.status, body: response.status === 204 ? null : await response.json() };
 }
-async function upload(noteId: string, bytes: Uint8Array, fields: Record<string, string> = {}) {
-  return respond(api.voiceUpload, await multipart(`/notes/${noteId}/voice`, bytes, fields), {
+const upload = async (noteId: string, bytes: Uint8Array, fields: Record<string, string> = {}) =>
+  respond(api.voiceUpload, await multipart(`/notes/${noteId}/voice`, bytes, fields), {
     id: noteId,
   });
+// A memo as one recorded before the inbox (CAPTURES-B06): new audio can no longer reach a note
+// through the API, so the row is written the way the retired upload wrote it.
+async function existingMemo(
+  noteId: string,
+  bytes: Uint8Array,
+  name = 'Board debrief.webm',
+  transcript: string | null = null,
+) {
+  const audio = await storeVoiceAudio(new File([new Uint8Array(bytes)], name));
+  const fileId = await upsertAudioFile(db(), {
+    storageKey: audio.storageKey,
+    originalName: audio.originalName,
+    mime: audio.mime,
+    sizeBytes: audio.sizeBytes,
+    sha256: audio.sha256,
+    uploadedBy: session.user?.id ?? null,
+  });
+  const memoId = id();
+  await insertVoiceMemo(db(), {
+    id: memoId,
+    noteId,
+    fileId,
+    durationSeconds: 30,
+    transcript,
+    transcriptionStatus: transcript ? 'done' : 'skipped',
+    createdBy: session.user?.id ?? null,
+  });
+  return { id: memoId, fileId };
 }
 const createFromVoice = async (bytes: Uint8Array, fields: Record<string, string> = {}) =>
   respond(api.voiceCreate, await multipart('/notes/voice', bytes, fields), {});
@@ -119,83 +150,94 @@ beforeEach(async () => {
 });
 afterAll(() => closeDatabase());
 afterEach(() => resetConnection());
-it('NOTES-B29 NOTES-I08 an upload stores the audio by its hash and answers 201 with the memo, AI or not', async () => {
+type Created = {
+  id: string;
+  title: string;
+  content: string;
+  committeeId: string | null;
+  type: string | null;
+  voiceMemos: { transcript: string | null; transcriptionStatus: string; durationSeconds: number }[];
+};
+it('CAPTURES-B07 both voice POST routes answer 410 gone, name their replacement and write nothing', async () => {
   const note = await createNote({ content: 'Existing prose' });
-  const bytes = webm(1);
-  const created = await upload(note.id, bytes, { durationSeconds: '74' });
-  expect(created.status).toBe(201);
-  const [memo] = created.body.data.voiceMemos;
-  expect(memo).toMatchObject({
-    originalName: 'Board debrief.webm',
-    mime: 'audio/webm',
-    sizeBytes: bytes.byteLength,
-    durationSeconds: 74,
-    transcript: null,
-    transcriptionStatus: 'skipped',
-    audioUrl: `/api/v1/notes/${note.id}/voice/${memo.id}/audio`,
-  });
-  expect(created.body.data.content).toBe('Existing prose');
-  const [file] = await db().select().from(files).where(eq(files.id, memo.fileId));
-  expect(file?.storageKey).toBe(`voice-${file?.sha256}`);
-  expect(new Uint8Array(await readStoredFile(file?.storageKey ?? ''))).toEqual(bytes);
-  const audits = await db().select().from(auditLog).where(eq(auditLog.entityId, memo.id));
-  expect(audits.map((row) => [row.action, row.entityType])).toEqual([
-    ['create', 'note_voice_memo'],
-  ]);
-  // The same recording again is a second memo over the one stored file.
-  const again = await upload(note.id, bytes);
-  expect(again.body.data.voiceMemos.map((item: { fileId: string }) => item.fileId)).toEqual([
-    memo.fileId,
-    memo.fileId,
-  ]);
-});
-it('NOTES-B29 a transcript sent with the audio marks the memo done without touching the note', async () => {
-  const note = await createNote({ content: 'Keep me' });
-  const created = await upload(note.id, webm(2), { transcript: 'We agreed to ship on Sunday.' });
-  expect(created.body.data.voiceMemos[0]).toMatchObject({
-    transcript: 'We agreed to ship on Sunday.',
-    transcriptionStatus: 'done',
-  });
-  expect(created.body.data.content).toBe('Keep me');
-  expect(created.body.data.revision).toBe(note.revision);
-});
-it('NOTES-B29 a disguised file, an unknown note and a deleted note are refused', async () => {
-  const note = await createNote();
-  const page = new TextEncoder().encode('<!doctype html><script>alert(1)</script>');
-  const refused = await upload(note.id, page);
-  expect(refused.status).toBe(422);
-  expect(refused.body.error.details).toMatchObject({ reason: 'unsupported_type' });
-  expect((await upload(id(), webm(3))).status).toBe(404);
-  await json(
-    api.remove,
-    'DELETE',
-    `/notes/${note.id}`,
-    { id: note.id },
-    { revision: note.revision },
-  );
-  expect((await upload(note.id, webm(4))).status).toBe(404);
-  expect(await db().select().from(noteVoiceMemos)).toEqual([]);
-});
-it('NOTES-B29 an upload to an unknown note stores no audio', async () => {
   const before = await storageUsage();
   // Random bytes: the key is the content's hash, so an earlier run cannot have stored this one.
   const bytes = crypto.getRandomValues(new Uint8Array(2048));
   bytes.set([0x1a, 0x45, 0xdf, 0xa3]);
-  expect((await upload(id(), bytes)).status).toBe(404);
+  for (const answer of [
+    await upload(note.id, bytes, { durationSeconds: '12' }),
+    await createFromVoice(bytes, { durationSeconds: '12', transcript: 'Should not exist' }),
+  ]) {
+    expect(answer.status).toBe(410);
+    expect(answer.body.error).toMatchObject({
+      code: 'gone',
+      details: { reason: 'retired', use: '/api/v1/captures' },
+    });
+  }
+  expect(await db().select().from(noteVoiceMemos)).toEqual([]);
+  expect(await db().select().from(notes)).toHaveLength(1);
   expect(await storageUsage()).toBe(before);
+  const after = await json(api.detail, 'GET', `/notes/${note.id}`, { id: note.id });
+  expect(after.body.data).toMatchObject({ content: 'Existing prose', revision: note.revision });
 });
-it('NOTES-I08 a note holds at most twenty voice memos', async () => {
-  const note = await createNote();
-  for (let index = 0; index < 20; index += 1)
-    expect((await upload(note.id, webm(10 + index, 64))).status).toBe(201);
-  const over = await upload(note.id, webm(99, 64));
-  expect(over.status).toBe(422);
-  expect(over.body.error.details).toMatchObject({ reason: 'limit_reached', max: 20 });
+it('CAPTURES-B07 with the inbox on, record-first creation answers 410 before its body is read: missing, invalid, oversized or valid', async () => {
+  const before = await storageUsage();
+  const raw = (body: string | null, extra: Record<string, string> = {}) =>
+    respond(
+      api.voiceCreate,
+      new Request(new URL('/api/v1/notes/voice', env().APP_URL), {
+        method: 'POST',
+        headers: headers(extra),
+        ...(body === null ? {} : { body }),
+      }),
+      {},
+    );
+  const bytes = crypto.getRandomValues(new Uint8Array(2048));
+  bytes.set([0x1a, 0x45, 0xdf, 0xa3]);
+  for (const answer of [
+    await raw(null),
+    await raw('not a form', { 'Content-Type': 'multipart/form-data; boundary=x' }),
+    await raw('x', {
+      'Content-Type': 'multipart/form-data; boundary=x',
+      'Content-Length': '999999999',
+    }),
+    await createFromVoice(bytes, { durationSeconds: 'many' }),
+    await createFromVoice(bytes, { durationSeconds: '12' }),
+  ]) {
+    expect(answer.status).toBe(410);
+    expect(answer.body.error).toMatchObject({ code: 'gone', details: { reason: 'retired' } });
+  }
+  expect(await db().select().from(notes)).toEqual([]);
+  expect(await db().select().from(noteVoiceMemos)).toEqual([]);
+  expect(await storageUsage()).toBe(before);
+  // Rolled back, the body is read and checked again.
+  await writeSetting(db(), 'captures.inbox', false, session.user?.id ?? '');
+  expect((await raw(null)).status).toBe(400);
+  expect((await createFromVoice(bytes, { durationSeconds: 'many' })).status).toBe(400);
 });
-it('NOTES-B32 the audio answers in full, by range for seeking, 416 outside it, 401 signed out and 404 once gone', async () => {
+it('CAPTURES-B07 with the inbox rolled back, a recording becomes a note again, but attaching stays gone and no rewrite starts', async () => {
+  globalThis.enanAiConnection = {
+    state: 'enabled',
+    checkedAt: new Date().toISOString(),
+    error: null,
+  };
+  const actor = session.user?.id ?? '';
+  await writeSetting(db(), 'ai.model.default', fixtureModel.id, actor);
+  await writeSetting(db(), 'captures.inbox', false, actor);
+  const transcript = '## Ship the pilot on Sunday. Budget review follows.';
+  const created = await createFromVoice(webm(21), { transcript, type: 'one_on_one' });
+  expect(created.status).toBe(201);
+  const note = created.body.data as Created;
+  expect(note).toMatchObject({ title: 'Ship the pilot on Sunday', content: transcript });
+  expect(note.voiceMemos[0]).toMatchObject({ transcript, transcriptionStatus: 'done' });
+  expect(await latestAiJob(db(), actor, note.id, 'ai.notes.refine')).toBeUndefined();
+  const attach = await upload(note.id, webm(22));
+  expect(attach.status).toBe(410);
+});
+it('CAPTURES-B06 NOTES-B32 the audio answers in full, by range for seeking, 416 outside it, 401 signed out and 404 once gone', async () => {
   const note = await createNote();
   const bytes = webm(5);
-  const memo = (await upload(note.id, bytes)).body.data.voiceMemos[0];
+  const memo = await existingMemo(note.id, bytes);
   const full = await audio(note.id, memo.id);
   expect(full.status).toBe(200);
   expect(full.headers.get('content-type')).toBe('audio/webm');
@@ -228,9 +270,9 @@ it('NOTES-B32 the audio answers in full, by range for seeking, 416 outside it, 4
   expect(removed.body.data.voiceMemos).toEqual([]);
   expect((await audio(note.id, memo.id)).status).toBe(404);
 });
-it('NOTES-B30 removing a memo soft-deletes it, keeps the binary and is audited', async () => {
+it('CAPTURES-B06 NOTES-B30 removing a memo soft-deletes it, keeps the binary and is audited', async () => {
   const note = await createNote();
-  const memo = (await upload(note.id, webm(6))).body.data.voiceMemos[0];
+  const memo = await existingMemo(note.id, webm(6));
   await json(api.voiceRemove, 'DELETE', `/notes/${note.id}/voice/${memo.id}`, {
     id: note.id,
     memoId: memo.id,
@@ -241,16 +283,16 @@ it('NOTES-B30 removing a memo soft-deletes it, keeps the binary and is audited',
   const [file] = await db().select().from(files).where(eq(files.id, memo.fileId));
   await expect(readStoredFile(file?.storageKey ?? '')).resolves.toBeTruthy();
   const audits = await db().select().from(auditLog).where(eq(auditLog.entityId, memo.id));
-  expect(audits.map((entry) => entry.action).sort()).toEqual(['create', 'delete']);
+  expect(audits.map((entry) => entry.action)).toEqual(['delete']);
   const again = await json(api.voiceRemove, 'DELETE', `/notes/${note.id}/voice/${memo.id}`, {
     id: note.id,
     memoId: memo.id,
   });
   expect(again.status).toBe(404);
 });
-it('NOTES-B31 a transcript is stored on the memo and reaches the note only when appendToNote asks', async () => {
+it('CAPTURES-B06 NOTES-B31 a transcript is stored on the memo and reaches the note only when appendToNote asks', async () => {
   const note = await createNote({ content: 'Opening remarks' });
-  const memo = (await upload(note.id, webm(7))).body.data.voiceMemos[0];
+  const memo = await existingMemo(note.id, webm(7));
   const saved = await transcribe(note.id, memo.id, { transcript: 'Hire two analysts.' });
   expect(saved.status).toBe(200);
   expect(saved.body.data.voiceMemos[0]).toMatchObject({
@@ -264,9 +306,9 @@ it('NOTES-B31 a transcript is stored on the memo and reaches the note only when 
   expect(appended.body.data.content).toBe('Opening remarks\n\nHire two analysts.');
   expect(appended.body.data.revision).toBe(note.revision + 1);
 });
-it('NOTES-B31 appending or refining needs a transcript, and a refused refine leaves the note as it was', async () => {
+it('CAPTURES-B06 NOTES-B31 appending or refining needs a transcript, and a refused refine leaves the note as it was', async () => {
   const note = await createNote({ content: 'Opening remarks' });
-  const memo = (await upload(note.id, webm(8))).body.data.voiceMemos[0];
+  const memo = await existingMemo(note.id, webm(8));
   const empty = await transcribe(note.id, memo.id, { appendToNote: true });
   expect(empty.status).toBe(422);
   expect(empty.body.error.details).toMatchObject({ reason: 'no_transcript' });
@@ -277,22 +319,9 @@ it('NOTES-B31 appending or refining needs a transcript, and a refused refine lea
   const after = await json(api.detail, 'GET', `/notes/${note.id}`, { id: note.id });
   expect(after.body.data.content).toBe('Opening remarks');
 });
-it('NOTES-B32 an Arabic file name is served, its header carrying an ASCII stand-in and the name itself', async () => {
+it('CAPTURES-B06 NOTES-B32 an Arabic file name is served, its header carrying an ASCII stand-in and the name itself', async () => {
   const note = await createNote();
-  const body = new FormData();
-  body.set('file', new File([webm(9)], 'مذكرة صوتية.webm'));
-  const encoded = new Response(body);
-  const raw = new Uint8Array(await encoded.arrayBuffer());
-  const request = new Request(new URL(`/api/v1/notes/${note.id}/voice`, env().APP_URL), {
-    method: 'POST',
-    headers: headers({
-      'Content-Type': encoded.headers.get('content-type') ?? '',
-      'Content-Length': String(raw.byteLength),
-    }),
-    body: raw,
-  });
-  const memo = (await respond(api.voiceUpload, request, { id: note.id })).body.data.voiceMemos[0];
-  expect(memo.originalName).toBe('مذكرة صوتية.webm');
+  const memo = await existingMemo(note.id, webm(9), 'مذكرة صوتية.webm');
   const served = await audio(note.id, memo.id);
   expect(served.status).toBe(200);
   expect(served.headers.get('content-disposition')).toBe(
@@ -300,62 +329,8 @@ it('NOTES-B32 an Arabic file name is served, its header carrying an ASCII stand-
   );
 });
 
-type Created = {
-  id: string;
-  title: string;
-  content: string;
-  committeeId: string | null;
-  type: string | null;
-  voiceMemos: { transcript: string | null; transcriptionStatus: string; durationSeconds: number }[];
-};
-it('NOTES-B36 a recording with no note becomes one, named for the day, AI or not', async () => {
-  const created = await createFromVoice(webm(20), { durationSeconds: '42' });
-  expect(created.status).toBe(201);
-  const note = created.body.data as Created;
-  expect(note.title).toMatch(/^Voice Memo · \d{4}-\d{2}-\d{2}$/u);
-  expect(note.content).toBe('');
-  expect(note.voiceMemos).toMatchObject([
-    { transcript: null, transcriptionStatus: 'skipped', durationSeconds: 42 },
-  ]);
-  const audits = await db().select().from(auditLog);
-  expect(audits.map((row) => row.entityType).sort()).toEqual(['note', 'note_voice_memo']);
-});
-it('NOTES-B36 a transcript names the note, fills it and starts its refinement when AI is on', async () => {
-  globalThis.enanAiConnection = {
-    state: 'enabled',
-    checkedAt: new Date().toISOString(),
-    error: null,
-  };
-  const actor = session.user?.id ?? '';
-  await writeSetting(db(), 'ai.model.default', fixtureModel.id, actor);
-  await writeSetting(db(), 'ai.model.fast', fixtureModel.id, actor);
-  const transcript = '## Ship the pilot on Sunday. Budget review follows.';
-  const created = await createFromVoice(webm(21), { transcript, type: 'one_on_one' });
-  expect(created.status).toBe(201);
-  const note = created.body.data as Created;
-  expect(note).toMatchObject({ title: 'Ship the pilot on Sunday', content: transcript });
-  expect(note.type).toBe('one_on_one');
-  expect(note.voiceMemos[0]).toMatchObject({ transcript, transcriptionStatus: 'done' });
-  expect(await latestAiJob(db(), actor, note.id, 'ai.notes.refine')).toBeDefined();
-});
-it('NOTES-B36 with AI off a transcript still creates the note, and no refinement starts', async () => {
-  const created = await createFromVoice(webm(22), { transcript: 'Hiring plan for next quarter' });
-  expect(created.status).toBe(201);
-  const note = created.body.data as Created;
-  expect(note.title).toBe('Hiring plan for next quarter');
-  expect(
-    await latestAiJob(db(), session.user?.id ?? '', note.id, 'ai.notes.refine'),
-  ).toBeUndefined();
-});
-it('NOTES-B36 a disguised file is refused and no note is created', async () => {
-  const page = new TextEncoder().encode('<!doctype html><script>alert(1)</script>');
-  const refused = await createFromVoice(page, { transcript: 'Should not exist' });
-  expect(refused.status).toBe(422);
-  expect(refused.body.error.details).toMatchObject({ reason: 'unsupported_type' });
-  expect(await db().select().from(notes)).toEqual([]);
-});
 it('NOTES-B36 a title is the first sentence without heading marks, cut at a word to 120', () => {
-  expect(voiceNoteTitle(undefined, '2026-10-27')).toBe('Voice Memo · 2026-10-27');
+  expect(voiceNoteTitle(undefined, '2026-10-27')).toBe('Voice Memo 2026-10-27');
   expect(voiceNoteTitle('\n\n- Quarterly risks? Then more', 'x')).toBe('Quarterly risks?');
   const long = voiceNoteTitle('word '.repeat(60), 'x');
   expect(long.length).toBeLessThanOrEqual(120);

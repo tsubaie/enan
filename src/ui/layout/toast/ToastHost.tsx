@@ -1,5 +1,8 @@
 'use client';
 import type { ReactNode } from 'react';
+import Link from 'next/link';
+import { z } from 'zod';
+import { buttonVariants } from '@/ui/primitives/button';
 import {
   ToastAction,
   ToastClose,
@@ -38,14 +41,31 @@ export function ToastHost({ children }: { children: ReactNode }) {
 // not. Undo and a close button side by side are two small neighbours, and the slip that costs the
 // reader their only way back is the one that lands on the wrong one. A notice with nothing to do
 // about it gets the dismiss instead, which is also what a failed undo turns into.
+// A receipt for a record just made may also open it (S26: Undo and View); `data.view` carries the
+// link, which follows the action so Undo keeps the first place.
+const ToastView = z.object({ view: z.object({ href: z.string(), label: z.string() }) });
 function ToastList() {
   const { toasts } = useToastManager();
-  return toasts.map((toast) => (
-    <ToastRoot key={toast.id} toast={toast}>
-      <ToastContent>
-        <ToastTitle />
-        {toast.actionProps?.children ? <ToastAction /> : <ToastClose />}
-      </ToastContent>
-    </ToastRoot>
-  ));
+  return toasts.map((toast) => {
+    const view = ToastView.safeParse(toast.data).data?.view;
+    return (
+      <ToastRoot key={toast.id} toast={toast}>
+        <ToastContent>
+          <ToastTitle />
+          {toast.actionProps?.children ? <ToastAction /> : <ToastClose />}
+          {view && (
+            <Link
+              href={view.href}
+              className={buttonVariants({
+                variant: 'ghost',
+                className: 'pointer-coarse:min-h-11 pointer-coarse:min-w-11',
+              })}
+            >
+              {view.label}
+            </Link>
+          )}
+        </ToastContent>
+      </ToastRoot>
+    );
+  });
 }

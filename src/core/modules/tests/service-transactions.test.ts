@@ -53,12 +53,7 @@ const exempt: Record<string, string[]> = {
   ],
   // KPIS-B32: reading the latest brief writes nothing.
   'kpis/ai/service': ['readNarrative'],
-  'notes/voice/service': [
-    'uploadVoiceMemo',
-    'createNoteFromVoice',
-    'voiceNoteTitle',
-    'voiceMemoAudio',
-  ],
+  'notes/voice/service': ['createNoteFromVoice', 'voiceNoteTitle', 'voiceMemoAudio'],
   notifications: ['feed'],
   people: [
     'personNameSql',

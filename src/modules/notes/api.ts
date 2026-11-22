@@ -4,6 +4,8 @@ import { TaskCreate } from '@/modules/tasks/schema/validation';
 import { SuggestedTask } from './schema/validation';
 import { z } from 'zod';
 import { defineHandler, authenticated } from '@/core/http/handler';
+import { AppError } from '@/core/http/errors';
+import { getSetting } from '@/core/db/settings-repo';
 import { currentUser } from '@/core/auth/session';
 import { audioResponse } from '@/core/http/audio-response';
 import { voiceAudioLimits } from '@/core/files/voice-audio';
@@ -22,7 +24,6 @@ import {
   TagList,
   NoteTypes,
   NoteTemplates,
-  VoiceUpload,
   VoiceCreate,
   VoiceTranscribe,
 } from './schema/validation';
@@ -167,22 +168,25 @@ export const refineDiscard = noteAiDiscardHandler('notes.refine');
 export const refineRestore = noteAiRestoreHandler();
 export const tagsDiscard = noteAiDiscardHandler('notes.suggest_tags');
 
-// NOTES-B29–B32: voice memos. The upload checks and stores the audio before its own short
-// transaction (ADR 0054); the declared body may exceed the audio by the multipart framing.
+// NOTES-B29–B32: voice memos. New audio arrives as a voice capture (CAPTURES-B07, ADR 0071):
+// attaching a recording to a note is gone for good, and record-first note creation answers 410
+// unless the `captures.inbox` safety hatch is off. Existing memos keep playback, removal and
+// their transcript (CAPTURES-B06).
 const memoId = (params: Record<string, string>) => z.uuid().parse(params.memoId);
+const retired = () => new AppError('gone', { reason: 'retired', use: '/api/v1/captures' });
+// The body is never read, so no audio reaches the disk.
 export const voiceUpload = defineHandler({
   guard: 'session',
-  input: VoiceUpload,
-  source: 'form',
-  maxBytes: () => voiceAudioLimits.maxBytes + 128 * 1024,
-  status: 201,
+  input: z.object({}),
+  source: 'query',
   response,
   transaction: false,
-  handler: async (input, ctx, params) => ({
-    data: await voice.uploadVoiceMemo(authenticated(ctx), noteId(params), input),
-  }),
+  handler: async () => {
+    throw retired();
+  },
 });
-// NOTES-B36: a recording that becomes a new note; it may start the note's refinement.
+// NOTES-B36, retired: with the inbox off (rollback only), a recording becomes a new note again,
+// still without attaching to an existing note and without a self-applying rewrite.
 export const voiceCreate = defineHandler({
   guard: 'session',
   input: VoiceCreate,
@@ -192,6 +196,10 @@ export const voiceCreate = defineHandler({
   response,
   transaction: false,
   enqueues: true,
+  // The setting is read before the body, so with the inbox on nothing is parsed or buffered.
+  before: async (ctx) => {
+    if (await getSetting(ctx.db, 'captures.inbox')) throw retired();
+  },
   handler: async (input, ctx) => ({
     data: await voice.createNoteFromVoice(authenticated(ctx), input),
   }),

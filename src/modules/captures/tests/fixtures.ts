@@ -6,6 +6,7 @@ import { insertUser } from '@/core/db/auth-repo';
 import { files, jobs } from '@/core/db/system-schema';
 import { id } from '@/core/db/ids';
 import { User } from '@/core/http/user-schema';
+import { people } from '@/modules/people/schema/db';
 import { captures, captureSuggestions } from '../schema/db';
 // Rows written straight to the tables: the capture services that create them arrive with
 // recording, and these scenarios are about the shape and who may read it.
@@ -133,4 +134,19 @@ export async function queuedJob() {
   const jobId = id();
   await db().insert(jobs).values({ id: jobId, kind: 'ai.captures.transcribe', payload: {} });
   return jobId;
+}
+// An assignable person, optionally the person of a signed-in member (who can then be notified).
+export async function person(name: string, login: User | null = null) {
+  const [row] = await db()
+    .insert(people)
+    .values({
+      id: id(),
+      fullName: name,
+      kind: 'internal',
+      isAssignable: true,
+      userId: login?.id ?? null,
+    })
+    .returning();
+  if (!row) throw new Error('person not inserted');
+  return row;
 }

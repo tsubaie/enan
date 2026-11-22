@@ -1,0 +1,192 @@
+'use client';
+import { useState } from 'react';
+import { useFormatter, useTranslations } from 'next-intl';
+import { CircleAlert, CircleCheck, LoaderCircle, PenLine, RefreshCw, Trash2 } from 'lucide-react';
+import { Button } from '@/ui/primitives/button';
+import { Textarea } from '@/ui/primitives/textarea';
+import { ErrorPanel } from '@/ui/layout/ErrorPanel';
+import { useRelativeTime } from '@/ui/format';
+import { clock } from '@/modules/notes/ui';
+import type { CaptureGroup as Group } from '../schema/validation';
+import { failure } from './CaptureProcessing';
+import { CaptureListen } from './CaptureListen';
+import { MergeSheet } from './MergeSheet';
+import { SuggestionCardView, type Layout } from './SuggestionCard';
+import { useRemoveCapture, useRetryCapture, useReviewMutations } from './capture-queries';
+const working = ['queued', 'transcribing', 'interpreting'];
+// S15, S17: one recording: when it was made, how long it is, the whole clip, its processing state
+// and its drafts still waiting. Header parts are split by a 1px rule, never a dot.
+export function CaptureGroup({ group, layout }: { group: Group; layout: Layout }) {
+  const pending = group.suggestions.filter((draft) => draft.status === 'pending');
+  return (
+    <CaptureListen.Provider group={group}>
+      <section
+        aria-labelledby={`capture-${group.id}`}
+        className="grid gap-3"
+        data-testid="capture-group"
+      >
+        <Header group={group} drafts={pending.length} />
+        {pending.length > 1 && (
+          <div className="flex items-center justify-end gap-2">
+            <MergeSheet group={group} drafts={pending} />
+          </div>
+        )}
+        <CaptureListen.FullTranscript text={group.transcript} />
+        <State group={group} />
+        {pending.map((draft) => (
+          <SuggestionCardView key={draft.id} draft={draft} group={group} layout={layout} />
+        ))}
+      </section>
+    </CaptureListen.Provider>
+  );
+}
+function Divider() {
+  return <span aria-hidden className="h-3.5 w-px bg-border" />;
+}
+function Header({ group, drafts }: { group: Group; drafts: number }) {
+  const t = useTranslations('captures');
+  const format = useFormatter();
+  const relative = useRelativeTime();
+  const time = format.dateTime(new Date(group.createdAt), { hour: 'numeric', minute: '2-digit' });
+  return (
+    <header className="flex items-center gap-3">
+      <CaptureListen.PlayButton />
+      <div className="grid min-w-0 gap-0.5">
+        <h3 id={`capture-${group.id}`} className="flex flex-wrap items-center gap-2 font-medium">
+          {drafts ? (
+            <>
+              <span>{t('groupTitle', { time })}</span>
+              <Divider />
+              <span>{t('draftCount', { count: drafts })}</span>
+            </>
+          ) : (
+            <span>{t('recordingTitle', { time })}</span>
+          )}
+        </h3>
+        <p className="flex items-center gap-2 text-sm text-text-muted">
+          <time dateTime={group.createdAt}>{relative(group.createdAt)}</time>
+          <Divider />
+          {/* The clock does not mirror in RTL. */}
+          <span dir="ltr" className="tabular-nums">
+            {clock(group.durationSeconds)}
+          </span>
+        </p>
+      </div>
+    </header>
+  );
+}
+// S15 processing lines, S17 failure with Retry / Type the transcript / Delete recording, S29 AI
+// unavailable with Type the transcript / Retry.
+function State({ group }: { group: Group }) {
+  const t = useTranslations('captures');
+  if (working.includes(group.status))
+    return (
+      <p role="status" className="flex items-center gap-2 text-sm text-text-muted">
+        <LoaderCircle aria-hidden className="size-4 motion-safe:animate-spin" />
+        {group.status === 'interpreting' ? t('preparingDrafts') : t('transcribing')}
+      </p>
+    );
+  if (group.status === 'failed')
+    return (
+      <div className="grid gap-3 rounded-xl border border-danger p-4">
+        <p className="flex items-center gap-2 font-medium text-danger">
+          <CircleAlert aria-hidden className="size-4" />
+          {t(failure(group.errorCode))}
+        </p>
+        <Recover group={group} />
+      </div>
+    );
+  if (group.status === 'needs_transcript')
+    return (
+      <div className="grid gap-3 rounded-xl border p-4">
+        <p className="flex items-start gap-2 font-medium">
+          <CircleCheck aria-hidden className="mt-0.5 size-4 shrink-0" />
+          {t('unavailable')}
+        </p>
+        <Recover group={group} />
+      </div>
+    );
+  return null;
+}
+function Recover({ group }: { group: Group }) {
+  const t = useTranslations('captures');
+  const retry = useRetryCapture();
+  const remove = useRemoveCapture();
+  const [typing, setTyping] = useState(false);
+  const error = retry.error ?? remove.error;
+  return (
+    <>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={retry.isPending}
+          onClick={() => retry.mutate(group)}
+        >
+          <RefreshCw aria-hidden />
+          {t('retry')}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          aria-expanded={typing}
+          onClick={() => setTyping(!typing)}
+        >
+          <PenLine aria-hidden />
+          {t('typeTranscript')}
+        </Button>
+        {group.status === 'failed' && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="ms-auto text-danger"
+            disabled={remove.isPending}
+            onClick={() => remove.mutate(group.id)}
+          >
+            <Trash2 aria-hidden />
+            {t('deleteRecording')}
+          </Button>
+        )}
+      </div>
+      {typing && <TypeTranscript group={group} done={() => setTyping(false)} />}
+      {error && <ErrorPanel error={error} />}
+    </>
+  );
+}
+// S17 «كتابة النص»: a typed transcript replaces what the recording held and is interpreted anew.
+function TypeTranscript({ group, done }: { group: Group; done: () => void }) {
+  const t = useTranslations('captures');
+  const mutations = useReviewMutations();
+  const [error, setError] = useState<Error | null>(null);
+  const [saving, setSaving] = useState(false);
+  return (
+    <form
+      className="grid gap-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const transcript = String(new FormData(event.currentTarget).get('transcript') ?? '').trim();
+        if (!transcript) return;
+        setSaving(true);
+        mutations.typeTranscript(group.id, transcript).then(done, (failure: unknown) => {
+          setSaving(false);
+          setError(failure instanceof Error ? failure : null);
+        });
+      }}
+    >
+      <label className="grid gap-1 text-sm">
+        <span className="font-medium">{t('transcriptLabel')}</span>
+        <Textarea
+          name="transcript"
+          dir="auto"
+          rows={4}
+          required
+          defaultValue={group.transcript ?? ''}
+        />
+      </label>
+      <Button type="submit" size="sm" className="justify-self-start" disabled={saving}>
+        {t('saveTranscript')}
+      </Button>
+      {error && <ErrorPanel error={error} />}
+    </form>
+  );
+}

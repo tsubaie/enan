@@ -71,6 +71,7 @@ export async function selectCaptures(
   user: Reader,
   limit: number,
   after: { createdAt: Date; id: string } | null,
+  scope: 'mine' | 'all' = 'mine',
 ) {
   return database
     .select(columns)
@@ -79,6 +80,7 @@ export async function selectCaptures(
     .where(
       and(
         visibleCaptures(user),
+        scope === 'mine' ? eq(captures.createdBy, user.id) : undefined,
         after
           ? or(
               lt(captures.createdAt, after.createdAt),
@@ -167,4 +169,45 @@ export async function replacePendingSuggestions(
       ),
     );
   if (rows.length) await database.insert(captureSuggestions).values(rows);
+}
+
+export type SuggestionRow = typeof captureSuggestions.$inferSelect;
+// A draft with what its visibility is decided by: the capture's recorder and whether it is live.
+export async function selectSuggestion(database: Database, suggestionId: string) {
+  const [row] = await database
+    .select({
+      suggestion: captureSuggestions,
+      createdBy: captures.createdBy,
+      deletedAt: captures.deletedAt,
+    })
+    .from(captureSuggestions)
+    .innerJoin(captures, eq(captures.id, captureSuggestions.captureId))
+    .where(eq(captureSuggestions.id, suggestionId));
+  return row;
+}
+// Approve all ready (S23): the reader's own drafts still waiting, inside the visibility predicate.
+export async function selectOwnPendingSuggestions(database: Database, user: Reader) {
+  return database
+    .select({ id: captureSuggestions.id })
+    .from(captureSuggestions)
+    .innerJoin(captures, eq(captures.id, captureSuggestions.captureId))
+    .where(
+      and(
+        visibleCaptures(user),
+        eq(captures.createdBy, user.id),
+        eq(captureSuggestions.status, 'pending'),
+        isNull(captureSuggestions.deletedAt),
+      ),
+    )
+    .orderBy(captureSuggestions.createdAt, captureSuggestions.id);
+}
+export async function updateSuggestion(
+  database: Database,
+  suggestionId: string,
+  patch: Partial<typeof captureSuggestions.$inferInsert>,
+) {
+  await database
+    .update(captureSuggestions)
+    .set({ ...patch, updatedAt: new Date() })
+    .where(eq(captureSuggestions.id, suggestionId));
 }

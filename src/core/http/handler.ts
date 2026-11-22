@@ -55,6 +55,9 @@ type Options<I extends z.ZodType, O extends z.ZodType> = {
   // today). `false` takes a slow handler of another method (hashing files, calling a provider) out
   // of the queue too (ADR 0045); it may write only through its service's own transaction (ADR 0054).
   transaction?: boolean;
+  // Runs after the session and origin checks and before the body is read, so a route that refuses
+  // outright (a retired one) never buffers or validates an upload.
+  before?: (ctx: HandlerContext) => Promise<void>;
   handler: (
     input: z.output<I>,
     ctx: HandlerContext,
@@ -100,6 +103,11 @@ function serverTiming(started: number, marks: { auth?: number; db?: number }) {
   ];
   return { 'Server-Timing': parts.join(', ') };
 }
+function guard(level: Options<z.ZodType, z.ZodType>['guard'], user: User | null) {
+  if (level !== 'public' && !user) throw new AppError('unauthenticated');
+  if (level === 'admin' && user?.role !== 'admin')
+    throw new AppError('forbidden', { reason: 'role' });
+}
 export function defineHandler<I extends z.ZodType, O extends z.ZodType>(options: Options<I, O>) {
   const handler = async (request: Request, route?: { params: Promise<Record<string, string>> }) => {
     const requestId = id();
@@ -113,10 +121,9 @@ export function defineHandler<I extends z.ZodType, O extends z.ZodType>(options:
         );
       const user = await currentUser({ slide: true });
       marks.auth = performance.now() - started;
-      if (options.guard !== 'public' && !user) throw new AppError('unauthenticated');
-      if (options.guard === 'admin' && user?.role !== 'admin')
-        throw new AppError('forbidden', { reason: 'role' });
+      guard(options.guard, user);
       checkOrigin(request);
+      await options.before?.({ user, db: readOnlyDb(), requestId });
       const raw =
         options.source === 'form'
           ? await formFor(request, options.maxBytes)

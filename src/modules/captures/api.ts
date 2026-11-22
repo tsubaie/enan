@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { defineHandler, authenticated } from '@/core/http/handler';
+import { AppError } from '@/core/http/errors';
 import { currentUser } from '@/core/auth/session';
 import { voiceAudioLimits } from '@/core/files/voice-audio';
 import { audioResponse } from '@/core/http/audio-response';
@@ -10,8 +11,16 @@ import {
   CaptureList,
   CaptureListQuery,
   CaptureTranscript,
+  Approval,
+  ApproveReady,
+  MergeSuggestions,
+  Suggestion,
+  SuggestionPatch,
+  SuggestionRevision,
+  UndoBatch,
 } from './schema/validation';
 import * as service from './service';
+import * as review from './review/service';
 // CAPTURES-B02: session guard, then the module's own visibility check inside every service call;
 // the admin guard would hide a draft from its recorder.
 const captureId = (params: Record<string, string>) => z.uuid().parse(params.id);
@@ -100,3 +109,73 @@ export async function audio(request: Request, route: { params: Promise<Record<st
   if (!file) return Response.json({ error: { code: 'not_found' } }, { status: 404 });
   return audioResponse(request, file, 'private, no-store');
 }
+
+// CAPTURES-B10 CAPTURES-B11: reviewing drafts. The same session guard and visibility check; a
+// draft is addressed by its own id, and its capture's recorder or an admin is the only reader.
+const suggestionId = (params: Record<string, string>) => z.uuid().parse(params.id);
+const suggestion = z.object({ data: Suggestion });
+export const patchSuggestion = defineHandler({
+  guard: 'session',
+  input: SuggestionPatch,
+  response: suggestion,
+  handler: async (input, ctx, params) => ({
+    data: await review.patchSuggestion(authenticated(ctx), suggestionId(params), input),
+  }),
+});
+export const approve = defineHandler({
+  guard: 'session',
+  input: SuggestionRevision,
+  response: z.object({ data: Approval }),
+  idempotent: true,
+  handler: async (input, ctx, params) => ({
+    data: await review.approveSuggestion(authenticated(ctx), suggestionId(params), input.revision),
+  }),
+});
+export const approveReady = defineHandler({
+  guard: 'session',
+  input: ApproveReady,
+  response: z.object({ data: z.object({ approved: z.array(Approval) }) }),
+  idempotent: true,
+  handler: async (input, ctx) => ({
+    data: await review.approveReady(authenticated(ctx), input),
+  }),
+});
+export const discard = defineHandler({
+  guard: 'session',
+  input: SuggestionRevision,
+  response: suggestion,
+  idempotent: true,
+  handler: async (input, ctx, params) => ({
+    data: await review.discardSuggestion(authenticated(ctx), suggestionId(params), input.revision),
+  }),
+});
+export const undo = defineHandler({
+  guard: 'session',
+  input: z.strictObject({}),
+  response: suggestion,
+  idempotent: true,
+  handler: async (_, ctx, params) => {
+    const [undone] = await review.undoSuggestions(authenticated(ctx), [suggestionId(params)]);
+    if (!undone) throw new AppError('internal');
+    return { data: undone };
+  },
+});
+// §9 decision 10: an Approve N ready batch is undone whole or not at all.
+export const undoBatch = defineHandler({
+  guard: 'session',
+  input: UndoBatch,
+  response: z.object({ data: z.array(Suggestion) }),
+  idempotent: true,
+  handler: async (input, ctx) => ({
+    data: await review.undoSuggestions(authenticated(ctx), input.ids),
+  }),
+});
+export const merge = defineHandler({
+  guard: 'session',
+  input: MergeSuggestions,
+  response: suggestion,
+  idempotent: true,
+  handler: async (input, ctx, params) => ({
+    data: await review.mergeSuggestions(authenticated(ctx), captureId(params), input),
+  }),
+});

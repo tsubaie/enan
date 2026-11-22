@@ -8,6 +8,8 @@ import { CountCircle } from '@/ui/primitives/count-circle';
 import { cn } from '@/ui/cn';
 import { startCapture, useCaptureActive } from './capture-store';
 import { useCaptureCount } from './capture-queries';
+import { CaptureReviewPanel } from './CaptureReviewPanel';
+import { isWideScreen, setReviewPanel } from './inbox-state';
 // S9: the desktop control, with its chord on the keycap and the Mac spelling in the tooltip.
 function CaptureHeaderButton() {
   const t = useTranslations('captures');
@@ -38,16 +40,23 @@ export function CaptureHeaderControls() {
     <>
       <CaptureHeaderButton />
       <CaptureReviewLink />
+      <CaptureReviewPanel />
     </>
   );
 }
-// S13: Review, with the reader's own drafts waiting and failed recordings (CAPTURES-B02).
+// S13: Review, with the reader's own drafts waiting and failed recordings (CAPTURES-B02). On a
+// desktop it opens the side panel; on a phone, and without script, it is the page.
 function CaptureReviewLink() {
   const t = useTranslations('captures');
   const count = useCaptureCount().data?.data.pending ?? 0;
   return (
     <Link
       href={routes.captures()}
+      onClick={(event) => {
+        if (!isWideScreen() || event.metaKey || event.ctrlKey) return;
+        event.preventDefault();
+        setReviewPanel(true);
+      }}
       aria-label={count ? t('reviewCount', { count }) : t('review')}
       className={buttonVariants({
         variant: 'ghost',
@@ -58,6 +67,8 @@ function CaptureReviewLink() {
       <span aria-hidden className="hidden sm:inline">
         {t('review')}
       </span>
+      {/* A real space, so the visible words read "Review 3", as the name does (WCAG 2.5.3). */}
+      {count > 0 && ' '}
       {count > 0 && (
         <span aria-hidden>
           <CountCircle current>{count}</CountCircle>

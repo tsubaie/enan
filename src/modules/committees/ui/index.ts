@@ -4,3 +4,4 @@ export {
   CommitteeChip,
   useCommitteeOptions,
 } from './CommitteePicker';
+export { useCommitteeChoices } from './queries';

@@ -18,3 +18,7 @@ export const TagsAdmin = dynamic(() => import('./TagsAdmin').then((module) => mo
 export { useVoiceRecorder, recorderLimits, type Recording } from './use-voice-recorder';
 export { RecorderMeter, recorderKeys, recordingFile } from './VoiceCapture';
 export { clock } from './VoiceMemoPlayer';
+// The note type picker and its labels, for a voice capture's meeting-note draft.
+export { TypeSelect } from './NoteSelects';
+export { useNoteTypes } from './queries';
+export { useTypeLabel } from './use-note-labels';
