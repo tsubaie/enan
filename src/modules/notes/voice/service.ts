@@ -95,7 +95,7 @@ export function voiceNoteTitle(transcript: string | undefined, today: string) {
     ?.split(/(?<=[.!?؟])\s/u)[0]
     ?.replace(/\.$/u, '')
     .trim();
-  if (!sentence) return `Voice Memo · ${today}`;
+  if (!sentence) return `Voice Memo ${today}`;
   if (sentence.length <= 120) return sentence;
   const cut = sentence.slice(0, 119);
   const space = cut.lastIndexOf(' ');

@@ -295,7 +295,7 @@ it('CAPTURES-B06 NOTES-B32 an Arabic file name is served, its header carrying an
 });
 
 it('NOTES-B36 a title is the first sentence without heading marks, cut at a word to 120', () => {
-  expect(voiceNoteTitle(undefined, '2026-10-27')).toBe('Voice Memo · 2026-10-27');
+  expect(voiceNoteTitle(undefined, '2026-10-27')).toBe('Voice Memo 2026-10-27');
   expect(voiceNoteTitle('\n\n- Quarterly risks? Then more', 'x')).toBe('Quarterly risks?');
   const long = voiceNoteTitle('word '.repeat(60), 'x');
   expect(long.length).toBeLessThanOrEqual(120);

@@ -52,7 +52,7 @@ const handler = (kind: string) => {
 };
 it('NOTES-B37 a recording saved without a transcript waits on a transcription job of its own', async () => {
   const { note, memo, job } = await recordedNote();
-  expect(note).toMatchObject({ content: '', title: expect.stringMatching(/^Voice Memo · /u) });
+  expect(note).toMatchObject({ content: '', title: expect.stringMatching(/^Voice Memo \d/u) });
   expect(memo.transcriptionStatus).toBe('pending');
   const payload = AiPayload.parse(job.payload);
   expect(job).toMatchObject({ kind: 'ai.notes.transcribe', status: 'queued', entityId: memo.id });
@@ -94,7 +94,7 @@ it('CAPTURES-B05 NOTES-B37 the transcript lands on the memo only: the note is no
   expect(await db().select().from(jobs).where(eq(jobs.kind, 'ai.notes.refine'))).toEqual([]);
 });
 it('NOTES-B37 a self-applying refinement already in flight writes the note, unless the reader has edited it since', async () => {
-  const note = await harness.note('Voice Memo · 2026-09-10', { content: 'raw transcript' });
+  const note = await harness.note('Voice Memo 2026-09-10', { content: 'raw transcript' });
   const job = await finishedJob(
     db(),
     actorId(),
