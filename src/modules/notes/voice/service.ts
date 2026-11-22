@@ -10,11 +10,10 @@ import { storeVoiceAudio, voiceAudioLimits } from '@/core/files/voice-audio';
 import { AppError } from '@/core/http/errors';
 import { getSetting } from '@/core/db/settings-repo';
 import { dayAt } from '@/core/time/notes';
-import { NoteCreate, VoiceCreate, VoiceTranscribe, VoiceUpload } from '../schema/validation';
-import { selectNote } from '../repo';
+import { NoteCreate, VoiceCreate, VoiceTranscribe } from '../schema/validation';
 import { createNote, getNote, patchNote } from '../service';
-import { startNoteAi } from '../ai/service';
 import { admitAi } from '@/core/ai/admission';
+import { selectNote } from '../repo';
 import * as voiceRepo from './repo';
 type StoredAudio = Awaited<ReturnType<typeof storeVoiceAudio>>;
 type MemoFields = { durationSeconds: number; transcript?: string | undefined };
@@ -85,22 +84,6 @@ async function startTranscription(
     transcriptionError: null,
   });
 }
-export async function uploadVoiceMemo(
-  ctx: Context,
-  noteId: string,
-  input: z.output<typeof VoiceUpload>,
-) {
-  // An unknown or deleted note is refused before its audio reaches the disk.
-  const note = await selectNote(ctx.db, noteId);
-  if (!note || note.deletedAt) throw new AppError('not_found', { entityType: 'note' });
-  const audio = await storeVoiceAudio(input.file);
-  return withTransaction(ctx.db, async (database) => {
-    const scoped = { ...ctx, db: database };
-    await getNote(scoped, noteId);
-    await attachVoiceMemo(scoped, noteId, audio, input);
-    return getNote(scoped, noteId);
-  });
-}
 // NOTES-B36: the note's title is the transcript's first sentence, without the marks of a heading
 // or a list item, cut at a word to 120 characters; with no transcript it names the day.
 export function voiceNoteTitle(transcript: string | undefined, today: string) {
@@ -118,10 +101,9 @@ export function voiceNoteTitle(transcript: string | undefined, today: string) {
   const space = cut.lastIndexOf(' ');
   return `${(space > 60 ? cut.slice(0, space) : cut).trimEnd()}…`;
 }
-// NOTES-B36: record first, and the note follows. The audio is stored before the transaction as
-// an upload's is; the note, its memo and, with a transcript, the start of its refinement go in
-// together. A refinement AI cannot take (off, unconfigured, over budget or rate) is skipped, and
-// the note and its recording are created all the same.
+// NOTES-B36, retired (CAPTURES-B07): with `captures.inbox` off, a recording becomes a new note.
+// The audio is stored before the transaction; the note and its memo go in together. No
+// refinement starts: a rewrite that applies itself is not part of the rollback.
 export async function createNoteFromVoice(ctx: Context, input: z.output<typeof VoiceCreate>) {
   const audio = await storeVoiceAudio(input.file);
   const transcript = input.transcript || undefined;
@@ -138,10 +120,6 @@ export async function createNoteFromVoice(ctx: Context, input: z.output<typeof V
       }),
     );
     await attachVoiceMemo(scoped, note.id, audio, { ...input, transcript });
-    if (transcript)
-      await startNoteAi(scoped, note.id, note.revision, 'notes.refine').catch((error: unknown) => {
-        if (!(error instanceof AppError && error.code === 'ai_unavailable')) throw error;
-      });
     return getNote(scoped, note.id);
   });
 }

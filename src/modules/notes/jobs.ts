@@ -3,7 +3,6 @@ import { z } from 'zod';
 import { type JobHandler } from '@/core/jobs/types';
 import { executeAi } from '@/core/ai/execute';
 import { AiPayload, AiOutput } from '@/core/ai/job-schema';
-import { type Claimed } from '@/core/db/jobs-repo';
 import { id } from '@/core/db/ids';
 import { RefinementOutput, TagOutput, modelTags } from './schema/validation';
 import { TAG_PROMPT } from './ai/prompts/refine.v1';
@@ -12,15 +11,10 @@ import { lockNote, insertRefinement } from './repo';
 import { transcribeStoredAudio } from '@/core/ai/transcribe';
 import { userById } from '@/core/db/auth-repo';
 import { db, type Database } from '@/core/db/client';
-import { getSetting } from '@/core/db/settings-repo';
 import { User } from '@/core/http/user-schema';
 import { AppError } from '@/core/http/errors';
-import { dayAt } from '@/core/time/notes';
-import { getNote, patchNote } from './service';
-import { startNoteAi } from './ai/service';
 import { applyNoteAi } from './ai/apply';
 import { NoteAiApply } from './schema/validation';
-import { voiceNoteTitle } from './voice/service';
 import * as voiceRepo from './voice/repo';
 const TranscribeInput = z.object({ noteId: z.uuid(), memoId: z.uuid() });
 const Transcribed = z.object({ transcript: z.string() });
@@ -34,27 +28,6 @@ async function actingAs(database: Database, userId: string | null) {
 const refused = (error: unknown) => {
   if (!(error instanceof AppError)) throw error;
 };
-// NOTES-B37: the transcript goes after what the note holds; a note that held nothing takes it as
-// its content and, while it still has the name of its day, its first sentence as its title, and
-// its refinement then applies itself.
-async function writeTranscript(database: Database, job: Claimed, noteId: string, text: string) {
-  const ctx = await actingAs(database, job.createdBy);
-  if (!ctx) return;
-  const note = await getNote(ctx, noteId);
-  const today = dayAt(await getSetting(database, 'workspace.timezone'));
-  const empty = !note.content.trim();
-  const content = empty ? text : `${note.content.trimEnd()}\n\n${text}`;
-  const updated = await patchNote(ctx, noteId, {
-    revision: note.revision,
-    content,
-    ...(empty && note.title.startsWith('Voice Memo · ')
-      ? { title: voiceNoteTitle(text, today) }
-      : {}),
-  });
-  // Only a note the recording started writes itself: prose the reader already wrote is never
-  // rewritten without review, so there the rewrite waits in the brief (B18).
-  await startNoteAi(ctx, noteId, updated.revision, 'notes.refine', { autoApply: empty });
-}
 export const noteJobs: Record<string, JobHandler> = {
   'ai.notes.refine': {
     concurrency: 2,
@@ -148,12 +121,13 @@ export const noteJobs: Record<string, JobHandler> = {
       const note = await lockNote(database, noteId);
       const memo = await voiceRepo.selectVoiceMemo(database, noteId, memoId);
       if (!note || !memo || memo.transcriptionJobId !== job.id) return;
+      // CAPTURES-B05 (ADR 0071): the transcript stays on the memo. Nothing is appended to the note
+      // and no rewrite starts by itself; Insert into Note is the reader's own action (NOTES-B31).
       await voiceRepo.updateVoiceMemo(database, memoId, {
         transcript,
         transcriptionStatus: 'done',
         transcriptionError: null,
       });
-      if (!note.deletedAt) await writeTranscript(database, job, noteId, transcript).catch(refused);
     },
   },
   'ai.notes.suggest_tags': {

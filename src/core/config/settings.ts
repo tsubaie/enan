@@ -88,6 +88,9 @@ export const settingsRegistry = {
     lower: { on: 1.01, near: 1.18 },
   }),
   'tasks.default_view': entry(z.string(), 'today'),
+  // CAPTURES-B07: the review inbox is how new audio arrives. Off is a post-release safety hatch
+  // that restores record-first note creation only, never attach-to-note or a self-applying rewrite.
+  'captures.inbox': entry(z.boolean(), true),
   'user.locale': entry(Locale, defaults.locale, user),
   'user.timezone': entry(Timezone, defaults.timezone, user),
   'user.theme': entry(Theme, 'dark', user),

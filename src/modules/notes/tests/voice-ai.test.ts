@@ -11,8 +11,8 @@ import refinement from '../../../../tests/fixtures/ai/notes.refine.v1.en.json';
 import { harness, actorId } from './fixtures';
 import { noteJobs } from '../jobs';
 import { getNote, patchNote } from '../service';
-import { createNoteFromVoice, transcribeWithAi, uploadVoiceMemo } from '../voice/service';
-import { VoiceCreate, VoiceUpload } from '../schema/validation';
+import { createNoteFromVoice, transcribeWithAi } from '../voice/service';
+import { VoiceCreate } from '../schema/validation';
 // The network is the only stand-in: admission, the job's handlers and the note's own rules run
 // against the real database, and the transcription request goes through the real provider code.
 const sdk = vi.hoisted(() => ({ post: vi.fn() }));
@@ -60,14 +60,8 @@ it('NOTES-B37 a recording saved without a transcript waits on a transcription jo
   expect(payload.input).toEqual({ noteId: note.id, memoId: memo.id });
   // ADR 0070: both attempts at the per-second ceiling, for the memo's 30 seconds.
   expect(payload.reservedCostMicros).toBe(2 * 30 * 100);
-  // A second recording on the same note is transcribed on its own, not folded into the first.
-  const again = await harness.run((ctx) =>
-    uploadVoiceMemo(ctx, note.id, VoiceUpload.parse({ file: webm(2), durationSeconds: 5 })),
-  );
-  const ids = again.voiceMemos.map((entry) => entry.transcriptionJobId);
-  expect(new Set(ids).size).toBe(2);
 });
-it('NOTES-B37 the transcript writes the note and starts a refinement that applies itself', async () => {
+it('CAPTURES-B05 NOTES-B37 the transcript lands on the memo only: the note is not written and no refinement starts', async () => {
   const { note, memo, job } = await recordedNote();
   sdk.post.mockResolvedValue({
     text: ' Approve the budget by Thursday. Then brief the board. ',
@@ -88,37 +82,18 @@ it('NOTES-B37 the transcript writes the note and starts a refinement that applie
   expect(invocation).toMatchObject({ status: 'ok', estimatedCostMicros: 200 });
   await withTransaction(db(), (database) => handler(job.kind).publish(database, job, result));
   const written = await harness.run((ctx) => getNote(ctx, note.id));
-  expect(written.content).toBe('Approve the budget by Thursday. Then brief the board.');
-  expect(written.title).toBe('Approve the budget by Thursday');
+  expect(written).toMatchObject({
+    content: note.content,
+    title: note.title,
+    revision: note.revision,
+  });
   expect(written.voiceMemos.find((entry) => entry.id === memo.id)).toMatchObject({
     transcriptionStatus: 'done',
     transcript: 'Approve the budget by Thursday. Then brief the board.',
   });
-  const [refine] = await db().select().from(jobs).where(eq(jobs.kind, 'ai.notes.refine'));
-  expect(refine).toMatchObject({ entityId: note.id, status: 'queued' });
-  expect(AiPayload.parse(refine?.payload)).toMatchObject({
-    autoApply: true,
-    revision: written.revision,
-  });
+  expect(await db().select().from(jobs).where(eq(jobs.kind, 'ai.notes.refine'))).toEqual([]);
 });
-it('NOTES-B37 a memo on a note the reader wrote appends its transcript and leaves the rewrite to review', async () => {
-  const typed = await harness.note('Board minutes', { content: 'Our own minutes.' });
-  const note = await harness.run((ctx) =>
-    uploadVoiceMemo(ctx, typed.id, VoiceUpload.parse({ file: webm(3), durationSeconds: 8 })),
-  );
-  const job = await jobRow(note.voiceMemos[0]?.transcriptionJobId ?? '');
-  sdk.post.mockResolvedValue({ text: 'Add the audit to the agenda.' });
-  const result = await handler(job.kind).run(job, new AbortController().signal);
-  await withTransaction(db(), (database) => handler(job.kind).publish(database, job, result));
-  const written = await harness.run((ctx) => getNote(ctx, typed.id));
-  expect(written).toMatchObject({
-    title: 'Board minutes',
-    content: 'Our own minutes.\n\nAdd the audit to the agenda.',
-  });
-  const [refine] = await db().select().from(jobs).where(eq(jobs.kind, 'ai.notes.refine'));
-  expect(AiPayload.parse(refine?.payload).autoApply).toBeFalsy();
-});
-it('NOTES-B37 a self-applying refinement writes the note, unless the reader has edited it since', async () => {
+it('NOTES-B37 a self-applying refinement already in flight writes the note, unless the reader has edited it since', async () => {
   const note = await harness.note('Voice Memo · 2026-09-10', { content: 'raw transcript' });
   const job = await finishedJob(
     db(),

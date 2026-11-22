@@ -12,7 +12,6 @@ import { NoteCreate, type NoteDetail } from '../schema/validation';
 import { useNoteTypes } from './queries';
 import { CommitteePicker } from '@/modules/committees/ui';
 import { TemplateSelect, TypeSelect } from './NoteSelects';
-import { QuickVoiceNoteBar } from './QuickVoiceNoteBar';
 // Create asks for title, type, date and an optional template whose body becomes the content
 // (notes.md § UI, NOTES-B27); everything else is added on the detail right after, with autosave.
 export function CreateNote({
@@ -42,27 +41,18 @@ export function CreateNote({
     }
   }
   return (
-    <>
-      <CreateFromVoice
-        committeeId={draft.committee}
-        type={draft.type || null}
-        onCreated={api.open}
-      />
-      <EntityCreateForm
-        title={t('newNote')}
-        error={error}
-        pending={api.pending}
-        cancel={api.cancel}
-        onSubmit={submit}
-      >
-        <Field label={t('title')}>
-          {(control) => (
-            <Input {...control} name="title" required pattern=".*\S.*" maxLength={500} />
-          )}
-        </Field>
-        <CreateProperties committeeId={committeeId} draft={draft} />
-      </EntityCreateForm>
-    </>
+    <EntityCreateForm
+      title={t('newNote')}
+      error={error}
+      pending={api.pending}
+      cancel={api.cancel}
+      onSubmit={submit}
+    >
+      <Field label={t('title')}>
+        {(control) => <Input {...control} name="title" required pattern=".*\S.*" maxLength={500} />}
+      </Field>
+      <CreateProperties committeeId={committeeId} draft={draft} />
+    </EntityCreateForm>
   );
 }
 // What the form holds besides the title; the type falls back to the workspace default.
@@ -85,14 +75,6 @@ function useNoteDraft(committeeId: string | null) {
     committee,
     setCommittee,
   };
-}
-// NOTES-B36: the recorder is its own form, so it sits before the create form, not inside it.
-function CreateFromVoice(props: Parameters<typeof QuickVoiceNoteBar>[0]) {
-  return (
-    <div className="px-5 pt-5">
-      <QuickVoiceNoteBar {...props} />
-    </div>
-  );
 }
 function CreateProperties({
   committeeId,

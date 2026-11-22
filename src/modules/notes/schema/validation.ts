@@ -113,11 +113,6 @@ export const NoteVoiceMemo = z.strictObject({
 });
 export type NoteVoiceMemo = z.infer<typeof NoteVoiceMemo>;
 const Transcript = z.string().trim().min(1).max(50000);
-export const VoiceUpload = z.strictObject({
-  file: z.file(),
-  durationSeconds: z.coerce.number().int().min(0).max(900).default(0),
-  transcript: Transcript.optional(),
-});
 // NOTES-B36: a recording that becomes a new note. Its transcript, when one is given, is the
 // note's first content, since there is no prose of the reader's to keep apart from it.
 export const VoiceCreate = z.strictObject({

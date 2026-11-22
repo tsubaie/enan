@@ -437,21 +437,48 @@ function silentWav() {
   wav.writeUInt32LE(samples, 40);
   return wav;
 }
-test('NOTES-A15 an uploaded voice memo plays, its typed transcript goes into the note on Insert, and the section passes axe', async ({
+// A memo as one attached before the inbox: new audio cannot reach a note any more (CAPTURES-B07),
+// so the administrator opens the rollback hatch for one record-first upload and closes it again.
+async function existingMemo(page: Page, name: string) {
+  // Audio is stored by its hash, so bytes of their own keep this file's name on the memo.
+  const buffer = silentWav();
+  buffer.writeUInt32LE(Math.floor(Math.random() * 2 ** 32), buffer.length - 4);
+  await api(page, 'admin', '/settings', 'PATCH', { key: 'captures.inbox', value: false });
+  try {
+    return await page.evaluate(
+      async ({ name, bytes }) => {
+        const form = new FormData();
+        form.set('file', new File([new Uint8Array(bytes)], name, { type: 'audio/wav' }));
+        const response = await fetch('/api/v1/notes/voice', {
+          method: 'POST',
+          headers: { 'X-Requested-With': 'Enan', 'Idempotency-Key': crypto.randomUUID() },
+          body: form,
+        });
+        return { status: response.status, body: await response.json() };
+      },
+      { name, bytes: [...buffer] },
+    );
+  } finally {
+    await api(page, 'admin', '/settings', 'PATCH', { key: 'captures.inbox', value: true });
+  }
+}
+test('NOTES-A15 CAPTURES-A05 an existing voice memo plays, its typed transcript goes into the note on Insert, the note cannot record, and the section passes axe', async ({
   page,
 }) => {
   await loginAs(page, 'en');
-  const created = await note(page, `Voice ${crypto.randomUUID()}`);
-  await api(page, 'notes', `/${created.id}`, 'PATCH', {
-    revision: created.revision,
+  const seeded = await existingMemo(page, 'standup.wav');
+  expect(seeded.status).toBe(201);
+  const recorded = seeded.body.data;
+  created.get(page)?.push({ resource: 'notes', id: recorded.id });
+  await api(page, 'notes', `/${recorded.id}`, 'PATCH', {
+    revision: recorded.revision,
     content: 'Agenda',
   });
-  await page.goto(`/notes?view=all&id=${created.id}`);
-  await detail(page)
-    .getByTestId('voice-file')
-    .setInputFiles({ name: 'standup.wav', mimeType: 'audio/wav', buffer: silentWav() });
+  await page.goto(`/notes?view=all&id=${recorded.id}`);
   const memo = detail(page).locator('li').filter({ hasText: 'standup.wav' });
   await expect(memo.getByText(en.notes.voiceSkipped, { exact: true })).toBeVisible();
+  await expect(detail(page).locator('input[type="file"]')).toHaveCount(0);
+  await expect(detail(page).getByRole('button', { name: /record/iu })).toHaveCount(0);
   const audio = await page.request.get(
     (await memo.locator('audio').getAttribute('src')) ?? 'missing',
   );
@@ -463,15 +490,17 @@ test('NOTES-A15 an uploaded voice memo plays, its typed transcript goes into the
   ).toBeVisible();
   // AI is off here, so the transcript tab is the one shown and nothing has reached the note yet.
   await expect(memo.getByText(en.notes.noTranscript)).toBeVisible();
-  expect((await api(page, 'notes', `/${created.id}`)).body.data.content).toBe('Agenda');
+  expect((await api(page, 'notes', `/${recorded.id}`)).body.data.content).toBe('Agenda');
   const words = `Ship the budget by Thursday ${crypto.randomUUID()}`;
   await memo.getByRole('textbox', { name: en.notes.transcriptTab, exact: true }).fill(words);
   await memo.getByRole('button', { name: en.notes.saveTranscript, exact: true }).click();
   await expect(memo.getByText(words)).toBeVisible();
-  expect((await api(page, 'notes', `/${created.id}`)).body.data.content).toBe('Agenda');
+  expect((await api(page, 'notes', `/${recorded.id}`)).body.data.content).toBe('Agenda');
   await memo.getByRole('button', { name: en.notes.insertIntoNote, exact: true }).click();
   await expect(memo.getByRole('button', { name: en.notes.insertedIntoNote })).toBeDisabled();
-  expect((await api(page, 'notes', `/${created.id}`)).body.data.content).toBe(`Agenda\n\n${words}`);
+  expect((await api(page, 'notes', `/${recorded.id}`)).body.data.content).toBe(
+    `Agenda\n\n${words}`,
+  );
   const scan = await new AxeBuilder({ page }).include('aside.entity-detail').analyze();
   expect(
     scan.violations
@@ -479,35 +508,26 @@ test('NOTES-A15 an uploaded voice memo plays, its typed transcript goes into the
       .map((item) => item.id),
   ).toEqual([]);
 });
-test('NOTES-A16 EP-B48 a WAV uploaded on the notes list becomes a new note that opens, and the strip passes axe', async ({
+test('NOTES-A16 CAPTURES-B07 the notes list has no record strip and the retired voice routes answer 410', async ({
   page,
 }) => {
   await loginAs(page, 'en');
   await page.goto('/notes?view=all');
-  // Audio is stored by its hash, so bytes of their own keep this file's name on the memo.
-  const buffer = silentWav();
-  buffer.writeUInt32LE(Math.floor(Math.random() * 2 ** 32), buffer.length - 4);
-  const strip = page.getByRole('group', { name: en.notes.quickVoiceLabel });
-  await strip
-    .getByTestId('voice-file')
-    .setInputFiles({ name: 'hallway.wav', mimeType: 'audio/wav', buffer });
-  await expect(page).toHaveURL(/[?&]id=/u);
-  const id = new URL(page.url()).searchParams.get('id') ?? 'missing';
-  const created = (await api(page, 'notes', `/${id}`)).body.data;
-  expect(created.title).toMatch(/^Voice Memo · \d{4}-\d{2}-\d{2}$/u);
-  expect(created.voiceMemos).toHaveLength(1);
-  await expect(
-    detail(page)
-      .locator('li')
-      .filter({ hasText: 'hallway.wav' })
-      .getByText(en.notes.voiceSkipped, { exact: true }),
-  ).toBeVisible();
-  const scan = await new AxeBuilder({ page })
-    .include(`[aria-label="${en.notes.quickVoiceLabel}"]`)
-    .analyze();
-  expect(
-    scan.violations
-      .filter((item) => item.impact === 'serious' || item.impact === 'critical')
-      .map((item) => item.id),
-  ).toEqual([]);
+  await expect(page.getByRole('heading', { name: en.common.notes }).first()).toBeVisible();
+  await expect(page.locator('main input[type="file"]')).toHaveCount(0);
+  const note = await api(page, 'notes', '', 'POST', { title: `Retired ${crypto.randomUUID()}` });
+  for (const path of ['/notes/voice', `/notes/${note.body.data.id}/voice`]) {
+    const answer = await page.evaluate(async (target) => {
+      const form = new FormData();
+      form.set('file', new File([new Uint8Array([0x52, 0x49, 0x46, 0x46])], 'x.wav'));
+      const response = await fetch(`/api/v1${target}`, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'Enan', 'Idempotency-Key': crypto.randomUUID() },
+        body: form,
+      });
+      return { status: response.status, body: await response.json() };
+    }, path);
+    expect(answer.status).toBe(410);
+    expect(answer.body.error.code).toBe('gone');
+  }
 });
