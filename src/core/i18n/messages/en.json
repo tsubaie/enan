@@ -1446,6 +1446,9 @@
     "kind_committee_note": "Committee note",
     "shortcut": "Alt+V",
     "keyEscape": "Esc",
-    "keyEnter": "Enter"
+    "keyEnter": "Enter",
+    "tooLong": "This recording is longer than 15 minutes, so it can’t be added. Trim it or split it into shorter parts, then upload it again.",
+    "tooLarge": "This file is larger than 25 MB, so it can’t be added. Save it in a smaller format such as M4A or MP3, then upload it again.",
+    "unsupportedType": "This file isn’t a supported audio format. Upload M4A, MP3, WAV, WebM or OGG."
   }
 }

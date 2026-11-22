@@ -16,6 +16,7 @@ import { CaptureRecorder, type Placement } from './CaptureRecorder';
 import { CaptureProcessing, stageOf } from './CaptureProcessing';
 import { CaptureShortcut } from './CaptureShortcut';
 import { registerCapture, setCaptureActive } from './capture-store';
+import { refusalOf, type Refusal } from './upload-refusal';
 import { useCapture, useCreateCapture } from './capture-queries';
 // S2 is shown once per browser; the browser's own prompt follows it.
 const introKey = 'enan.captures.microphone-intro';
@@ -49,23 +50,28 @@ function useCommitteeName(committeeId: string | null) {
   }).data?.data.name;
 }
 type Phase = 'idle' | 'intro' | 'recording' | 'after';
+type Source = 'recorder' | 'sheet';
 // Sending the audio: it becomes a capture and nothing else. One that does not reach the server is
-// held in this tab only, for Retry (S12); a refusal (type, size) is said and the panel closes.
-function useSend(opened: () => void, closed: () => void) {
+// held in this tab only, for Retry (S12). A refused recording stays held with the reason; a
+// refused file from the S3 sheet reopens the sheet with the reason; anything else is said and the
+// panel closes.
+function useSend(opened: () => void, closed: (source: Source) => void) {
   const t = useTranslations('captures');
   const toasts = useToastManager();
   const [committeeId, setCommitteeId] = useState<string | null>(null);
   const create = useCreateCapture();
   const [held, setHeld] = useState<{ file: File; seconds: number } | null>(null);
   const [offline, setOffline] = useState(false);
+  const [refusal, setRefusal] = useState<Refusal | null>(null);
   const [captureId, setCaptureId] = useState<string | null>(null);
-  function send(file: File, seconds: number) {
+  function send(file: File, seconds: number, source: Source = 'recorder') {
     const form = new FormData();
     form.set('file', file);
     form.set('durationSeconds', String(Math.min(Math.round(seconds), recorderLimits.maxSeconds)));
     if (committeeId) form.set('committeeId', committeeId);
     setHeld({ file, seconds });
     setOffline(false);
+    setRefusal(null);
     setCaptureId(null);
     opened();
     create.mutate(form, {
@@ -75,8 +81,12 @@ function useSend(opened: () => void, closed: () => void) {
       },
       onError: (error) => {
         if (!(error instanceof ApiError)) return setOffline(true);
+        const refused = refusalOf(error);
+        setRefusal(refused);
+        if (refused && source === 'sheet') return closed('sheet');
+        if (refused) return toasts.add({ title: t(refused), priority: 'high' });
         toasts.add({ title: error.message });
-        closed();
+        closed('recorder');
       },
     });
   }
@@ -84,14 +94,26 @@ function useSend(opened: () => void, closed: () => void) {
     setCaptureId(null);
     setHeld(null);
     setOffline(false);
+    setRefusal(null);
   };
-  // S8: at 15:00 the hook stops by itself and the recording is kept, with a toast to say so.
+  // S8: just before 15:00 the hook stops by itself and the recording is kept, with a toast to say so.
   const finish = (recording: Recording) => {
-    if (recording.seconds >= recorderLimits.maxSeconds) toasts.add({ title: t('limitReached') });
+    if (recording.seconds >= recorderLimits.stopSeconds) toasts.add({ title: t('limitReached') });
     send(recordingFile(recording, t('fileName')), recording.seconds);
   };
   const uploading = create.isPending;
-  return { send, finish, held, offline, captureId, uploading, reset, committeeId, setCommitteeId };
+  return {
+    send,
+    finish,
+    held,
+    offline,
+    refusal,
+    captureId,
+    uploading,
+    reset,
+    committeeId,
+    setCommitteeId,
+  };
 }
 // Starting goes through the store so a control's own click or key event asks for the microphone.
 function useLauncher(launch: () => void) {
@@ -114,12 +136,13 @@ export function CaptureHost() {
   const [phase, setPhase] = useState<Phase>('idle');
   const upload = useSend(
     () => setPhase('after'),
-    () => setPhase('idle'),
+    (source) => setPhase(source === 'sheet' ? 'recording' : 'idle'),
   );
   const committee = useCommitteeName(upload.committeeId) ?? null;
   const recorder = useVoiceRecorder(upload.finish);
   function begin() {
     localStorage.setItem(introKey, '1');
+    upload.reset();
     upload.setCommitteeId(pageCommittee);
     setPhase('recording');
     void recorder.start();
@@ -147,7 +170,8 @@ export function CaptureHost() {
           kind={refused ? 'refused' : 'ask'}
           proceed={begin}
           dismiss={done}
-          pick={(file) => upload.send(file, 0)}
+          pick={(file) => upload.send(file, 0, 'sheet')}
+          refusal={refused ? upload.refusal : null}
         />
       )}
       {recording && (
@@ -180,8 +204,9 @@ function After({
   return (
     <CaptureProcessing
       placement={placement}
-      stage={stageOf(upload.uploading, upload.offline, capture)}
+      stage={stageOf(upload.uploading, upload.offline, capture, upload.refusal)}
       capture={capture}
+      refusal={upload.refusal}
       seconds={held?.seconds ?? capture?.durationSeconds ?? 0}
       done={done}
       retry={() => held && upload.send(held.file, held.seconds)}

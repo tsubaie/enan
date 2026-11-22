@@ -9,15 +9,17 @@ const accepted = '.m4a,.mp3,.wav,.webm,.ogg,audio/*';
 export function CaptureUpload({
   pick,
   variant = 'default',
+  ref,
 }: {
   pick: (file: File) => void;
   variant?: 'default' | 'outline';
+  ref?: React.Ref<HTMLButtonElement>;
 }) {
   const t = useTranslations('captures');
   const input = useRef<HTMLInputElement>(null);
   return (
     <>
-      <Button variant={variant} onClick={() => input.current?.click()}>
+      <Button ref={ref} variant={variant} onClick={() => input.current?.click()}>
         <Upload aria-hidden />
         {t('uploadAudio')}
       </Button>

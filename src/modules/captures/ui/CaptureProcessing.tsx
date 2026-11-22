@@ -1,21 +1,31 @@
 'use client';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { Check, CircleCheck, CircleDashed, LoaderCircle, WifiOff } from 'lucide-react';
+import { Check, CircleAlert, CircleCheck, CircleDashed, LoaderCircle, WifiOff } from 'lucide-react';
 import { routes } from '@/core/routes';
 import { Button, buttonVariants } from '@/ui/primitives/button';
 import { cn } from '@/ui/cn';
 import { clock } from '@/modules/notes/ui';
 import type { CaptureGroup } from '../schema/validation';
 import type { Placement } from './CaptureRecorder';
+import type { Refusal } from './upload-refusal';
 // What the panel says after Stop, from the upload and the capture's own status (S11, S12, S29).
-export type Stage = 'uploading' | 'offline' | 'working' | 'ready' | 'unavailable' | 'failed';
+export type Stage =
+  | 'uploading'
+  | 'offline'
+  | 'refused'
+  | 'working'
+  | 'ready'
+  | 'unavailable'
+  | 'failed';
 export function stageOf(
   uploading: boolean,
   offline: boolean,
   capture: CaptureGroup | undefined,
+  refusal: Refusal | null = null,
 ): Stage {
   if (offline) return 'offline';
+  if (refusal && !uploading) return 'refused';
   if (uploading || !capture) return 'uploading';
   if (capture.status === 'ready') return 'ready';
   if (capture.status === 'needs_transcript') return 'unavailable';
@@ -51,6 +61,7 @@ type Props = {
   stage: Stage;
   capture: CaptureGroup | undefined;
   seconds: number;
+  refusal?: Refusal | null;
   done: () => void;
   retry: () => void;
 };
@@ -71,6 +82,8 @@ export function CaptureProcessing(props: Props) {
     >
       {props.stage === 'offline' ? (
         <Offline {...props} />
+      ) : props.stage === 'refused' ? (
+        <Refused {...props} />
       ) : props.stage === 'ready' ? (
         <Ready {...props} />
       ) : (
@@ -104,6 +117,19 @@ function ReviewLink({
     </Link>
   );
 }
+function RetryActions({ done, retry }: Pick<Props, 'done' | 'retry'>) {
+  const t = useTranslations('captures');
+  return (
+    <div className="flex gap-2">
+      <Button ref={focusIfLost} onClick={retry}>
+        {t('retry')}
+      </Button>
+      <Button variant="ghost" onClick={done}>
+        {t('done')}
+      </Button>
+    </div>
+  );
+}
 // S12: the upload did not reach the server; the recording waits in this tab for Retry.
 function Offline({ done, retry }: Props) {
   const t = useTranslations('captures');
@@ -115,14 +141,20 @@ function Offline({ done, retry }: Props) {
       </p>
       <p>{t('offlineStatus')}</p>
       <p className="text-text-muted">{t('offlineSession')}</p>
-      <div className="flex gap-2">
-        <Button ref={focusIfLost} onClick={retry}>
-          {t('retry')}
-        </Button>
-        <Button variant="ghost" onClick={done}>
-          {t('done')}
-        </Button>
-      </div>
+      <RetryActions done={done} retry={retry} />
+    </>
+  );
+}
+// F3: the server refused the recording (its toast says why); it stays held here for Retry.
+function Refused({ refusal, done, retry }: Props) {
+  const t = useTranslations('captures');
+  return (
+    <>
+      <p className="flex items-center gap-2 font-medium">
+        <CircleAlert aria-hidden className="size-4 text-danger" />
+        {refusal && t(refusal)}
+      </p>
+      <RetryActions done={done} retry={retry} />
     </>
   );
 }

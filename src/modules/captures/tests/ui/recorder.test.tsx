@@ -5,6 +5,7 @@ import en from '@/core/i18n/messages/en.json';
 import ar from '@/core/i18n/messages/ar.json';
 import { CaptureHost } from '../../ui/CaptureHost';
 import { CaptureFab } from '../../ui/CaptureFab';
+import { ApiError } from '@/core/http/client';
 import { mount } from '../../../../../tests/fixtures/mount';
 // CAPTURES-B01: the shell's recorder with the browser's microphone, recorder, clock and screen
 // stood in for, so the recorder's own timing and keys are what run. Nothing reaches a server: the
@@ -132,13 +133,15 @@ it('CAPTURES-B01 S7 the length warning appears at about one minute and does not 
   expect(screen.getByText(en.captures.lengthWarning)).toBeTruthy();
   expect(media.recorder?.state).toBe('recording');
 });
-it('CAPTURES-B01 S8 at 15:00 the recording stops, is sent as a capture and the limit toast says so', async () => {
+it('CAPTURES-B01 S8 a second before 15:00 the recording stops, is sent as a capture and the limit toast says so', async () => {
   await startRecording();
-  await elapse(900);
+  await elapse(898);
+  expect(spies.send).not.toHaveBeenCalled();
+  await elapse(1);
   expect(spies.send).toHaveBeenCalledTimes(1);
   const form = spies.send.mock.calls[0]?.[0];
   expect(form).toBeInstanceOf(FormData);
-  expect(form.get('durationSeconds')).toBe('900');
+  expect(form.get('durationSeconds')).toBe('899');
   expect(form.get('file')).toBeInstanceOf(File);
   expect(spies.toast).toHaveBeenCalledWith({ title: en.captures.limitReached });
 });
@@ -191,4 +194,51 @@ it('CAPTURES-B01 S9 Alt+V starts a recording, but not while a field has focus or
     fireEvent.keyDown(document.body, { code: 'KeyV', key: '√', altKey: true });
   });
   expect(recorder()).not.toBeNull();
+});
+const refuse = (details: Record<string, string>, code = 'rule_violation') =>
+  spies.send.mockImplementation((_form: FormData, handlers: { onError: (e: Error) => void }) =>
+    handlers.onError(new ApiError(code, 'Request refused', details, 'request')),
+  );
+const keys = ['tooLong', 'tooLarge', 'unsupportedType'] as const;
+it.each([
+  [{ reason: 'too_long' }, 'rule_violation', keys[0]],
+  [{ reason: 'too_large' }, 'rule_violation', keys[1]],
+  [{ reason: 'unsupported_type' }, 'rule_violation', keys[2]],
+  [{}, 'too_large', keys[1]],
+])(
+  'CAPTURES-B12 a recording refused with %o (%s) says why at high priority and stays held for Retry',
+  async (details, code, key) => {
+    refuse(details, code);
+    await startRecording();
+    await elapse(3);
+    fireEvent.click(screen.getByRole('button', { name: en.captures.stop }));
+    await act(() => vi.advanceTimersByTimeAsync(100));
+    expect(spies.toast).toHaveBeenCalledWith({ title: en.captures[key], priority: 'high' });
+    expect(screen.getByText(en.captures[key])).toBeTruthy();
+    const file = spies.send.mock.calls[0]?.[0].get('file');
+    fireEvent.click(screen.getByRole('button', { name: en.captures.retry }));
+    expect(spies.send).toHaveBeenCalledTimes(2);
+    expect(spies.send.mock.calls[1]?.[0].get('file')).toBe(file);
+  },
+);
+it('CAPTURES-B12 a file from the refused-microphone sheet that the server refuses reopens the sheet with the reason and focus on Upload audio', async () => {
+  Object.defineProperty(navigator, 'mediaDevices', {
+    configurable: true,
+    value: { getUserMedia: () => Promise.reject(new Error('NotAllowedError')) },
+  });
+  refuse({ reason: 'unsupported_type' });
+  await startRecording('ar');
+  expect(screen.getByText(ar.captures.refusedTitle)).toBeTruthy();
+  const input = screen.getByTestId('capture-file');
+  await act(async () => {
+    fireEvent.change(input, { target: { files: [new File(['<html>'], 'memo.m4a')] } });
+  });
+  await act(() => vi.advanceTimersByTimeAsync(100));
+  expect(spies.send).toHaveBeenCalledTimes(1);
+  expect(screen.getByText(ar.captures.refusedTitle)).toBeTruthy();
+  expect(screen.getByRole('alert').textContent).toBe(ar.captures.unsupportedType);
+  expect(document.activeElement).toBe(
+    screen.getByRole('button', { name: ar.captures.uploadAudio }),
+  );
+  expect(spies.toast).not.toHaveBeenCalled();
 });
