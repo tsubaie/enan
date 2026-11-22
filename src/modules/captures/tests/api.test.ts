@@ -103,7 +103,9 @@ it('CAPTURES-B02 the recorder and an admin can open, play, list and delete it; s
   session.user = admin;
   expect((await call(api.detail, 'GET', `/captures/${mine.id}`, { id: mine.id })).status).toBe(200);
   expect((await audio(mine.id)).status).toBe(200);
-  expect((await call(api.list, 'GET', '/captures')).body.data).toHaveLength(1);
+  // An admin's own inbox holds their own recordings; everyone's is the `all` filter.
+  expect((await call(api.list, 'GET', '/captures')).body.data).toHaveLength(0);
+  expect((await call(api.list, 'GET', '/captures?scope=all')).body.data).toHaveLength(1);
   // The badge is the reader's own: an admin's does not count someone else's capture.
   expect((await call(api.count, 'GET', '/captures/count')).body.data).toEqual({ pending: 0 });
   session.user = null;

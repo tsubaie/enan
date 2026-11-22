@@ -122,7 +122,11 @@ export const CaptureCreate = z.strictObject({
 export const CaptureTranscript = z.strictObject({
   transcript: z.string().trim().min(1).max(50000),
 });
+// `all` is an administrator's view of everyone's drafts (CAPTURES-B02); for a member it is the
+// member's own, as the visibility predicate allows nothing else.
+export const CaptureScope = z.enum(['mine', 'all']);
 export const CaptureListQuery = z.strictObject({
+  scope: CaptureScope.default('mine'),
   cursor: z.string().max(200).optional(),
   limit: z.coerce.number().int().min(1).max(50).default(20),
 });
@@ -151,3 +155,64 @@ export const CaptureList = z.object({
   data: z.array(CaptureGroup),
   meta: z.object({ nextCursor: z.string().nullable() }),
 });
+// What each kind of draft must hold before Approve (§ Data model). Shared with the inbox, so the
+// disabled Approve and the server's refusal give the same reason.
+export const payloadSchemas = {
+  task: TaskPayload,
+  meeting_note: MeetingNotePayload,
+  committee_note: CommitteeNotePayload,
+};
+export type RequiredField = 'title' | 'type' | 'committeeId' | 'noteDate' | 'body';
+export const requiredFields: Record<SuggestionKind, readonly RequiredField[]> = {
+  task: ['title'],
+  meeting_note: ['title', 'type', 'noteDate', 'body'],
+  committee_note: ['title', 'committeeId', 'noteDate', 'body'],
+};
+// A draft's payload as plain fields, for reading one field without knowing the kind yet.
+export const PayloadFields = z.record(z.string(), z.json());
+export type PayloadFields = z.infer<typeof PayloadFields>;
+export const payloadFields = (payload: unknown) => PayloadFields.catch({}).parse(payload);
+// CAPTURES-B10: the required fields still unsettled: empty, or one the interpreter was unsure of
+// (`unknown`, or `several` without a choice). An optional field, such as an unmatched owner, and a
+// type flag never block.
+export function blockers(draft: Pick<Suggestion, 'kind' | 'payload' | 'fieldStates'>) {
+  const payload = payloadFields(draft.payload);
+  return requiredFields[draft.kind].filter((field) => {
+    const value = payload[field] ?? '';
+    const state = draft.fieldStates[field]?.state ?? 'confident';
+    return value === '' || state !== 'confident';
+  });
+}
+// A changed kind keeps the fields the kinds share; a task's description is a note's body and
+// back. What the new kind requires and the old one lacked stays empty for the reviewer to fill.
+export function reshape(kind: SuggestionKind, payload: PayloadFields): PayloadFields {
+  const keys = Object.keys(payloadSchemas[kind].shape);
+  const kept = Object.fromEntries(Object.entries(payload).filter(([key]) => keys.includes(key)));
+  const text = payload.body ?? payload.description ?? null;
+  if (kind !== 'task') return { ...kept, body: text ?? payload.title ?? null };
+  return text === null ? kept : { ...kept, description: text };
+}
+const SuggestionRevisionValue = z.number().int().positive();
+// An edit before Approve: the fields changed, and optionally a new kind (the type chip).
+export const SuggestionPatch = z.strictObject({
+  revision: SuggestionRevisionValue,
+  kind: SuggestionKind.optional(),
+  payload: z.record(z.string().min(1).max(50), z.json()).default({}),
+});
+export type SuggestionPatch = z.infer<typeof SuggestionPatch>;
+export const SuggestionRevision = z.strictObject({ revision: SuggestionRevisionValue });
+const SuggestionIds = z
+  .array(z.uuid())
+  .min(1)
+  .max(100)
+  .transform((values) => [...new Set(values)]);
+// Without ids, every ready draft the reader recorded; with ids, exactly those, each one ready.
+export const ApproveReady = z.strictObject({ ids: SuggestionIds.optional() });
+export const UndoBatch = z.strictObject({ ids: SuggestionIds });
+export const MergeSuggestions = z.strictObject({
+  keepId: z.uuid(),
+  mergeIds: SuggestionIds,
+});
+export const LiveRecord = z.object({ type: LiveEntityType, id: z.uuid() });
+export const Approval = z.object({ suggestion: Suggestion, live: LiveRecord });
+export type Approval = z.infer<typeof Approval>;
