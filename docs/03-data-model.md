@@ -6,8 +6,8 @@ Source of truth for schema is `src/modules/*/schema/db.ts` (Drizzle) plus custom
 
 | Class | Tables | Required columns |
 |---|---|---|
-| **Entity** | tasks, notes, committees, objectives, kpis, initiatives, meetings, people, users | `id uuid pk`, `revision int not null default 1`, `created_at`, `updated_at`, `created_by`, `updated_by`, `deleted_at`, `deleted_op_id` |
-| **Child** (owned rows edited by users) | kpi_readings, kpi_targets, initiative_deliverables, initiative_updates, initiative_progress, meeting_agenda_items, meeting_documents, meeting_briefs, note_refinements, note_voice_memos, kpi_narratives, brief_feedback, comments, meeting_private_notes | `id`, `created_at`, `updated_at`, `created_by`, `deleted_at`, `deleted_op_id`; `revision` only where the spec says the row is inline-editable |
+| **Entity** | tasks, notes, committees, objectives, kpis, initiatives, meetings, people, users, captures | `id uuid pk`, `revision int not null default 1`, `created_at`, `updated_at`, `created_by`, `updated_by`, `deleted_at`, `deleted_op_id` |
+| **Child** (owned rows edited by users) | kpi_readings, kpi_targets, initiative_deliverables, initiative_updates, initiative_progress, meeting_agenda_items, meeting_documents, meeting_briefs, note_refinements, note_voice_memos, capture_suggestions, kpi_narratives, brief_feedback, comments, meeting_private_notes | `id`, `created_at`, `updated_at`, `created_by`, `deleted_at`, `deleted_op_id`; `revision` only where the spec says the row is inline-editable |
 | **Junction** | meeting_attendees, note_people, entity_links | `created_at`, `created_by`, `deleted_at`, `deleted_op_id` |
 | **History / system** | sessions, login_attempts, jobs, job_attempts, schedules, ai_invocations, ai_credentials, audit_log, files, wallpapers, prep_learnings, idempotency_keys, settings, workspace | as specified per table |
 
@@ -164,6 +164,12 @@ Indexes: `(note_date, created_at, id) where deleted_at is null`, `(type)`, `(arc
 ### note_voice_memos
 `note_id fk notes cascade, file_id fk files restrict, duration_seconds int default 0 check 0..900, transcript text null, transcription_status (pending|done|failed|skipped) default pending, transcription_job_id fk jobs set null null, transcription_error text null, created_at, updated_at, created_by fk users, deleted_at, deleted_op_id`. A voice memo on a note (NOTES-I08). The audio is a `files` row keyed `voice-<sha256>`, written before the row's transaction (ADR 0054) and shared by every memo of the same recording; removing a memo soft-deletes it and keeps the binary (ADR 0034). `skipped` means no transcript came with the audio; `pending`, `failed` and `transcription_job_id` are reserved for server-side transcription (ADR 0065). Indexes: `(note_id, created_at)`, `(file_id)`, `(transcription_job_id)`, `(created_by)`.
 
+### captures
+`file_id fk files restrict, duration_seconds int default 0 check 0..900, transcript text null, status (queued|transcribing|interpreting|ready|needs_transcript|failed) default queued, error_code text null, error_detail text null, context_committee_id fk committees set null null, context_note_type text null, transcribe_job_id fk jobs set null null, interpret_job_id fk jobs set null null` + entity columns. A voice recording waiting for review (CAPTURES-I01, ADR 0071), visible only to `created_by` and administrators (CAPTURES-B02). The audio is a `files` row keyed `voice-<sha256>`, written before the row (ADR 0054); deleting a capture soft-deletes it and keeps the binary (ADR 0034). `transcript` is never copied into a note before Approve. Captures are not in notes lists, notes search or committee note tabs. Migration `0021_captures` creates the table empty: no `note_voice_memos` row is copied into it. Indexes: `(created_by, created_at) where deleted_at is null`, `(status)`, `(file_id)`, `(context_committee_id)`, `(transcribe_job_id)`, `(interpret_job_id)`, `(updated_by)`.
+
+### capture_suggestions
+`capture_id fk captures cascade, kind (task|meeting_note|committee_note), payload jsonb, field_states jsonb default {} (per field `{ state: confident|several|unknown, candidates uuid[], sourceText? }`), source_spans jsonb default [] (character offsets into the capture's transcript), type_flag (task|meeting_note|committee_note) null, status (pending|approved|discarded|merged) default pending, live_entity_type (task|note) null, live_entity_id uuid null, live_revision_at_approve int null, merge_target_id fk capture_suggestions null, approved_at, approved_by fk users null, discarded_at, revision` + child columns. A draft task or note proposed from one capture; nothing in it is live until Approve (CAPTURES-B10). `payload` holds the kind's fields (`features/captures.md` § Data model). `live_entity_id` is a soft reference to the task or note Approve created, like a notification subject, so it carries no foreign key. Indexes: `(capture_id, status) where deleted_at is null`, `(live_entity_id)`, `(merge_target_id)`, `(approved_by)`, `(created_by)`.
+
 ### committees
 `name, description, ownership, scope (internal|external), status (active|archived), sort_order, search_text` + entity columns. Unique `lower(name) where deleted_at is null`.
 
@@ -236,6 +242,10 @@ Indexes: `(note_date, created_at, id) where deleted_at is null`, `(type)`, `(arc
 | note → committee / initiative | `notes.*_id` | N:1 | `about` |
 | voice memo → note | `note_voice_memos.note_id` | N:1 | not projected |
 | voice memo → audio file | `note_voice_memos.file_id` | N:1 | not projected |
+| capture → audio file | `captures.file_id` | N:1 | not projected |
+| capture → committee context | `captures.context_committee_id` | N:1 | not projected |
+| suggestion → capture | `capture_suggestions.capture_id` | N:1 | not projected |
+| suggestion → live task / note | `capture_suggestions.live_entity_type`, `live_entity_id` | 1:1 | not projected |
 | meeting → committee | `meetings.committee_id` | N:1 | `belongs_to` |
 | meeting ↔ person | `meeting_attendees` | N:M with role | `attendee` |
 | meeting → agenda-linked entity | `meeting_agenda_items.linked_*` | N:M | `discussed_in` |

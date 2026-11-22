@@ -18,6 +18,12 @@ import { Role } from '../../src/core/http/user-schema';
 import { JobStatus } from '../../src/core/jobs/types';
 import { Status, Priority } from '../../src/modules/tasks/schema/validation';
 import { Kind } from '../../src/modules/people/schema/validation';
+import {
+  CaptureStatus,
+  LiveEntityType,
+  SuggestionKind,
+  SuggestionStatus,
+} from '../../src/modules/captures/schema/validation';
 import { read, walk } from './lib/files';
 import { report, finish, type Finding, type Report } from './lib/report';
 const run = promisify(execFile);
@@ -267,6 +273,11 @@ export async function auditSchema(root: string) {
       { table: 'people', column: 'kind', options: Kind.options },
       { table: 'users', column: 'role', options: Role.options },
       { table: 'jobs', column: 'status', options: JobStatus.options },
+      { table: 'captures', column: 'status', options: CaptureStatus.options },
+      { table: 'capture_suggestions', column: 'kind', options: SuggestionKind.options },
+      { table: 'capture_suggestions', column: 'type_flag', options: SuggestionKind.options },
+      { table: 'capture_suggestions', column: 'status', options: SuggestionStatus.options },
+      { table: 'capture_suggestions', column: 'live_entity_type', options: LiveEntityType.options },
     ];
     const tables: DbTable[] = [];
     for (const name of await listTables(database)) tables.push(await describeTable(database, name));

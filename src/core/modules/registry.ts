@@ -10,6 +10,7 @@ import { server as kpis } from '@/modules/kpis';
 import { server as users } from '@/modules/users';
 import { server as settings } from '@/modules/settings';
 import { server as account } from '@/modules/account';
+import { server as captures } from '@/modules/captures';
 // Home aggregates these providers; the home module itself is the consumer, so it is not listed.
 // The notifications module is the same: it consumes the contributions below and is not among them.
 export const serverModules: readonly ServerManifest[] = [
@@ -21,6 +22,7 @@ export const serverModules: readonly ServerManifest[] = [
   users,
   settings,
   account,
+  captures,
 ];
 export function homeProviders(modules: readonly ServerManifest[] = serverModules) {
   return modules.flatMap((item) => (item.homeSummary ? [item.homeSummary] : []));
