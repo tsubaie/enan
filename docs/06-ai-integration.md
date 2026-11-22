@@ -51,6 +51,7 @@ The admin disclosure lists the task/note content, existing tags and assignable p
 | `notes.suggest_tags` | fast | `notes.suggest_tags:<noteId>` | content, existing tags → `{ tags }` |
 | `tasks.breakdown` | default | `tasks.breakdown:<taskId>` | task → `{ subtasks[] }` |
 | `kpis.narrative` | default | `kpis.narrative:<narrativeId>` | scoped KPI figures, targets, statuses and recent reading notes → `{ headline, bodyMarkdown, highlights[{ code, summary }] }` (`features/kpis.md` KPIS-B32) |
+| `captures.interpret` (job `ai.captures.interpret`) | default | `captures.interpret:<captureId>:<transcriptHash>` | capture transcript (untrusted data) + active committees, assignable people, note types, today → `{ suggestions[] }` drafts for review, never applied by the job (`features/captures.md`, ADR 0071) |
 | `initiatives.update_draft` | default | `initiatives.draft:<id>` | initiative context → `{ health, body }` |
 | `meetings.brief` | default, effort high, 32 000 output | `meetings.brief:<docId>:<locale>` | document + context + active learnings → `BriefSections` |
 | `meetings.brief_translate` | fast | `meetings.translate:<briefId>:<locale>` | `BriefSections` → `BriefSections` |

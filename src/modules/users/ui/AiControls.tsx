@@ -22,12 +22,14 @@ const featureKey: Record<
   | 'aiFeature_notes_suggest_tags'
   | 'aiFeature_notes_transcribe'
   | 'aiFeature_kpis_narrative'
+  | 'aiFeature_captures_interpret'
 > = {
   'tasks.breakdown': 'aiFeature_tasks_breakdown',
   'notes.refine': 'aiFeature_notes_refine',
   'notes.suggest_tags': 'aiFeature_notes_suggest_tags',
   'notes.transcribe': 'aiFeature_notes_transcribe',
   'kpis.narrative': 'aiFeature_kpis_narrative',
+  'captures.interpret': 'aiFeature_captures_interpret',
 };
 // ADMIN-B45: which AI features are on, each one switch that saves at once, the monthly limit in
 // dollars, and what this month has cost, feature by feature, in words and money.
@@ -87,6 +89,10 @@ function Features({ data }: { data: Data }) {
           commit={(monthlyBudgetMicros) => write({ monthlyBudgetMicros })}
         />
       </PropertySheet>
+      {/* CAPTURES-B01: recording a note sends its audio to the provider while transcription is on. */}
+      {data.enabledCapabilities.includes('notes.transcribe') && (
+        <p className="px-1 text-sm font-light text-text-muted">{t('aiTranscriptionDisclosure')}</p>
+      )}
       {save.error && <ErrorPanel error={save.error} />}
     </RecordSection>
   );
