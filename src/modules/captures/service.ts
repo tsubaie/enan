@@ -226,7 +226,20 @@ async function idleCapture(ctx: Context, captureId: string) {
   return { capture, stored };
 }
 // S17 «كتابة النص»: a typed transcript replaces whatever the capture held and is interpreted anew.
-export const typeTranscript = transactional(async function typeTranscript(
+// CAPTURES-B23: typed words are never lost. They are committed in their own transaction first,
+// with the capture marked failed, and only then interpreted in a second one; so a refusal there
+// (a full queue, or anything else interpretOrHold does not hold) still answers as it always did,
+// and leaves the S17 failed card holding the transcript, whose Retry interprets it again.
+export async function typeTranscript(
+  ctx: Context,
+  captureId: string,
+  input: z.output<typeof CaptureTranscript>,
+) {
+  await storeTranscript(ctx, captureId, input);
+  await interpretOrHold(ctx, captureId);
+  return getCapture(ctx, captureId);
+}
+const storeTranscript = transactional(async function storeTranscript(
   ctx: Context,
   captureId: string,
   input: z.output<typeof CaptureTranscript>,
@@ -235,11 +248,12 @@ export const typeTranscript = transactional(async function typeTranscript(
   await repo.updateCapture(ctx.db, captureId, {
     transcript: input.transcript,
     revision: stored.revision + 1,
+    status: 'failed',
+    errorCode: null,
+    errorDetail: null,
     updatedBy: ctx.user.id,
   });
   await writeAudit(ctx.db, ctx.user.id, 'update', 'capture', captureId, { transcript: true });
-  await interpretOrHold(ctx, captureId);
-  return getCapture(ctx, captureId);
 });
 // S17 «إعادة المحاولة»: transcription again, for a capture with no usable transcript yet.
 export const retryTranscription = transactional(async function retryTranscription(
