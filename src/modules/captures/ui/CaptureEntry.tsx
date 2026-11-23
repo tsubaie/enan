@@ -3,7 +3,6 @@ import type { ComponentProps, ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { Keyboard, Mic } from 'lucide-react';
 import { Button } from '@/ui/primitives/button';
-import { CountCircle } from '@/ui/primitives/count-circle';
 import { cn } from '@/ui/cn';
 import { startCapture, useCaptureActive } from './capture-store';
 import { useCaptureCount } from './capture-queries';
@@ -56,8 +55,14 @@ function ActionBody({ keys }: { keys: ShortcutKeys }) {
         ) : null}
       </span>
       {count > 0 ? (
-        <span aria-hidden>
-          <CountCircle>{count}</CountCircle>
+        // The Review badge's figure, as a filled accent disc: on the action's accent-soft ground
+        // the neutral circle would fall below 3:1 (WCAG 1.4.11). The numeral is `on-accent`,
+        // the accent's own text colour (light on the day accent, dark on the pale night one).
+        <span
+          aria-hidden
+          className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-accent px-1.5 text-xs leading-5 font-normal text-on-accent tabular-nums"
+        >
+          {count}
         </span>
       ) : null}
       {keys ? (

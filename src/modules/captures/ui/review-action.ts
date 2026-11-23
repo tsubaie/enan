@@ -80,3 +80,14 @@ export const listedGroup = (captureId: string) =>
 // The inbox heading: where focus goes when the thing it was on has gone and nothing replaces it.
 export const focusInboxHeading = () =>
   document.querySelector<HTMLElement>('[data-inbox] h1')?.focus();
+// The drafts whose latest save failed, once every save in flight has answered.
+export async function failedSaves(saves: Map<string, Promise<boolean>>) {
+  const ids = [...saves.keys()];
+  const outcomes = await Promise.allSettled(saves.values());
+  return new Set(
+    ids.filter((_, at) => {
+      const outcome = outcomes[at];
+      return outcome?.status !== 'fulfilled' || !outcome.value;
+    }),
+  );
+}

@@ -593,6 +593,30 @@ for (const [locale, m] of [
       if (locale === 'en') expect(start.left).toBeLessThan(start.right);
       else expect(start.right).toBeLessThan(start.left);
       expect(Math.min(start.left, start.right)).toBeLessThanOrEqual(24);
+      // The page reserves the circle's ground: scrolled to its end, the last row (the Voice
+      // capture footer and what follows it) sits above the circle on either side.
+      for (const side of ['start', 'end'] as const) {
+        await placement(page, { mobile: 'floating', side });
+        await gotoReady(page, '/account');
+        await expect(page.getByText(m.account.voiceSaved)).toBeAttached();
+        const clear = await page.evaluate(() => {
+          const main = document.querySelector('#content') as HTMLElement;
+          main.scrollTo(0, main.scrollHeight);
+          const last = main.lastElementChild?.getBoundingClientRect().bottom ?? 0;
+          const circle = document.querySelector('[data-capture-fab]')?.getBoundingClientRect().top;
+          return { last, circle: circle ?? 0 };
+        });
+        expect(clear.last).toBeLessThanOrEqual(clear.circle + 1);
+      }
+      // The Review title keeps one line beside Record and Approve N ready on a phone.
+      await gotoReady(page, '/captures');
+      const title = page.locator('[data-inbox] h1');
+      expect(
+        await title.evaluate(
+          (h1) =>
+            h1.getBoundingClientRect().height < parseFloat(getComputedStyle(h1).lineHeight) * 1.5,
+        ),
+      ).toBe(true);
       // A record's sheet hides the bar, and the circle with it.
       await gotoReady(page, '/tasks?new=1');
       await expect(page.locator('.entity-page-open')).toHaveCount(1);

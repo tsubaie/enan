@@ -39,7 +39,9 @@ export function AppShell({
         <ShellHeader user={user} capture={capture} record={entries.header} menu={entries.menu} />
         {/* Below 1024 px the bar floats over this column as a glass capsule, so the page reserves
             the ground it takes — the safe area, the gap under the capsule, the capsule and the gap
-            over it (--mobile-nav-clear in tokens.css) — rather than running its last rows under it. */}
+            over it (--mobile-nav-clear in tokens.css) — rather than running its last rows under it.
+            While the phone's record circle is shown, tokens.css adds the circle's ground too
+            (CAPTURES-B17). */}
         <main
           id="content"
           className="min-h-0 min-w-0 flex-1 overflow-y-auto pb-[var(--mobile-nav-clear)] lg:pb-0"

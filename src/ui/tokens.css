@@ -1685,10 +1685,20 @@ main:has(.home-page)::-webkit-scrollbar {
    a gap. The viewport spans the width, so either side is cleared.
    CAPTURES-B17: the circle goes wherever the bar does (a record's sheet is open) and while the
    on-screen keyboard is up (a touch device with a text field focused); it never shrinks and never
-   hides on scroll. A hidden circle lifts no toast. */
+   hides on scroll. A hidden circle lifts no toast.
+   The page reserves the same ground at its end while the circle is shown, so its last rows (a
+   form's last option, a footer) can scroll clear of it rather than sit under it. While the
+   keyboard hides the circle the reservation stays: dropping it as the reader types would move the
+   page under the caret, and the keyboard covers that ground anyway. */
 @media (max-width: 1023.98px) {
   body:has([data-capture-fab]) [data-slot='toast-viewport'] {
     inset-block-end: calc(var(--mobile-nav-clear) + 0.75rem + 3.5rem + 0.5rem);
+  }
+  body:has([data-capture-fab]) #content {
+    padding-block-end: calc(var(--mobile-nav-clear) + 0.75rem + 3.5rem + 0.5rem);
+  }
+  body:has([data-capture-fab]):has(.entity-page-open) #content {
+    padding-block-end: var(--mobile-nav-clear);
   }
   body:has(.entity-page-open) [data-capture-fab] {
     display: none;
