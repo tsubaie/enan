@@ -116,6 +116,7 @@ test('CAPTURES-A01 a recording made from Home is waiting in Review after leaving
   await page.goto('/notes');
   await openReview(page, en);
   const group = page.locator(`[aria-labelledby="capture-${captureId}"]`);
+  await expect(group).toHaveCount(1);
   await expect(group.getByText(en.captures.unavailable)).toBeVisible();
   // The badge counts a recording that failed (here: AI is off, so a typed transcript cannot be
   // interpreted), deferred from the recorder's own release.
@@ -131,6 +132,7 @@ test('CAPTURES-A01 a recording made from Home is waiting in Review after leaving
   ).toBeVisible();
   seedDrafts(captureId);
   await page.goto('/captures');
+  await expect(page.locator(`[aria-labelledby="capture-${captureId}"]`)).toHaveCount(1);
   await expect(
     page
       .locator(`[aria-labelledby="capture-${captureId}"]`)
@@ -217,6 +219,8 @@ test('CAPTURES-A03 CAPTURES-A04 a member cannot open another person’s draft or
     expect((await api(page, `/captures/${theirs}`)).status).toBe(200);
     expect((await page.request.get(`/api/v1/captures/${theirs}/audio`)).status()).toBe(200);
     await page.goto('/captures?scope=all');
+    // One section per recording: a hydration mismatch once left the streamed copy beside it.
+    await expect(page.locator(`[aria-labelledby="capture-${theirs}"]`)).toHaveCount(1);
     await expect(page.locator(`[aria-labelledby="capture-${theirs}"]`)).toBeVisible();
   } finally {
     await close();
