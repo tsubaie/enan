@@ -88,7 +88,7 @@ function State({ group }: { group: Group }) {
     );
   if (group.status === 'failed')
     return (
-      <div className="grid gap-3 rounded-xl border border-danger p-4">
+      <div className="grid gap-3 rounded-xl border border-danger bg-elevated p-4">
         <p className="flex items-center gap-2 font-medium text-danger">
           <CircleAlert aria-hidden className="size-4" />
           {t(failure(group.errorCode))}
@@ -98,7 +98,7 @@ function State({ group }: { group: Group }) {
     );
   if (group.status === 'needs_transcript')
     return (
-      <div className="grid gap-3 rounded-xl border p-4">
+      <div className="grid gap-3 rounded-xl border bg-elevated p-4">
         <p className="flex items-start gap-2 font-medium">
           <CircleCheck aria-hidden className="mt-0.5 size-4 shrink-0" />
           {t('unavailable')}

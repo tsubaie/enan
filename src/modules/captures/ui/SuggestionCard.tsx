@@ -109,7 +109,7 @@ function Root({
         data-testid="suggestion-card"
         data-kind={draft.kind}
         className={cn(
-          'grid gap-3 rounded-xl border bg-surface p-4',
+          'grid gap-3 rounded-xl border bg-elevated p-4',
           missing.length > 0 && 'border-warning',
         )}
       >

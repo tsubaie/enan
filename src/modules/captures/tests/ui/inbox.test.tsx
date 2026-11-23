@@ -628,3 +628,29 @@ it('CAPTURES-B10 a receipt that names skipped drafts stays fifteen seconds; with
   toast.discarded(taskId);
   expect(lastToast()).toMatchObject({ title: en.captures.discarded, timeout: 5000 });
 });
+it('CAPTURES-B01 drafts and the failed and unavailable boxes stand on a solid surface; the signal stays on the border', () => {
+  const box = (status: string) =>
+    CaptureGroup.parse({
+      ...group,
+      id: crypto.randomUUID(),
+      transcript: null,
+      status,
+      errorCode: status === 'failed' ? 'provider_error' : null,
+      suggestions: [],
+    });
+  spies.list = {
+    data: [group, box('failed'), box('needs_transcript')],
+    meta: { nextCursor: null },
+  };
+  page();
+  for (const card of screen.getAllByTestId('suggestion-card')) {
+    expect(card.className).toMatch(/\bbg-elevated\b/u);
+    expect(card.className).not.toMatch(/\bbg-surface\b/u);
+  }
+  const failed = screen.getByText(en.captures.failedOther).closest('div');
+  expect(failed?.className).toMatch(/\bbg-elevated\b/u);
+  expect(failed?.className).toMatch(/\bborder\b.*\bborder-danger\b/u);
+  const unavailable = screen.getByText(en.captures.unavailable).closest('div');
+  expect(unavailable?.className).toMatch(/\bbg-elevated\b/u);
+  expect(unavailable?.className).toMatch(/\bborder\b/u);
+});

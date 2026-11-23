@@ -36,3 +36,12 @@ it('CAPTURES-B01 the panel does not take focus the reader has moved elsewhere', 
   );
   expect(document.activeElement).toBe(screen.getByRole('textbox', { name: en.common.search }));
 });
+it.each(['uploading', 'unavailable', 'failed', 'offline', 'refused', 'ready'] as const)(
+  'CAPTURES-B01 the %s sheet stands on a solid surface, so the page never shows through',
+  (stage) => {
+    mount(panel(stage));
+    const sheet = screen.getByRole('status', { name: en.captures.processingLabel });
+    expect(sheet.className).toMatch(/\bbg-elevated\b/u);
+    expect(sheet.className).not.toMatch(/\bbg-(bg|popover)\b/u);
+  },
+);

@@ -531,9 +531,10 @@ html[data-wallpaper='sky'] {
 }
 /* A sheet (the filters, the phone's More) is the record panel's material: the same frosted glass
    over the same blurred and lightly dimmed page (EP-B23), so every surface that rises over a list
-   reads as one family. */
+   reads as one family. Its tint is denser than the record's (0.76, not 0.58): the sheet's scrim is
+   light, and over a white page the muted line must still clear 4.5:1 under the sheen (#166). */
 .dark [data-slot='dialog-content'][data-sheet] {
-  background-color: rgb(36 36 40 / 0.58);
+  background-color: rgb(36 36 40 / 0.76);
   background-image:
     linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 35%), var(--frost-grain);
   backdrop-filter: blur(64px) saturate(170%);
@@ -675,7 +676,13 @@ main:has(.home-page)::-webkit-scrollbar {
     ) {
     backdrop-filter: none;
   }
-  .dark :is(.entity-detail, [data-slot='dialog-content'][data-sheet]) {
+  .dark
+    :is(
+      .entity-detail,
+      [data-slot='dialog-content'][data-sheet],
+      [data-slot='popover-content'],
+      [data-slot='select-content']
+    ) {
     background: var(--elevated);
     background-image: none;
   }
