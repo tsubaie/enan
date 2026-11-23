@@ -171,11 +171,10 @@ test('EP-B43 a click anywhere outside the record closes it like Esc @desktop', a
 // EP-B23 (#166): the record and the sheets are one glass, dense enough to read over a white page;
 // a reader who asks for less transparency gets solid ground, no blur and a status red that clears
 // 4.5:1 on it. Read from computed style, because each of these was a cascade or token slip.
+// Reduced transparency is emulated over CDP, which every project here (Chrome) speaks.
 test('EP-B23 the record and the sheets share one dense glass, and reduced transparency makes it solid @desktop', async ({
   page,
-  browserName,
 }) => {
-  test.skip(browserName !== 'chromium', 'reduced transparency is emulated through Chromium only');
   const alpha = (color: string) => {
     const parts = color.match(/[\d.]+/gu) ?? [];
     return parts.length > 3 ? Number(parts[3]) : 1;
