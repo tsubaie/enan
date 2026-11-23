@@ -52,11 +52,13 @@ export type ServerManifest = {
 };
 // NOTIF-B06: the feed resolves subjects at read time, and a subject the reader can no longer see
 // resolves to null so the line is dropped rather than rendered as a dead link.
-// `hrefs` names a kind whose line opens somewhere more specific than the subject itself.
+// `hrefs` names a kind whose line opens somewhere more specific than the subject itself; `count`
+// is a number the line says, computed when it is read (NOTIF-B18).
 export type NotificationSubject = {
   title: string;
   href: string;
   hrefs?: Partial<Record<string, string>>;
+  count?: number;
 };
 export type NotificationContribution = {
   kinds: readonly string[];

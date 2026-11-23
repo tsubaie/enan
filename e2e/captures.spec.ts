@@ -62,24 +62,39 @@ async function refuseMicrophone(page: Page) {
     });
   });
 }
-// S1/S9 → S2 → S3 → S11: start from wherever the page is, upload instead, and dismiss Done.
-async function recordByUpload(page: Page, m: typeof en) {
+// One after-Stop toast (CAPTURES-B20), by what it says.
+const toastWith = (page: Page, text: string) =>
+  page.locator('[data-slot="toast"]').filter({ hasText: text });
+// S1/S9 → S2 → S3: start from wherever the page is and upload instead (the microphone is refused).
+// The intro (S2) is asked once per browser, so a later recording goes straight to the S3 sheet.
+async function upload(page: Page, m: typeof en) {
   await page
     .getByRole('button', { name: m.captures.recordNote })
     .filter({ visible: true })
     .first()
     .click();
-  await page.getByRole('button', { name: m.captures.continue }).click();
-  await expect(page.getByText(m.captures.refusedTitle)).toBeVisible();
+  const intro = page.getByRole('button', { name: m.captures.continue });
+  const sheet = page.getByText(m.captures.refusedTitle);
+  await expect(intro.or(sheet)).toBeVisible();
+  if (await intro.isVisible()) await intro.click();
+  await expect(sheet).toBeVisible();
+  await page
+    .getByTestId('capture-file')
+    .setInputFiles({ name: 'hallway.wav', mimeType: 'audio/wav', buffer: wav() });
+}
+// CAPTURES-B20: AI is off here, so a recording lands saved but not transcribed; its warning stays
+// until it is closed, which this does. The primitive keeps a toast's Close out of the accessibility
+// tree until the stack is hovered or focused, hence `includeHidden`.
+async function recordByUpload(page: Page, m: typeof en) {
   const created = page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname === '/api/v1/captures' && response.status() === 201,
   );
-  await page
-    .getByTestId('capture-file')
-    .setInputFiles({ name: 'hallway.wav', mimeType: 'audio/wav', buffer: wav() });
+  await upload(page, m);
   const captureId: string = (await (await created).json()).data.id;
-  await page.getByRole('button', { name: m.captures.done }).first().click();
+  const warning = toastWith(page, m.captures.unavailable);
+  await warning.getByRole('button', { name: m.common.close, includeHidden: true }).click();
+  await expect(warning).toHaveCount(0);
   return captureId;
 }
 async function openReview(page: Page, m: typeof en) {
@@ -734,3 +749,114 @@ test('CAPTURES-A15 CAPTURES-B16 a member on Workspace default follows the admini
     await chosen.close();
   }
 });
+for (const [locale, m] of [
+  ['en', en],
+  ['ar', ar],
+] as const)
+  test(`CAPTURES-A16 CAPTURES-B20 after Stop the reader stays on the page with no sheet: the unavailable warning stays until closed, a failed upload keeps Retry and Discard and Retry succeeds, and a processed recording says so (${locale})`, async ({
+    page,
+  }) => {
+    await refuseMicrophone(page);
+    // The page's own clock, so "stays" and "about five seconds" are shown without waiting.
+    await page.clock.install();
+    await loginAs(page, locale);
+    await gotoReady(page, '/tasks');
+    // Saved without a transcript: the warning, and nothing in front of the page.
+    await upload(page, m);
+    const warning = toastWith(page, m.captures.unavailable);
+    await expect(warning).toBeVisible();
+    await expect(warning).toHaveAttribute('data-tone', 'warning');
+    await expect(warning.getByRole('link', { name: m.captures.view })).toHaveAttribute(
+      'href',
+      '/captures',
+    );
+    await expect(page).toHaveURL(/\/tasks$/u);
+    await page.clock.fastForward(60_000);
+    await expect(warning).toBeVisible();
+    await expect(
+      page.locator(
+        '[role="dialog"]:not([data-slot="toast"]), [role="alertdialog"]:not([data-slot="toast"])',
+      ),
+    ).toHaveCount(0);
+    // The upload fails once: the audio is held with Discard and Retry, and Retry sends it.
+    let refused = false;
+    await page.route('**/api/v1/captures', async (route) => {
+      if (route.request().method() !== 'POST' || refused) return route.continue();
+      refused = true;
+      await route.abort('internetdisconnected');
+    });
+    await upload(page, m);
+    const failed = toastWith(page, m.captures.uploadFailedTitle);
+    await expect(failed).toBeVisible();
+    await expect(failed).toContainText(m.captures.uploadFailedBody);
+    await expect(failed.locator('button')).toHaveText([m.captures.discard, m.captures.retry]);
+    const resent = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === '/api/v1/captures' && response.status() === 201,
+    );
+    await failed.locator('button', { hasText: m.captures.retry }).click();
+    await resent;
+    await expect(failed).toHaveCount(0);
+    await expect(toastWith(page, m.captures.unavailable)).toHaveCount(1);
+    await page.unroute('**/api/v1/captures');
+    // As if transcription had started: the first on this device explains itself and stays; the
+    // next says it is processing, with View, and goes by itself while the warning stays.
+    await page.route('**/api/v1/captures', async (route) => {
+      if (route.request().method() !== 'POST') return route.continue();
+      const response = await route.fetch();
+      const body = await response.json();
+      await route.fulfill({
+        response,
+        json: { ...body, data: { ...body.data, status: 'transcribing' } },
+      });
+    });
+    await upload(page, m);
+    const first = toastWith(page, m.captures.firstRunTitle);
+    await expect(first).toContainText(m.captures.education);
+    await expect(first.getByRole('link', { name: m.captures.howItWorks })).toHaveAttribute(
+      'href',
+      '/captures',
+    );
+    // One persistent notice at a time: the first-run toast took the warning's place.
+    await expect(toastWith(page, m.captures.unavailable)).toHaveCount(0);
+    await first.getByRole('button', { name: m.common.close, includeHidden: true }).click();
+    await upload(page, m);
+    const processing = toastWith(page, m.captures.processingTitle);
+    await expect(processing.getByRole('link', { name: m.captures.view })).toBeVisible();
+    await page.mouse.move(0, 0);
+    await page.clock.fastForward(4_000);
+    await expect(processing).toHaveCount(1);
+    await page.clock.fastForward(2_000);
+    await expect(processing).toHaveCount(0);
+    await page.unroute('**/api/v1/captures');
+  });
+for (const [locale, m, line] of [
+  ['en', en, '2 recordings ready to review'],
+  ['ar', ar, 'تسجيلان جاهزان للمراجعة'],
+] as const)
+  test(`CAPTURES-A16b CAPTURES-B21 two ready recordings make one bell line reading "${line}" (${locale})`, async ({
+    page,
+    browser,
+  }) => {
+    await loginAs(page, 'en');
+    const { other, close } = await member(page, browser);
+    try {
+      await other.context().addCookies([{ name: 'eos_locale', value: locale, url: laneBaseURL() }]);
+      await refuseMicrophone(other);
+      await reloadReady(other);
+      const first = await recordByUpload(other, m);
+      const second = await recordByUpload(other, m);
+      seedDrafts(first);
+      seedDrafts(second);
+      await reloadReady(other);
+      await other.getByRole('button', { name: m.notifications.title }).first().click();
+      const centre = other.getByRole('dialog');
+      await expect(centre.getByText(line, { exact: true })).toHaveCount(1);
+      await expect(centre.getByText(m.captures.education)).toHaveCount(0);
+      await expect(centre.getByRole('button').filter({ hasText: line })).toContainText(
+        m.notifications.updated.replace('{time}', '').trim(),
+      );
+    } finally {
+      await close();
+    }
+  });

@@ -1391,7 +1391,12 @@
     "kindKpis": "KPIs",
     "kindAi": "AI",
     "kindUpdates": "Updates",
-    "kpiReadingDue": "Reading due: {title}"
+    "kpiReadingDue": "Reading due: {title}",
+    "capturesReady": "{count, plural, one {1 recording ready to review} other {<bdi>{count, number, integer}</bdi> recordings ready to review}}",
+    "captureFailed": "A recording couldn’t be processed",
+    "updated": "Updated {time}",
+    "kindCaptures": "Recordings",
+    "recordingTitle": "{time} recording"
   },
   "mail": {
     "testSubject": "Test email from {workspace}",
@@ -1406,7 +1411,6 @@
     "review": "Review",
     "reviewCount": "Drafts waiting for review: {count, number, integer}",
     "recorderLabel": "Voice capture recorder",
-    "processingLabel": "Recording status",
     "permissionTitle": "Allow the microphone",
     "permissionBody": "We use the microphone to record your note. If transcription is on, the audio is sent to be turned into text. Nothing is created in the workspace until you approve the drafts.",
     "continue": "Continue",
@@ -1437,20 +1441,10 @@
     "committeeChip": "Committee: {name}",
     "clearCommittee": "Clear the committee",
     "fileName": "Voice capture",
-    "savedTitle": "Recording saved",
-    "preparing": "Preparing your drafts… We’ll let you know when they’re ready.",
-    "uploaded": "Recording uploaded",
     "transcribing": "Transcribing…",
     "preparingDrafts": "Preparing drafts…",
-    "done": "Done",
-    "readyTitle": "Your drafts are ready.",
-    "reviewNow": "Review now",
-    "later": "Later",
-    "offlineTitle": "You’re offline",
-    "offlineStatus": "Will send when you are back online.",
-    "offlineSession": "The recording is held in this session only; keep this page open.",
     "retry": "Retry",
-    "unavailable": "Recording saved. Transcription isn’t available now — you can type the text later.",
+    "unavailable": "Recording saved, but transcription isn’t available right now",
     "failedNoSpeech": "Transcription failed: no speech.",
     "failedTimeout": "Transcription timed out.",
     "failedOther": "We couldn’t prepare drafts from this recording. Try again, or delete it.",
@@ -1570,6 +1564,13 @@
     "placement_more": "In the More menu",
     "placement_header": "Header button",
     "placement_account-menu": "In the account menu",
-    "placement_hidden": "Hidden (shortcut only)"
+    "placement_hidden": "Hidden (shortcut only)",
+    "uploadingTitle": "Uploading recording…",
+    "firstRunTitle": "Recording saved. We’re preparing its drafts in the background.",
+    "firstRunBody": "Carry on working; we’ll let you know when they’re ready.",
+    "howItWorks": "How it works",
+    "processingTitle": "Processing your recording in the background",
+    "uploadFailedTitle": "Couldn’t upload the recording",
+    "uploadFailedBody": "It’s kept on this device until you retry."
   }
 }

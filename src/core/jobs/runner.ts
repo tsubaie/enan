@@ -66,12 +66,15 @@ function failure(
   return [error instanceof Error ? error.message : String(error), true, retryAfterMs];
 }
 // NOTIF-B04 `job.finished`: whoever asked for an AI result hears that it is ready, or that it failed,
-// about the note or task it ran on. System and scheduled jobs have nobody waiting on them.
-function finished(job: Claimed) {
+// about the note or task it ran on. System and scheduled jobs have nobody waiting on them. A
+// handler with its own `finished` hook speaks for itself instead (a capture's jobs, CAPTURES-B21),
+// so `job.finished` is never written for them.
+function finished(job: Claimed, outcome: 'succeeded' | 'failed') {
   const payload = AiPayload.safeParse(job.payload);
+  const hook = handlerFor(job.kind).finished;
   return async (database: Database) => {
-    // CAPTURES-B03: a capture's jobs tell nobody anything; the Review badge is how the recorder
-    // learns their drafts are ready, and nothing is notified before Approve.
+    if (hook) return hook(database, job, outcome);
+    // CAPTURES-B03: never `job.finished` for a capture's jobs, hook or not (ADR 0073).
     if (!job.createdBy || !payload.success || job.kind.startsWith('ai.captures.')) return;
     const [subjectType = ''] = payload.data.capability.split('.');
     await emitUnattended(database, [
@@ -90,10 +93,10 @@ async function runJob(job: Claimed, active: Map<string, AbortController>) {
     controller.signal.throwIfAborted();
     await publish(job, result, async (database) => {
       await handler.publish(database, job, result);
-      await finished(job)(database);
+      await finished(job, 'succeeded')(database);
     });
   } catch (error) {
-    await fail(job, ...failure(job, error, controller.signal), finished(job));
+    await fail(job, ...failure(job, error, controller.signal), finished(job, 'failed'));
   } finally {
     clearInterval(heartbeat);
     active.delete(job.id);

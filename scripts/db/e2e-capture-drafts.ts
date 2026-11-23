@@ -2,11 +2,12 @@ import { closeDatabase, db, withTransaction } from '../../src/core/db/client';
 import { id } from '../../src/core/db/ids';
 import { claim, enqueue, publish } from '../../src/core/db/jobs-repo';
 import * as repo from '../../src/modules/captures/repo';
+import { notifyReady } from '../../src/modules/captures/notifications';
 // The browser suite runs with AI off, so no interpreter can turn a capture into drafts. This
 // stands in for `ai.captures.interpret`'s publish on one lane's database: it gives the capture
 // named by CAPTURE_ID a transcript and two drafts (a task and a meeting note), each pointing at
-// its sentence, and marks it ready. Nothing else is touched; Approve stays the only way to a
-// live record.
+// its sentence, and marks it ready, telling the recorder in their grouped bell line exactly as the
+// publish does (CAPTURES-B21). Nothing else is touched; Approve stays the only way to a live record.
 // CAPTURE_STEP=processing instead leaves the capture transcribing on a job of a kind no runner
 // takes, so it stays in progress for as long as a scenario needs; CAPTURE_STEP=finished then claims
 // and publishes that job with nothing in it, as a transcription whose result the fence dropped
@@ -74,5 +75,6 @@ else if (step === 'finished') {
         createdBy: capture.createdBy,
       },
     ]);
+    await notifyReady(database, capture);
   });
 closeDatabase();

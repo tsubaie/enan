@@ -1868,6 +1868,57 @@ main:has(.home-page)::-webkit-scrollbar {
   background: color-mix(in oklch, var(--elevated), var(--text) 10%);
   color: var(--text);
 }
+/* CAPTURES-B20: a notice that something is not as asked (a recording kept, but not transcribed)
+   stands on the warning ground with a warning hairline, opaque in both themes so it reads as
+   clearly as the glass it replaces. */
+[data-slot='toast'][data-tone='warning'] {
+  background: var(--warning-soft);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklch, var(--warning), transparent 55%),
+    var(--shadow-panel);
+}
+.dark [data-slot='toast'][data-tone='warning'] {
+  background-color: color-mix(in oklch, var(--elevated), var(--warning) 16%);
+  background-image: none;
+  backdrop-filter: none;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklch, var(--warning), transparent 50%),
+    0 24px 60px -20px rgb(0 0 0 / 0.75);
+}
+/* An upload cannot say how far it is (fetch reports no upload progress), so the bar is
+   indeterminate: a short segment travels along the track until the toast turns into its outcome.
+   Under reduced motion it rests as a full, quiet track. */
+[data-slot='toast-progress'] {
+  position: relative;
+  display: block;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 9999px;
+  background: color-mix(in oklch, var(--text), transparent 88%);
+}
+[data-slot='toast-progress']::after {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: -40%;
+  width: 40%;
+  border-radius: inherit;
+  background: var(--accent);
+  animation: toast-progress 1.4s var(--ease-rise) infinite;
+}
+@keyframes toast-progress {
+  to {
+    inset-inline-start: 100%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-slot='toast-progress']::after {
+    animation: none;
+    inset-inline-start: 0;
+    width: 100%;
+    opacity: 0.5;
+  }
+}
 [data-slot='toast'][data-expanded] {
   height: var(--toast-height);
   transform: translateY(var(--toast-expanded-y)) scale(1);

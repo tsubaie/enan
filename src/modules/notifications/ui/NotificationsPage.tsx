@@ -18,7 +18,7 @@ import { NotificationRow } from './NotificationRow';
 // the newest hundred that match are all on hand.
 const groupKey: Record<
   NotificationGroup,
-  'kindAll' | 'kindTasks' | 'kindNotes' | 'kindKpis' | 'kindAi' | 'kindUpdates'
+  'kindAll' | 'kindTasks' | 'kindNotes' | 'kindKpis' | 'kindAi' | 'kindUpdates' | 'kindCaptures'
 > = {
   all: 'kindAll',
   tasks: 'kindTasks',
@@ -26,6 +26,7 @@ const groupKey: Record<
   kpis: 'kindKpis',
   ai: 'kindAi',
   updates: 'kindUpdates',
+  captures: 'kindCaptures',
 };
 type Filter = { unread: boolean; kind: NotificationGroup };
 export function NotificationsPage() {

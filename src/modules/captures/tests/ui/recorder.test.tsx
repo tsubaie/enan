@@ -16,11 +16,12 @@ import { mount } from '../../../../../tests/fixtures/mount';
 // upload is a spy.
 const spies = vi.hoisted(() => ({ send: vi.fn(), toast: vi.fn() }));
 vi.mock('../../ui/capture-queries', () => ({
-  useCreateCapture: () => ({ mutate: spies.send, isPending: false }),
-  useCapture: () => ({ data: undefined }),
+  useCreateCapture: () => ({ mutateAsync: spies.send }),
   useCaptureCount: () => ({ data: undefined }),
 }));
-vi.mock('@/ui/primitives/toast', () => ({ useToastManager: () => ({ add: spies.toast }) }));
+vi.mock('@/ui/primitives/toast', () => ({
+  useToastManager: () => ({ add: spies.toast, close: () => {} }),
+}));
 vi.mock('next/navigation', () => ({
   usePathname: () => '/home',
   useSearchParams: () => new URLSearchParams(),
@@ -57,6 +58,7 @@ class FakeRecorder {
 beforeEach(() => {
   vi.useFakeTimers();
   spies.send.mockReset();
+  spies.send.mockResolvedValue({ data: { id: crypto.randomUUID(), status: 'queued' } });
   spies.toast.mockReset();
   media.desktop = false;
   media.listeners.clear();
@@ -171,6 +173,22 @@ it('CAPTURES-B01 S8 a second before 15:00 the recording stops, is sent as a capt
   expect(form.get('durationSeconds')).toBe('899');
   expect(form.get('file')).toBeInstanceOf(File);
   expect(spies.toast).toHaveBeenCalledWith({ title: en.captures.limitReached });
+});
+it('CAPTURES-B20 after Stop the recorder closes with no sheet, focus returns to the record button and a new recording can start at once', async () => {
+  await startRecording();
+  await elapse(3);
+  fireEvent.click(screen.getByRole('button', { name: en.captures.stop }));
+  await act(() => vi.advanceTimersByTimeAsync(100));
+  expect(spies.send).toHaveBeenCalledTimes(1);
+  expect(recorder()).toBeNull();
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(screen.queryByRole('status')).toBeNull();
+  const record = screen.getByRole('button', { name: en.captures.recordNote });
+  expect(document.activeElement).toBe(record);
+  await act(async () => {
+    fireEvent.click(record);
+  });
+  expect(recorder()).not.toBeNull();
 });
 it('CAPTURES-B01 S10 Escape on a desktop pauses and offers three choices with Keep recording as the default', async () => {
   media.desktop = true;
@@ -341,32 +359,7 @@ it('CAPTURES-B14 with recording off the header keeps Review and draws no Record 
   expect(screen.getByRole('link', { name: en.captures.review })).toBeTruthy();
 });
 const refuse = (details: Record<string, string>, code = 'rule_violation') =>
-  spies.send.mockImplementation((_form: FormData, handlers: { onError: (e: Error) => void }) =>
-    handlers.onError(new ApiError(code, 'Request refused', details, 'request')),
-  );
-const keys = ['tooLong', 'tooLarge', 'unsupportedType', 'recordingOff'] as const;
-it.each([
-  [{ reason: 'recording_off', scope: 'workspace' }, 'forbidden', keys[3]],
-  [{ reason: 'too_long' }, 'rule_violation', keys[0]],
-  [{ reason: 'too_large' }, 'rule_violation', keys[1]],
-  [{ reason: 'unsupported_type' }, 'rule_violation', keys[2]],
-  [{}, 'too_large', keys[1]],
-])(
-  'CAPTURES-B12 a recording refused with %o (%s) says why at high priority and stays held for Retry',
-  async (details, code, key) => {
-    refuse(details, code);
-    await startRecording();
-    await elapse(3);
-    fireEvent.click(screen.getByRole('button', { name: en.captures.stop }));
-    await act(() => vi.advanceTimersByTimeAsync(100));
-    expect(spies.toast).toHaveBeenCalledWith({ title: en.captures[key], priority: 'high' });
-    expect(screen.getByText(en.captures[key])).toBeTruthy();
-    const file = spies.send.mock.calls[0]?.[0].get('file');
-    fireEvent.click(screen.getByRole('button', { name: en.captures.retry }));
-    expect(spies.send).toHaveBeenCalledTimes(2);
-    expect(spies.send.mock.calls[1]?.[0].get('file')).toBe(file);
-  },
-);
+  spies.send.mockRejectedValue(new ApiError(code, 'Request refused', details, 'request'));
 it('CAPTURES-B12 a file from the refused-microphone sheet that the server refuses reopens the sheet with the reason and focus on Upload audio', async () => {
   Object.defineProperty(navigator, 'mediaDevices', {
     configurable: true,
@@ -386,7 +379,8 @@ it('CAPTURES-B12 a file from the refused-microphone sheet that the server refuse
   expect(document.activeElement).toBe(
     screen.getByRole('button', { name: ar.captures.uploadAudio }),
   );
-  expect(spies.toast).not.toHaveBeenCalled();
+  // The sheet says it; no toast repeats the refusal.
+  expect(spies.toast).not.toHaveBeenCalledWith(expect.objectContaining({ priority: 'high' }));
 });
 it('CAPTURES-B01 the phone and desktop recorders stand on a solid surface, so the page and the bar never show through', async () => {
   await startRecording();

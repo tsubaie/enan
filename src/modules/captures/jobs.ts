@@ -12,12 +12,15 @@ import { AppError } from '@/core/http/errors';
 import { User } from '@/core/http/user-schema';
 import * as repo from './repo';
 import { interpretOrHold } from './service';
+import { notifyFailed, notifyReady } from './notifications';
 import { INTERPRET_PROMPT } from './ai/prompt';
 import { InterpretInput, InterpretOutput, toSuggestions } from './ai/interpret';
 import { SuggestionContent } from './schema/validation';
 // CAPTURES-B03 CAPTURES-B05 (§4.2, §4.3, § Security 3 and 10): both jobs publish only onto the
 // capture their payload names, and only while that capture still waits on this very job. They
-// write a transcript or drafts and nothing else: no note, no task, no notification, no refine.
+// write a transcript or drafts and nothing else: no note, no task, no refine, and no notification
+// but the recorder's own ready or failed line (CAPTURES-B21, ADR 0073), written behind the same
+// fence in the same transaction.
 const TranscribeInput = z.object({ captureId: z.uuid() });
 const Transcribed = z.object({ transcript: z.string().min(1) });
 const Interpreted = z.object({ suggestions: z.array(SuggestionContent).min(1) });
@@ -35,6 +38,18 @@ async function waitingOn(
   const current = step === 'transcribe' ? capture.transcribeJobId : capture.interpretJobId;
   return current === job.id ? capture : null;
 }
+// CAPTURES-B21: a job that failed for good tells the recorder, while the capture still waits on it
+// and is not deleted; a restore later (CAPTURES-B13 `interrupted`) emits nothing.
+const failedFor =
+  (step: 'transcribe' | 'interpret'): NonNullable<JobHandler['finished']> =>
+  async (database, job, outcome) => {
+    if (outcome !== 'failed') return;
+    const input = z.object({ captureId: z.uuid() }).safeParse(AiPayload.parse(job.payload).input);
+    const capture = input.success
+      ? await waitingOn(database, job, input.data.captureId, step)
+      : null;
+    if (capture) await notifyFailed(database, capture);
+  };
 export const captureJobs: Record<string, JobHandler> = {
   'ai.captures.transcribe': {
     concurrency: 2,
@@ -64,7 +79,11 @@ export const captureJobs: Record<string, JobHandler> = {
         'rate_limited',
         'conflict',
       ]);
+      // A refusal of the interpretation it asked for failed the capture inside this publish.
+      if ((await repo.selectStoredCapture(database, captureId))?.status === 'failed')
+        await notifyFailed(database, capture);
     },
+    finished: failedFor('transcribe'),
   },
   'ai.captures.interpret': {
     concurrency: 2,
@@ -95,6 +114,8 @@ export const captureJobs: Record<string, JobHandler> = {
         })),
       );
       await repo.updateCapture(database, capture.id, { status: 'ready', errorCode: null });
+      await notifyReady(database, capture);
     },
+    finished: failedFor('interpret'),
   },
 };

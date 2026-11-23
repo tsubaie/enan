@@ -182,7 +182,13 @@ const on: CaptureSetup = {
 };
 const page = (locale: 'en' | 'ar' = 'en', capture = on) =>
   mount(
-    <CapturesPage initial={spies.list as never} scope="mine" admin={false} capture={capture} />,
+    <CapturesPage
+      initial={spies.list as never}
+      scope="mine"
+      admin={false}
+      capture={capture}
+      focus={null}
+    />,
     locale,
   );
 it('CAPTURES-B02 the education line is shown until dismissed, then stays dismissed on this device', () => {
@@ -1106,7 +1112,13 @@ it('CAPTURES-B10 a recording made now, hydrated a moment after the server render
     const app = () => (
       <NextIntlClientProvider {...config}>
         <QueryClientProvider client={client}>
-          <CapturesPage initial={spies.list as never} scope="mine" admin={false} capture={on} />
+          <CapturesPage
+            initial={spies.list as never}
+            scope="mine"
+            admin={false}
+            capture={on}
+            focus={null}
+          />
         </QueryClientProvider>
       </NextIntlClientProvider>
     );

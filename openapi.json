@@ -3972,6 +3972,11 @@
                         "null"
                       ]
                     },
+                    "count": {
+                      "maximum": 9007199254740991,
+                      "minimum": -9007199254740991,
+                      "type": "integer"
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -3998,7 +4003,9 @@
                         "update.rollback_failed",
                         "update.blocked",
                         "update.stalled",
-                        "update.updater_outdated"
+                        "update.updater_outdated",
+                        "captures.ready",
+                        "captures.failed"
                       ],
                       "type": "string"
                     },
@@ -11071,7 +11078,8 @@
                   "notes",
                   "kpis",
                   "ai",
-                  "updates"
+                  "updates",
+                  "captures"
                 ],
                 "type": "string"
               },
@@ -11090,7 +11098,9 @@
                   "update.rollback_failed",
                   "update.blocked",
                   "update.stalled",
-                  "update.updater_outdated"
+                  "update.updater_outdated",
+                  "captures.ready",
+                  "captures.failed"
                 ],
                 "type": "string"
               }
@@ -26325,7 +26335,8 @@
                     "notes",
                     "kpis",
                     "ai",
-                    "updates"
+                    "updates",
+                    "captures"
                   ],
                   "type": "string"
                 },
@@ -26344,7 +26355,9 @@
                     "update.rollback_failed",
                     "update.blocked",
                     "update.stalled",
-                    "update.updater_outdated"
+                    "update.updater_outdated",
+                    "captures.ready",
+                    "captures.failed"
                   ],
                   "type": "string"
                 }

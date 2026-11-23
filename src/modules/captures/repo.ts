@@ -121,6 +121,41 @@ export async function countPendingCaptures(database: Database, user: Reader) {
     .where(and(visibleCaptures(user), eq(captures.createdBy, user.id)));
   return Number(row?.pending ?? 0) + Number(row?.failed ?? 0);
 }
+// CAPTURES-B21: the recorder's own live captures that are ready with at least one draft still
+// pending, counted when the bell is read (never stored), so Approve, Discard, Delete and Restore
+// keep the grouped line honest without writing to it. Never widened for an administrator.
+export async function countReadyForRecorder(database: Database, userId: string) {
+  const [row] = await database
+    .select({ count: sql<number>`count(distinct ${captures.id})` })
+    .from(captures)
+    .innerJoin(
+      captureSuggestions,
+      and(
+        eq(captureSuggestions.captureId, captures.id),
+        isNull(captureSuggestions.deletedAt),
+        eq(captureSuggestions.status, 'pending'),
+      ),
+    )
+    .where(
+      and(eq(captures.createdBy, userId), isNull(captures.deletedAt), eq(captures.status, 'ready')),
+    );
+  return Number(row?.count ?? 0);
+}
+// CAPTURES-B21: the captures a bell line names, with the derived status, for the resolver to check.
+export async function selectCaptureSubjects(database: Database, captureIds: readonly string[]) {
+  if (!captureIds.length) return [];
+  return database
+    .select({
+      id: captures.id,
+      status,
+      createdAt: captures.createdAt,
+      createdBy: captures.createdBy,
+      deletedAt: captures.deletedAt,
+    })
+    .from(captures)
+    .leftJoin(jobs, eq(jobs.id, waitingJob))
+    .where(inArray(captures.id, [...captureIds]));
+}
 export async function insertCapture(database: Database, value: typeof captures.$inferInsert) {
   await database.insert(captures).values(value);
 }

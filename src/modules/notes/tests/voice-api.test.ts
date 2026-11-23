@@ -30,6 +30,20 @@ vi.mock('@/core/auth/session', async (importOriginal) => ({
 }));
 vi.mock('@/core/ai/models', () => ({ loadModels: async () => [fixtureModel] }));
 vi.mock('next-intl/server', () => ({ getTranslations: async () => (key: string) => key }));
+// The moment between storing the audio and the transaction that writes its rows: a scenario may
+// turn the switch off there, so only the check inside the transaction can refuse (CAPTURES-B14).
+const storing = vi.hoisted(() => ({ after: async () => {} }));
+vi.mock('@/core/files/voice-audio', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/core/files/voice-audio')>();
+  return {
+    ...original,
+    storeVoiceAudio: async (file: File) => {
+      const audio = await original.storeVoiceAudio(file);
+      await storing.after();
+      return audio;
+    },
+  };
+});
 type Handler = (
   request: Request,
   route?: { params: Promise<Record<string, string>> },
@@ -147,6 +161,7 @@ const audio = (noteId: string, memoId: string, range?: string) =>
 beforeAll(() => migrateDatabase());
 beforeEach(async () => {
   await clearDatabase();
+  storing.after = async () => {};
   session.user = User.parse(
     await insertUser(db(), {
       id: id(),
@@ -399,8 +414,33 @@ it.each([
     expect(await storageUsage()).toBe(before);
   },
 );
+it.each([
+  ['workspace', 'captures.enabled'],
+  ['account', 'user.captures.enabled'],
+] as const)(
+  'CAPTURES-B07 CAPTURES-B14 recording turned off (%s) after the audio is stored refuses the rolled-back route inside the transaction with 403 recording_off and writes no row',
+  async (scope, key) => {
+    const actor = session.user?.id ?? '';
+    await writeSetting(db(), 'captures.inbox', false, actor);
+    // As for POST /captures: only the check inside the transaction is left to refuse.
+    storing.after = async () => {
+      if (key === 'captures.enabled') await writeSetting(db(), key, false, actor);
+      else await writeSetting(db(), key, false, actor, actor);
+    };
+    const answer = await createFromVoice(unique(webm(36)), { durationSeconds: '12' });
+    expect(answer.status).toBe(403);
+    expect(answer.body.error).toMatchObject({
+      code: 'forbidden',
+      details: { reason: 'recording_off', scope },
+    });
+    expect(await db().select().from(notes)).toEqual([]);
+    expect(await db().select().from(noteVoiceMemos)).toEqual([]);
+    expect(await db().select().from(files)).toEqual([]);
+  },
+);
 // Bytes no earlier run stored: files are content-addressed and FILES_DIR outlives a run, so a
 // repeated upload would find its file already there and "nothing written" would prove nothing.
+// Keep it: without it a same-bytes overwrite of an existing file would go undetected.
 function unique(bytes: Uint8Array) {
   crypto.getRandomValues(bytes.subarray(bytes.length - 16));
   return bytes;

@@ -1,11 +1,12 @@
 'use client';
-import { useTranslations } from 'next-intl';
+import { useFormatter, useTranslations } from 'next-intl';
 import {
   AlarmClock,
   CircleAlert,
   CircleCheck,
   Clock,
   Download,
+  Inbox,
   ListChecks,
   NotebookPen,
   Target,
@@ -22,6 +23,7 @@ import type { Notification } from '../schema/validation';
 // The page passes `showDate` (NOTIF-B16), so a long list says when beside how long ago.
 type RowProps = { item: Notification; onOpen: () => void; showDate?: boolean };
 export function NotificationRow({ item, onOpen, showDate = false }: RowProps) {
+  const t = useTranslations('notifications');
   const relative = useRelativeTime();
   const when = useDateTime();
   const read = useMarkRead();
@@ -62,12 +64,15 @@ export function NotificationRow({ item, onOpen, showDate = false }: RowProps) {
         >
           <Sentence item={item} />
         </span>
+        {item.kind === 'captures.failed' && <RecordedAt item={item} />}
         <time
           dateTime={item.createdAt}
           title={when(item.createdAt)}
           className="text-xs font-light text-text-muted tabular-nums"
         >
-          {relative(item.createdAt)}
+          {item.kind === 'captures.ready'
+            ? t('updated', { time: relative(item.createdAt) })
+            : relative(item.createdAt)}
           {showDate && ` · ${when(item.createdAt)}`}
         </time>
       </span>
@@ -100,6 +105,8 @@ const badge: Record<Notification['kind'], [LucideIcon, Tone]> = {
   'note.mentioned': [NotebookPen, 'info'],
   'job.finished': [WandSparkles, 'info'],
   'update.available': [Download, 'info'],
+  'captures.ready': [Inbox, 'info'],
+  'captures.failed': [CircleAlert, 'warning'],
 };
 // Each kind names its own message key, in the map or the switch below, rather than one built from
 // the kind at runtime. next-intl
@@ -108,7 +115,10 @@ const badge: Record<Notification['kind'], [LucideIcon, Tone]> = {
 // half-written line in front of the reader. The keys carry no dots: a kind is `task.assigned`
 // because that is what the database stores, but next-intl reads a dot as a path and the catalogue
 // is two levels deep by audit (`scripts/audit/i18n.ts`). These kinds name only their subject.
-type AboutKind = Exclude<Notification['kind'], 'task.assigned' | 'note.mentioned'>;
+type AboutKind = Exclude<
+  Notification['kind'],
+  'task.assigned' | 'note.mentioned' | 'captures.ready' | 'captures.failed'
+>;
 const aboutKey: Record<
   AboutKind,
   | 'taskDueToday'
@@ -148,7 +158,26 @@ function Sentence({ item }: { item: Notification }) {
       return t('taskAssigned', by);
     case 'note.mentioned':
       return t('noteMentioned', by);
+    // CAPTURES-B21: one line for every recording ready, its number counted when the bell is read.
+    case 'captures.ready':
+      return t.rich('capturesReady', {
+        count: item.count ?? 0,
+        bdi: (text) => <bdi>{text}</bdi>,
+      });
+    case 'captures.failed':
+      return t('captureFailed');
     default:
       return t(aboutKey[item.kind], { title: item.title });
   }
+}
+// A failed recording's line says when it was recorded: its subject's title is that moment.
+function RecordedAt({ item }: { item: Notification }) {
+  const t = useTranslations('notifications');
+  const format = useFormatter();
+  const time = format.dateTime(new Date(item.title), { hour: 'numeric', minute: '2-digit' });
+  return (
+    <span className="text-xs text-text-muted" dir="auto">
+      {t('recordingTitle', { time })}
+    </span>
+  );
 }

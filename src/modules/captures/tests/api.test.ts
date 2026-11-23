@@ -21,6 +21,20 @@ vi.mock('@/core/auth/session', async (importOriginal) => ({
   currentUser: async () => session.user,
 }));
 vi.mock('next-intl/server', () => ({ getTranslations: async () => (key: string) => key }));
+// The moment between storing the audio and the transaction that writes its rows: a scenario may
+// turn the switch off there, so only the check inside the transaction can refuse (CAPTURES-B14).
+const storing = vi.hoisted(() => ({ after: async () => {} }));
+vi.mock('@/core/files/voice-audio', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/core/files/voice-audio')>();
+  return {
+    ...original,
+    storeVoiceAudio: async (file: File) => {
+      const audio = await original.storeVoiceAudio(file);
+      await storing.after();
+      return audio;
+    },
+  };
+});
 beforeAll(() => migrateDatabase());
 afterAll(() => closeDatabase());
 let recorder: User;
@@ -32,6 +46,7 @@ beforeEach(async () => {
   other = await user('Other Member', 'member');
   admin = await user('Administrator', 'admin');
   session.user = recorder;
+  storing.after = async () => {};
 });
 const audio = (captureId: string, range?: string) =>
   api.audio(
@@ -298,6 +313,28 @@ it.each([
     expect(await storageUsage()).toBe(before);
   },
 );
+it.each([
+  ['workspace', 'captures.enabled'],
+  ['account', 'user.captures.enabled'],
+] as const)(
+  'CAPTURES-B14 recording turned off (%s) after the audio is stored refuses POST /captures inside the transaction with 403 recording_off and writes no row',
+  async (scope, key) => {
+    // The check before the audio is stored has passed; only the one inside the transaction that
+    // writes the rows can refuse now. The blob already written is left to the sweep (#186).
+    storing.after = async () => {
+      if (key === 'captures.enabled') await writeSetting(db(), key, false, admin.id);
+      else await writeSetting(db(), key, false, recorder.id, recorder.id);
+    };
+    const answer = await record(api.create, unique(webm(46)), { durationSeconds: '12' });
+    expect(answer.status).toBe(403);
+    expect(answer.body.error).toMatchObject({
+      code: 'forbidden',
+      details: { reason: 'recording_off', scope },
+    });
+    expect(await db().select().from(captures)).toEqual([]);
+    expect(await db().select().from(files)).toEqual([]);
+  },
+);
 it('CAPTURES-B14 with recording off an existing recording can still be listed, opened, played, typed, retried, deleted and restored', async () => {
   const mine = await recorded(44);
   await writeSetting(db(), 'captures.enabled', false, admin.id);
@@ -326,6 +363,7 @@ it('CAPTURES-B14 with recording off an existing recording can still be listed, o
 });
 // Bytes no earlier run stored: files are content-addressed and FILES_DIR outlives a run, so a
 // repeated upload would find its file already there and "nothing written" would prove nothing.
+// Keep it: without it a same-bytes overwrite of an existing file would go undetected.
 function unique(bytes: Uint8Array) {
   crypto.getRandomValues(bytes.subarray(bytes.length - 16));
   return bytes;

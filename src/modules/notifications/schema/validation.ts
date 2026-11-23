@@ -17,11 +17,22 @@ export const NotificationKind = z.enum([
   'update.blocked',
   'update.stalled',
   'update.updater_outdated',
+  // CAPTURES-B21, ADR 0073: the recorder's grouped ready line and a recording that failed.
+  'captures.ready',
+  'captures.failed',
 ]);
 export type NotificationKind = z.infer<typeof NotificationKind>;
 // NOTIF-B14: the page narrows by the module a kind belongs to, the way the audit log narrows by
 // kind of entry. A group is every kind under its prefix, so a kind added later lands in its group.
-export const NotificationGroup = z.enum(['all', 'tasks', 'notes', 'kpis', 'ai', 'updates']);
+export const NotificationGroup = z.enum([
+  'all',
+  'tasks',
+  'notes',
+  'kpis',
+  'ai',
+  'updates',
+  'captures',
+]);
 export type NotificationGroup = z.infer<typeof NotificationGroup>;
 const groupPrefix: Record<Exclude<NotificationGroup, 'all'>, string> = {
   tasks: 'task.',
@@ -29,6 +40,7 @@ const groupPrefix: Record<Exclude<NotificationGroup, 'all'>, string> = {
   kpis: 'kpi.',
   ai: 'job.',
   updates: 'update.',
+  captures: 'captures.',
 };
 export const NotificationFilter = z.union([NotificationGroup, NotificationKind]);
 export type NotificationFilter = z.infer<typeof NotificationFilter>;
@@ -49,6 +61,8 @@ export const Notification = z.object({
   // NOTIF-B06: resolved through the owning module at read time, never stored.
   title: z.string(),
   href: z.string(),
+  // NOTIF-B18: a number the line says (recordings ready), counted when it is read.
+  count: z.number().int().optional(),
   actorName: z.string().nullable(),
   createdAt: z.string(),
   readAt: z.string().nullable(),
