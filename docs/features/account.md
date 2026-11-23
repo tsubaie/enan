@@ -140,7 +140,8 @@ password and session routes.
   current-password check, the other-sessions revocation and the current session surviving;
   ACCT-I02 role and active state rejected if supplied; ACCT-B11 only the reader's own
   `user.captures.*` rows written, a strict `captures` patch, `workspace` clearing a placement row
-  and a member reading the workspace's default placements.
+  and a member reading the workspace's default placements; Workspace default clearing only the
+  reader's own placement rows while another member's stay unchanged (ACCT-I03).
 - `src/modules/account/tests/ui/account-page.test.tsx`: ACCT-B11 the switches, the refresh, the
   greyed state; the placement radios, the Workspace default label, the Side cards and End for a
   new Floating choice, none offered while recording is off.

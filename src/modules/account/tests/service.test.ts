@@ -278,3 +278,36 @@ it('ACCT-B11 CAPTURES-B16 workspace clears the placement row, a concrete choice 
     workspaceDesktop: 'hidden',
   });
 });
+// ACCT-B11 ACCT-I03 CAPTURES-B16: Workspace default clears the reader's own placement rows and
+// nobody else's; the clear is scoped to `ctx.user.id`, not just to the key.
+it('ACCT-B11 ACCT-I03 CAPTURES-B16 choosing Workspace default clears only the reader’s placement rows; another member’s survive unchanged', async () => {
+  const second = User.parse(
+    await insertUser(db(), {
+      id: id(),
+      name: 'Second Member',
+      email: 'second@example.test',
+      passwordHash: 'unused-test-hash',
+      role: 'member',
+    }),
+  );
+  for (const userId of [actor.id, second.id]) {
+    await writeSetting(db(), 'user.captures.mobile_placement', 'more', userId, userId);
+    await writeSetting(db(), 'user.captures.floating_side', 'start', userId, userId);
+    await writeSetting(db(), 'user.captures.desktop_placement', 'hidden', userId, userId);
+  }
+  const rowsOf = async (userId: string) =>
+    (await db().select().from(settings))
+      .filter((row) => row.userId === userId && row.key.startsWith('user.captures.'))
+      .map((row) => [row.key, row.value])
+      .sort();
+  const before = await rowsOf(second.id);
+  await run((ctx) =>
+    service.patchAccount(
+      ctx,
+      AccountPatch.parse({ revision: 1, captures: { mobile: 'workspace', desktop: 'workspace' } }),
+    ),
+  );
+  expect(await rowsOf(actor.id)).toEqual([['user.captures.floating_side', 'start']]);
+  expect(await rowsOf(second.id)).toEqual(before);
+  expect(before).toHaveLength(3);
+});
