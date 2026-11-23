@@ -1,11 +1,11 @@
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
-import { eq, like } from 'drizzle-orm';
+import { and, eq, like } from 'drizzle-orm';
 import { closeDatabase, db, withTransaction } from '@/core/db/client';
 import { id } from '@/core/db/ids';
 import { migrateDatabase } from '@/core/db/migrate';
 import { clearDatabase } from '@/core/db/reset';
 import { writeSetting } from '@/core/db/settings-repo';
-import { files, jobs, notifications } from '@/core/db/system-schema';
+import { auditLog, files, jobs, notifications } from '@/core/db/system-schema';
 import { readStoredFile } from '@/core/files/storage';
 import type { User } from '@/core/http/user-schema';
 import { notes } from '@/modules/notes/schema/db';
@@ -15,9 +15,18 @@ import { PersonCreate, personDraft } from '@/modules/people/schema/validation';
 import { fixtureModel } from '../../../../tests/fixtures/ai/jobs';
 import { captureJobs } from '../jobs';
 import { INTERPRET_PROMPT } from '../ai/prompt';
-import { captureSuggestions } from '../schema/db';
-import { CaptureCreate } from '../schema/validation';
-import { createCapture, getCapture, removeCapture, typeTranscript } from '../service';
+import { captureSuggestions, captures } from '../schema/db';
+import { CaptureCreate, CaptureListQuery } from '../schema/validation';
+import {
+  createCapture,
+  getCapture,
+  listCaptures,
+  pendingCaptureCount,
+  removeCapture,
+  restoreCapture,
+  retryTranscription,
+  typeTranscript,
+} from '../service';
 import { committee, user, webm } from './fixtures';
 // CAPTURES-B03 CAPTURES-B05 (§4.2, §4.3): the capture jobs against the real database. The network
 // is the only stand-in: admission, the handlers and the provider code run as they do in production.
@@ -256,4 +265,156 @@ it('CAPTURES-B01 publishing the same interpretation twice leaves one set of draf
   await withTransaction(db(), (database) => handler(job.kind).publish(database, job, result));
   const live = (await db().select().from(captureSuggestions)).filter((row) => !row.deletedAt);
   expect(live).toHaveLength(1);
+});
+const finish = (jobId: string | null) =>
+  db()
+    .update(jobs)
+    .set({ status: 'succeeded' })
+    .where(eq(jobs.id, jobId ?? ''));
+it('CAPTURES-B13 a capture deleted mid-transcription or mid-interpretation never surfaces a draft and stays deleted', async () => {
+  const listed = async () => (await listCaptures(ctx(), CaptureListQuery.parse({}))).data;
+  const transcribing = await createCapture(
+    ctx(),
+    CaptureCreate.parse({ file: new File([webm(11)], 'Debrief.webm'), durationSeconds: 5 }),
+  );
+  expect(transcribing.status).toBe('transcribing');
+  const interpreting = await transcribed('Send the quote.', 12);
+  expect(interpreting.status).toBe('interpreting');
+  for (const capture of [transcribing, interpreting]) await removeCapture(ctx(), capture.id);
+  const before = await db().select().from(captures);
+  sdk.post.mockResolvedValue({ text: 'Too late.' });
+  answer({ suggestions: [proposal({ title: 'Too late' })] });
+  await runAndPublish(transcribing.transcribeJobId);
+  await runAndPublish(interpreting.interpretJobId);
+  // As the runner does, both jobs are marked done; nothing reached the deleted captures.
+  await finish(transcribing.transcribeJobId);
+  await finish(interpreting.interpretJobId);
+  expect(await db().select().from(captures)).toEqual(before);
+  expect(
+    await db()
+      .select()
+      .from(captureSuggestions)
+      .where(eq(captureSuggestions.captureId, interpreting.id)),
+  ).toEqual([]);
+  expect(await db().select().from(captureSuggestions)).toEqual([]);
+  expect(await listed()).toEqual([]);
+  expect(await pendingCaptureCount(ctx())).toEqual({ pending: 0 });
+  expect(await db().select().from(tasks)).toEqual([]);
+  expect(await db().select().from(notes)).toEqual([]);
+});
+// CAPTURES-B13 restore after a delete made while a job ran. The restore and the job's publish each
+// run in one BEGIN IMMEDIATE transaction (withTransaction): the fence's read of deleted_at and the
+// result's write sit inside the publish transaction, and the restore holds the lock from its first
+// read, so one always finishes before the other starts.
+const restores = (captureId: string) =>
+  db()
+    .select()
+    .from(auditLog)
+    .where(and(eq(auditLog.entityId, captureId), eq(auditLog.action, 'restore')));
+const row = async (captureId: string) =>
+  (await db().select().from(captures).where(eq(captures.id, captureId)))[0];
+it('CAPTURES-B13 a capture restored after its job finished while deleted fails as interrupted, audited as reconciled, and takes Retry', async () => {
+  const created = await createCapture(
+    ctx(),
+    CaptureCreate.parse({ file: new File([webm(31)], 'Debrief.webm'), durationSeconds: 5 }),
+  );
+  const { opId } = await removeCapture(ctx(), created.id);
+  sdk.post.mockResolvedValue({ text: 'Too late.' });
+  await runAndPublish(created.transcribeJobId);
+  await finish(created.transcribeJobId);
+  const back = await restoreCapture(ctx(), created.id, opId);
+  expect(back).toMatchObject({ status: 'failed', errorCode: 'interrupted', transcript: null });
+  const [audit] = await restores(created.id);
+  expect(audit?.diff).toEqual({ reconciled: true, previousStatus: 'transcribing' });
+  const retried = await retryTranscription(ctx(), created.id);
+  expect(retried.status).toBe('transcribing');
+  expect(retried.transcribeJobId).not.toBe(created.transcribeJobId);
+});
+it('CAPTURES-B13 a capture restored after its interpretation finished while deleted takes a typed transcript', async () => {
+  const capture = await transcribed('Send the quote.', 32);
+  const { opId } = await removeCapture(ctx(), capture.id);
+  answer({ suggestions: [proposal({ title: 'Too late' })] });
+  await runAndPublish(capture.interpretJobId);
+  await finish(capture.interpretJobId);
+  const back = await restoreCapture(ctx(), capture.id, opId);
+  expect(back).toMatchObject({ status: 'failed', errorCode: 'interrupted', suggestions: [] });
+  expect((await restores(capture.id))[0]?.diff).toEqual({
+    reconciled: true,
+    previousStatus: 'interpreting',
+  });
+  const typed = await typeTranscript(ctx(), capture.id, { transcript: 'Send the quote today.' });
+  expect(typed.status).toBe('interpreting');
+});
+it('CAPTURES-B13 restored before its job finishes, a capture takes the result as usual and is not reconciled', async () => {
+  const created = await createCapture(
+    ctx(),
+    CaptureCreate.parse({ file: new File([webm(33)], 'Debrief.webm'), durationSeconds: 5 }),
+  );
+  const { opId } = await removeCapture(ctx(), created.id);
+  const back = await restoreCapture(ctx(), created.id, opId);
+  expect(back.status).toBe('transcribing');
+  expect((await restores(created.id))[0]?.diff).toEqual({});
+  sdk.post.mockResolvedValue({ text: 'Send the updated supplier quote.' });
+  await runAndPublish(created.transcribeJobId);
+  const interpreting = await getCapture(ctx(), created.id);
+  expect(interpreting.status).toBe('interpreting');
+  answer({ suggestions: [proposal({ title: 'Send the quote' })] });
+  await runAndPublish(interpreting.interpretJobId);
+  const ready = await getCapture(ctx(), created.id);
+  expect(ready.status).toBe('ready');
+  expect(ready.suggestions.map((draft) => draft.payload)).toMatchObject([
+    { title: 'Send the quote' },
+  ]);
+});
+it('CAPTURES-B13 a second restore with the same op id answers the capture and changes nothing', async () => {
+  const created = await createCapture(
+    ctx(),
+    CaptureCreate.parse({ file: new File([webm(34)], 'Debrief.webm'), durationSeconds: 5 }),
+  );
+  const { opId } = await removeCapture(ctx(), created.id);
+  sdk.post.mockResolvedValue({ text: 'Too late.' });
+  await runAndPublish(created.transcribeJobId);
+  await finish(created.transcribeJobId);
+  const first = await restoreCapture(ctx(), created.id, opId);
+  const before = await row(created.id);
+  const again = await restoreCapture(ctx(), created.id, opId);
+  expect(again).toEqual(first);
+  expect(await row(created.id)).toEqual(before);
+  expect(await restores(created.id)).toHaveLength(1);
+  // Another op id is still not this capture's restore.
+  await expect(restoreCapture(ctx(), created.id, id())).rejects.toMatchObject({
+    code: 'not_found',
+  });
+});
+it('CAPTURES-B13 the publish fence refuses to run outside the write lock, and a restore holding it makes the publish wait', async () => {
+  const created = await createCapture(
+    ctx(),
+    CaptureCreate.parse({ file: new File([webm(35)], 'Debrief.webm'), durationSeconds: 5 }),
+  );
+  const { opId } = await removeCapture(ctx(), created.id);
+  const job = await jobRow(created.transcribeJobId);
+  sdk.post.mockResolvedValue({ text: 'Send the quote.' });
+  const result = await handler(job.kind).run(job, signal());
+  await expect(handler(job.kind).publish(db(), job, result)).rejects.toThrow(/withTransaction/u);
+  const order: string[] = [];
+  let release = () => {};
+  const held = new Promise<void>((done) => {
+    release = done;
+  });
+  const restoring = withTransaction(db(), async (database) => {
+    await restoreCapture({ ...ctx(), db: database }, created.id, opId);
+    order.push('restored');
+    await held;
+  });
+  const publishing = withTransaction(db(), async (database) => {
+    order.push('publishing');
+    await handler(job.kind).publish(database, job, result);
+  });
+  await new Promise((done) => setTimeout(done, 50));
+  expect(order).toEqual(['restored']);
+  release();
+  await Promise.all([restoring, publishing]);
+  expect(order).toEqual(['restored', 'publishing']);
+  // The restore came first, so the result landed on the live capture.
+  expect(await row(created.id)).toMatchObject({ deletedAt: null, transcript: 'Send the quote.' });
 });

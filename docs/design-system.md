@@ -169,7 +169,7 @@ Blue is the colour of "chosen".
 
 ### 4.5 Dropdowns and menus
 
-Popups are light glass (blur 28 px). Their items are Light. The current choice carries a tick.
+Popups are light glass (blur 28 px). Their items are Light. The current choice carries a tick. A popover over dense text that must stay legible takes the opaque surface instead (`PopoverContent surface="elevated"`, `data-surface="elevated"`): the elevated ground with no image and no blur, keeping its rim and shadow; the Review menu (CAPTURES-A09) is the one so far. Every other popover keeps the glass, the default.
 
 ### 4.5b Toasts
 

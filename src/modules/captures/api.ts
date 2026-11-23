@@ -98,6 +98,15 @@ export const remove = defineHandler({
   idempotent: true,
   handler: (_, ctx, params) => service.removeCapture(authenticated(ctx), captureId(params)),
 });
+export const restore = defineHandler({
+  guard: 'session',
+  input: z.strictObject({ opId: z.uuid() }),
+  response,
+  idempotent: true,
+  handler: async (input, ctx, params) => ({
+    data: await service.restoreCapture(authenticated(ctx), captureId(params), input.opId),
+  }),
+});
 // The audio is a file, not JSON, so it is answered here rather than through defineHandler, with
 // the voice memo's Range handling. Unlike a memo's, it is only for the recorder and admins, and
 // anyone else gets the same 404 as a missing id (CAPTURES-B02).

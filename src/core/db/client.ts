@@ -222,6 +222,13 @@ async function beginImmediate<T>(database: Database, work: (tx: Transaction) => 
     throw new DatabaseBusyError(busyTimeoutMs, error);
   }
 }
+// A transaction handle only ever comes from withTransaction, so it holds the write lock taken by
+// BEGIN IMMEDIATE (or is a savepoint inside such a transaction). A read whose answer decides a
+// write calls this, so no other writer can change the row between the two.
+export function assertWriteLock(database: Database) {
+  if (!is(database, SQLiteTransaction))
+    throw new Error('this read decides a write: run it inside withTransaction');
+}
 // Serializes other write work (the migrator's own transaction) with the transactions above.
 export async function withWriteLock<T>(work: () => Promise<T>, windowMs = busyRetryWindowMs) {
   const release = await enqueueWriter(windowMs);

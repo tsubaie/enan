@@ -62,9 +62,7 @@ export function useCapture(captureId: string | null) {
       query.state.data && !working.has(query.state.data.data.status) ? false : 3_000,
   });
 }
-function useCaptureMutation<I>(
-  send: (input: I) => Promise<z.infer<typeof one> | { opId: string }>,
-) {
+function useCaptureMutation<I>(send: (input: I) => Promise<z.infer<typeof one>>) {
   const client = useQueryClient();
   return useMutation({
     mutationFn: send,
@@ -85,11 +83,6 @@ export function useRetryCapture() {
       method: 'POST',
       body: {},
     }),
-  );
-}
-export function useRemoveCapture() {
-  return useCaptureMutation((captureId: string) =>
-    request(`/captures/${captureId}`, z.object({ opId: z.uuid() }), { method: 'DELETE' }),
   );
 }
 
@@ -137,6 +130,11 @@ export function useReviewMutations() {
       send(`/captures/${captureId}/merge`, suggestion, { keepId, mergeIds }),
     typeTranscript: (captureId: string, transcript: string) =>
       send(`/captures/${captureId}/transcript`, one, { transcript }),
+    // S17: the recording and its drafts leave Review; the delete's op id is what Undo sends back.
+    removeCapture: (captureId: string) =>
+      send(`/captures/${captureId}`, z.object({ opId: z.uuid() }), {}, 'DELETE'),
+    restoreCapture: (captureId: string, opId: string) =>
+      send(`/captures/${captureId}/restore`, one, { opId }),
   };
 }
 // The people a task draft may be given to; the same key as the notes' people list, so one read

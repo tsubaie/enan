@@ -5,7 +5,7 @@ import { executeAi } from '@/core/ai/execute';
 import { transcribeStoredAudio } from '@/core/ai/transcribe';
 import { AiOutput, AiPayload } from '@/core/ai/job-schema';
 import { userById } from '@/core/db/auth-repo';
-import { db, type Database } from '@/core/db/client';
+import { assertWriteLock, db, type Database } from '@/core/db/client';
 import { type Claimed } from '@/core/db/jobs-repo';
 import { id } from '@/core/db/ids';
 import { AppError } from '@/core/http/errors';
@@ -27,6 +27,9 @@ async function waitingOn(
   captureId: string,
   step: 'transcribe' | 'interpret',
 ) {
+  // The fence and the result's write share the runner's publish transaction (BEGIN IMMEDIATE, see
+  // jobs-repo `publish`), so a delete or a restore cannot land between this read and the write.
+  assertWriteLock(database);
   const capture = await repo.selectStoredCapture(database, captureId);
   if (!capture || capture.deletedAt) return null;
   const current = step === 'transcribe' ? capture.transcribeJobId : capture.interpretJobId;

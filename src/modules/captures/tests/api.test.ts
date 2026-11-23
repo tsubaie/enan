@@ -1,13 +1,15 @@
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { closeDatabase, db } from '@/core/db/client';
+import { and, eq } from 'drizzle-orm';
 import { id } from '@/core/db/ids';
+import { auditLog } from '@/core/db/system-schema';
 import { migrateDatabase } from '@/core/db/migrate';
 import { clearDatabase } from '@/core/db/reset';
 import { voiceAudioLimits } from '@/core/files/voice-audio';
 import type { User } from '@/core/http/user-schema';
 import { notes } from '@/modules/notes/schema/db';
 import * as api from '../api';
-import { captures } from '../schema/db';
+import { captureSuggestions, captures } from '../schema/db';
 import { call, committee, record, suggestion, user, webm } from './fixtures';
 // CAPTURES-B01 CAPTURES-B02 CAPTURES-B12: the capture routes as exported, with real multipart and
 // JSON requests against the real database. The session is the one seam replaced; AI is off.
@@ -156,4 +158,84 @@ it('CAPTURES-B01 a typed transcript is kept on the capture, and interpreting wit
   );
   expect(retried.status).toBe(503);
   expect(await db().select().from(notes)).toEqual([]);
+});
+
+const stored = async (captureId: string) =>
+  (await db().select().from(captures).where(eq(captures.id, captureId)))[0];
+const remove = (captureId: string) =>
+  call(api.remove, 'DELETE', `/captures/${captureId}`, { id: captureId });
+const restore = (captureId: string, opId: string) =>
+  call(api.restore, 'POST', `/captures/${captureId}/restore`, { id: captureId }, { opId });
+const notFound = { code: 'not_found', details: { entityType: 'capture' } };
+it('CAPTURES-B02 a repeat delete by the recorder answers 204 with the first operation id and rewrites nothing', async () => {
+  const mine = await recorded(20);
+  const first = await remove(mine.id);
+  expect(first.status).toBe(204);
+  const opId = first.response.headers.get('X-Op-Id');
+  expect(opId).toBeTruthy();
+  const before = await stored(mine.id);
+  const again = await remove(mine.id);
+  expect(again.status).toBe(204);
+  expect(again.response.headers.get('X-Op-Id')).toBe(opId);
+  expect(await stored(mine.id)).toEqual(before);
+  const deletes = await db()
+    .select()
+    .from(auditLog)
+    .where(and(eq(auditLog.entityId, mine.id), eq(auditLog.action, 'delete')));
+  expect(deletes).toHaveLength(1);
+  // Another member still learns nothing, before or after the delete.
+  session.user = other;
+  expect((await remove(mine.id)).body.error).toMatchObject(notFound);
+  expect((await remove(id())).body.error).toMatchObject(notFound);
+});
+it("CAPTURES-B02 an admin deletes someone else's capture; another member gets 404 and the row is untouched", async () => {
+  const mine = await recorded(21);
+  session.user = other;
+  const denied = await remove(mine.id);
+  expect(denied.status).toBe(404);
+  expect(denied.body.error).toMatchObject(notFound);
+  expect((await stored(mine.id))?.deletedAt).toBeNull();
+  session.user = admin;
+  expect((await remove(mine.id)).status).toBe(204);
+  expect((await stored(mine.id))?.deletedAt).not.toBeNull();
+});
+it("CAPTURES-B13 restore with the delete's op id brings back the capture and its drafts, audited; a wrong id or another member gets 404", async () => {
+  const mine = await recorded(22);
+  const draft = await suggestion(mine.id);
+  const opId = (await remove(mine.id)).response.headers.get('X-Op-Id') ?? '';
+  const wrong = await restore(mine.id, id());
+  expect(wrong.status).toBe(404);
+  expect(wrong.body.error).toMatchObject(notFound);
+  session.user = other;
+  const denied = await restore(mine.id, opId);
+  expect(denied.status).toBe(404);
+  expect(denied.body.error).toMatchObject(notFound);
+  expect((await restore(id(), opId)).status).toBe(404);
+  expect((await stored(mine.id))?.deletedAt).not.toBeNull();
+  session.user = recorder;
+  const back = await restore(mine.id, opId);
+  expect(back.status).toBe(200);
+  expect(back.body.data).toMatchObject({ id: mine.id, suggestions: [{ id: draft.id }] });
+  const [row] = await db()
+    .select()
+    .from(captureSuggestions)
+    .where(eq(captureSuggestions.id, draft.id));
+  expect(row).toMatchObject({ deletedAt: null, deletedOpId: null });
+  expect((await call(api.detail, 'GET', `/captures/${mine.id}`, { id: mine.id })).status).toBe(200);
+  const restores = await db()
+    .select()
+    .from(auditLog)
+    .where(and(eq(auditLog.entityId, mine.id), eq(auditLog.action, 'restore')));
+  expect(restores).toHaveLength(1);
+  // A repeat of that restore answers the capture and writes nothing; another op id is not found.
+  const repeat = await restore(mine.id, opId);
+  expect(repeat.status).toBe(200);
+  expect(repeat.body.data).toMatchObject({ id: mine.id });
+  expect(
+    await db()
+      .select()
+      .from(auditLog)
+      .where(and(eq(auditLog.entityId, mine.id), eq(auditLog.action, 'restore'))),
+  ).toHaveLength(1);
+  expect((await restore(mine.id, id())).status).toBe(404);
 });

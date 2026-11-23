@@ -6,7 +6,7 @@ import { laneBaseURL } from './lanes';
 import { seedDrafts } from './fixtures/captures';
 import en from '../src/core/i18n/messages/en.json' with { type: 'json' };
 import ar from '../src/core/i18n/messages/ar.json' with { type: 'json' };
-// CAPTURES-A01–A04, A06 (A05 is NOTES-A15). AI is off in the browser suite, so a recording is
+// CAPTURES-A01–A04, A06–A11 (A05 is NOTES-A15). AI is off in the browser suite, so a recording is
 // stored without a transcript; `scripts/db/e2e-capture-drafts.ts` stands in for the interpreter
 // where a scenario needs drafts. The microphone is refused in the page, so the recorder offers
 // its upload fallback (S3) and the scenarios send a real WAV through it.
@@ -221,6 +221,182 @@ test('CAPTURES-A03 CAPTURES-A04 a member cannot open another person’s draft or
   } finally {
     await close();
   }
+});
+test('CAPTURES-A08 from Review the recorder deletes a recording AI could not take, Undo brings it back, and another member gets 404 (en)', async ({
+  page,
+  browser,
+}) => {
+  await refuseMicrophone(page);
+  await loginAs(page, 'en');
+  const captureId = await recordByUpload(page, en);
+  const { other, close } = await member(page, browser);
+  try {
+    expect((await api(other, `/captures/${captureId}`, 'DELETE')).status).toBe(404);
+    await page.goto('/captures');
+    const group = page.locator(`[data-capture="${captureId}"]`);
+    await expect(page.locator(`[data-capture="${captureId}"]`)).toHaveCount(1);
+    await expect(group.getByText(en.captures.unavailable)).toBeVisible();
+    const deleted = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === `/api/v1/captures/${captureId}` &&
+        response.request().method() === 'DELETE',
+    );
+    await group.getByRole('button', { name: en.captures.deleteRecording }).click();
+    const response = await deleted;
+    expect(response.status()).toBe(204);
+    const opId = response.headers()['x-op-id'] ?? '';
+    await expect(group).toHaveCount(0);
+    await expect(page.getByText(en.captures.recordingDeleted, { exact: true })).toBeVisible();
+    // Another member can neither restore it nor learn it exists.
+    const denied = await api(other, `/captures/${captureId}/restore`, 'POST', { opId });
+    expect(denied.status).toBe(404);
+    expect(denied.body.error).toMatchObject({
+      code: 'not_found',
+      details: { entityType: 'capture' },
+    });
+    await page.getByRole('button', { name: en.common.undo }).click();
+    await expect(page.getByText(en.captures.recordingRestored)).toBeVisible();
+    await expect(page.locator(`[data-capture="${captureId}"]`)).toHaveCount(1);
+    await expect(group.getByText(en.captures.unavailable)).toBeVisible();
+    // Focus lands on the restored group's first action, its play button, never on the page.
+    await expect(group.getByRole('button', { name: en.captures.playRecording })).toBeFocused();
+  } finally {
+    await close();
+  }
+});
+// CAPTURES-A11: a recording still transcribing is deleted from its More actions menu; its job then
+// ends while it is deleted (the stand-in publishes an empty result, as the fence leaves it), and
+// Undo brings it back failed, with Retry, rather than transcribing forever.
+test('CAPTURES-A11 a recording deleted while it transcribes comes back from Undo failed, with Retry (en)', async ({
+  page,
+}) => {
+  await refuseMicrophone(page);
+  await loginAs(page, 'en');
+  const captureId = await recordByUpload(page, en);
+  seedDrafts(captureId, 'processing');
+  await page.goto('/captures');
+  const group = page.locator(`[data-capture="${captureId}"]`);
+  await expect(group).toHaveCount(1);
+  await expect(group.getByText(en.captures.transcribing)).toBeVisible();
+  await group.getByRole('button', { name: en.captures.moreActions }).click();
+  await page
+    .locator("[data-slot='popover-content']")
+    .getByRole('button', { name: en.captures.deleteRecording })
+    .click();
+  await expect(group).toHaveCount(0);
+  await expect(page.getByText(en.captures.recordingDeleted, { exact: true })).toBeVisible();
+  seedDrafts(captureId, 'finished');
+  await page.getByRole('button', { name: en.common.undo }).click();
+  await expect(page.getByText(en.captures.recordingRestored)).toBeVisible();
+  await expect(group).toHaveCount(1);
+  await expect(group.getByText(en.captures.failedInterrupted)).toBeVisible();
+  await expect(group.getByRole('button', { name: en.captures.playRecording })).toBeFocused();
+  await expect(group.getByRole('button', { name: en.captures.retry })).toBeVisible();
+  await expect(group.getByText(en.captures.transcribing)).toHaveCount(0);
+});
+// CAPTURES-A09: the Review menu sits over dense text, so it takes the popover's opaque surface:
+// the elevated ground with no glass image or blur, in night and under reduced transparency, while
+// the default popovers (the account menu) keep their glass. Read from computed style.
+test('CAPTURES-A09 the More actions menu is opaque in night and under reduced transparency, and other popovers keep their glass (en) @desktop', async ({
+  page,
+}) => {
+  const style = (selector: string) =>
+    page
+      .locator(selector)
+      .first()
+      .evaluate((element) => {
+        const computed = getComputedStyle(element);
+        return {
+          color: computed.backgroundColor,
+          image: computed.backgroundImage,
+          filter: computed.backdropFilter,
+        };
+      });
+  await refuseMicrophone(page);
+  await loginAs(page, 'en');
+  await expect(page.locator('html')).toHaveClass(/\bdark\b/u);
+  const captureId = await recordByUpload(page, en);
+  seedDrafts(captureId);
+  await page.goto('/captures');
+  const group = page.locator(`[data-capture="${captureId}"]`);
+  await expect(group).toHaveCount(1);
+  await group.getByRole('button', { name: en.captures.moreActions }).click();
+  const menu = "[data-slot='popover-content'][data-surface='elevated']";
+  await expect(page.locator(menu)).toBeVisible();
+  expect(await style(menu)).toEqual({ color: 'rgb(35, 35, 38)', image: 'none', filter: 'none' });
+  await page.keyboard.press('Escape');
+  await expect(page.locator(menu)).toHaveCount(0);
+  // The account menu is the default glass: a translucent tint over a blur.
+  await page.getByRole('button', { name: en.common.account, exact: true }).click();
+  const glass = "[data-slot='popover-content'][data-surface='glass']";
+  await expect(page.locator(glass)).toBeVisible();
+  const account = await style(glass);
+  expect(account.color).toBe('rgba(48, 48, 60, 0.5)');
+  expect(account.filter).not.toBe('none');
+  await page.keyboard.press('Escape');
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Emulation.setEmulatedMedia', {
+    features: [{ name: 'prefers-reduced-transparency', value: 'reduce' }],
+  });
+  await group.getByRole('button', { name: en.captures.moreActions }).click();
+  await expect(page.locator(menu)).toBeVisible();
+  await expect
+    .poll(() => style(menu))
+    .toEqual({
+      color: 'rgb(42, 42, 46)',
+      image: 'none',
+      filter: 'none',
+    });
+});
+// CAPTURES-A10: on a phone the toast stands above the floating microphone while it is shown, and
+// drops back once it is not (the recorder open); on a desktop, where there is no such button, the
+// toast keeps its own place.
+// Every toast viewport on the page (the shell's and any nested host) obeys the same rule.
+const toastBottoms = (page: Page) =>
+  page
+    .locator("[data-slot='toast-viewport']")
+    .evaluateAll((elements) =>
+      elements.map((element) => parseFloat(getComputedStyle(element).bottom)),
+    );
+test('CAPTURES-A10 on a phone the toast clears the floating microphone only while it is shown (en) @mobile', async ({
+  page,
+}) => {
+  // A working (silent) microphone, so the recorder runs and the phone button gives way to it.
+  await page.addInitScript(() => {
+    localStorage.setItem('enan.captures.microphone-intro', '1');
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getUserMedia: async () => new AudioContext().createMediaStreamDestination().stream,
+      },
+    });
+  });
+  await loginAs(page, 'en');
+  const fab = page.locator('[data-capture-fab]');
+  await expect(fab).toBeVisible();
+  const top = await fab.evaluate((element) => element.getBoundingClientRect().top);
+  const height = await page.evaluate(() => window.innerHeight);
+  const lifted = await toastBottoms(page);
+  expect(lifted.length).toBeGreaterThan(0);
+  for (const bottom of lifted) expect(height - bottom).toBeLessThanOrEqual(top);
+  await fab.click();
+  await expect(page.getByTestId('capture-clock')).not.toHaveText('00:00');
+  await expect(page.locator('[data-capture-fab]')).toHaveCount(0);
+  await expect
+    .poll(async () => (await toastBottoms(page)).every((bottom) => height - bottom > top))
+    .toBe(true);
+  await page.getByRole('button', { name: en.captures.cancel }).click();
+  await expect(fab).toBeVisible();
+  await expect.poll(async () => toastBottoms(page)).toEqual(lifted);
+});
+test('CAPTURES-A10 on a desktop the hidden microphone does not lift the toast (en) @desktop', async ({
+  page,
+}) => {
+  await loginAs(page, 'en');
+  await expect(page.locator('[data-capture-fab]')).toBeHidden();
+  const bottoms = await toastBottoms(page);
+  expect(bottoms.length).toBeGreaterThan(0);
+  for (const bottom of bottoms) expect(bottom).toBe(32);
 });
 for (const [locale, m, dir] of [
   ['en', en, 'ltr'],

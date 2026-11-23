@@ -54,8 +54,14 @@ function Line({ step, children }: { step: Step; children: React.ReactNode }) {
     </li>
   );
 }
+const failures: Record<string, 'failedNoSpeech' | 'failedTimeout' | 'failedInterrupted'> = {
+  no_speech: 'failedNoSpeech',
+  timeout: 'failedTimeout',
+  // CAPTURES-B13: restored after the job it waited on ended while it was deleted.
+  interrupted: 'failedInterrupted',
+};
 export const failure = (code: string | null) =>
-  code === 'no_speech' ? 'failedNoSpeech' : code === 'timeout' ? 'failedTimeout' : 'failedOther';
+  (code && Object.hasOwn(failures, code) && failures[code]) || 'failedOther';
 type Props = {
   placement: Placement;
   stage: Stage;

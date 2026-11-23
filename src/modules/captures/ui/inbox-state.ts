@@ -1,11 +1,15 @@
 'use client';
-import { createContext, use, useSyncExternalStore } from 'react';
+import { createContext, use, useLayoutEffect, useState, useSyncExternalStore } from 'react';
 import type { CaptureGroup } from '../schema/validation';
 import type { CaptureScope } from './capture-queries';
 import type { Layout } from './suggestion-card-context';
+// One mounted inbox (the /captures page, the desktop Review panel), told apart from the others.
+export type InboxToken = symbol;
 // The inbox as its parts read it. `saves` holds each draft's latest save (whether it succeeded), so
-// Approve N ready can wait for an edit still being sent; `reread` reads the list again.
+// Approve N ready can wait for an edit still being sent; `reread` reads the list again. `inbox` is
+// this inbox's token, which an Undo started here carries so its focus move needs this inbox mounted.
 export type Inbox = {
+  inbox: InboxToken;
   groups: CaptureGroup[];
   layout: Layout;
   scope: CaptureScope;
@@ -52,6 +56,50 @@ export function dismissEducation() {
     // shortcut: a browser that refuses storage shows the line again next visit; nothing is lost.
   }
   notify();
+}
+// S17 Undo: the recording to focus once it is listed again. The restore answers before the list
+// renders it, so Undo leaves its id here; the group takes it when it renders (CaptureGroup), and
+// the inbox falls back to its heading when the list moves on without it (CaptureInbox.Root).
+// The focus waits for the inbox the Undo was pressed in, which owns it.
+let pendingFocus: { id: string; inbox: InboxToken } | null = null;
+export function focusWhenListed(captureId: string, inbox: InboxToken) {
+  pendingFocus = { id: captureId, inbox };
+  notify();
+}
+export const pendingFocusId = () => pendingFocus?.id ?? null;
+// Clears the id if it is this one, and says whether it was.
+export function takePendingFocus(captureId: string) {
+  if (pendingFocus?.id !== captureId) return false;
+  pendingFocus = null;
+  return true;
+}
+// The inboxes mounted now. A restore can answer after the inbox it was started in has gone (a link,
+// Back): its focus move then does nothing, rather than waiting for the next inbox to open.
+const mountedInboxes = new Set<InboxToken>();
+export const inboxMounted = (inbox: InboxToken) => mountedInboxes.has(inbox);
+// This inbox's token, registered while it is mounted. Unmounting drops a focus this inbox left
+// waiting (a restore that answered before it went), and only that one: another inbox's stays.
+export function useInboxToken() {
+  const [inbox] = useState<InboxToken>(() => Symbol('inbox'));
+  useLayoutEffect(() => {
+    mountedInboxes.add(inbox);
+    return () => {
+      mountedInboxes.delete(inbox);
+      if (pendingFocus?.inbox === inbox) pendingFocus = null;
+    };
+  }, [inbox]);
+  return inbox;
+}
+// Whether this recording is the one waiting for focus; only that group re-renders when it changes.
+export function useFocusPending(captureId: string) {
+  return useSyncExternalStore(
+    subscribe,
+    () => pendingFocus?.id === captureId,
+    () => false,
+  );
+}
+export function usePendingFocus() {
+  return useSyncExternalStore(subscribe, pendingFocusId, () => null);
 }
 export function setReviewPanel(open: boolean) {
   panelOpen = open;
