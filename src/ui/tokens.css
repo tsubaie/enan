@@ -39,6 +39,7 @@
   --color-ring: var(--accent);
   --color-destructive: var(--danger);
   --color-popover: var(--surface);
+  --color-elevated: var(--elevated);
   --color-popover-foreground: var(--text);
   --color-scrim: var(--scrim);
   --radius-lg: 0.625rem;
