@@ -38,7 +38,7 @@ export const routes = {
   account: () => '/account',
   accountPasskeys: () => '/account#passkeys',
   // The review inbox of voice captures (CAPTURES-B02); reached from its badge, not the navigation.
-  captures: (query?: Optional<'scope'>) => withQuery('/captures', query),
+  captures: (query?: Optional<'scope' | 'capture'>) => withQuery('/captures', query),
   notifications: (query?: Optional<'unread' | 'kind'>) => withQuery('/notifications', query),
   login: () => '/login',
   setup: () => '/setup',

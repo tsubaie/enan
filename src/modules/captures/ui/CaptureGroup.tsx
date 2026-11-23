@@ -8,7 +8,6 @@ import { ErrorPanel } from '@/ui/layout/ErrorPanel';
 import { useRelativeTime } from '@/ui/format';
 import { clock } from '@/modules/notes/ui';
 import type { CaptureGroup as Group } from '../schema/validation';
-import { failure } from './CaptureProcessing';
 import { CaptureListen } from './CaptureListen';
 import { MergeSheet } from './MergeSheet';
 import { SuggestionCardView, type Layout } from './SuggestionCard';
@@ -17,6 +16,15 @@ import { ProcessingGroupMenu, ReadyGroupMenu, RecoverDeleteButton } from './Dele
 import { focusWasLost } from './focus';
 import { takePendingFocus, useFocusPending } from './inbox-state';
 const working = ['queued', 'transcribing', 'interpreting'];
+const failures: Record<string, 'failedNoSpeech' | 'failedTimeout' | 'failedInterrupted'> = {
+  no_speech: 'failedNoSpeech',
+  timeout: 'failedTimeout',
+  // CAPTURES-B13: restored after the job it waited on ended while it was deleted.
+  interrupted: 'failedInterrupted',
+};
+// S17: why a recording failed, in the reader's words.
+const failure = (code: string | null) =>
+  (code && Object.hasOwn(failures, code) && failures[code]) || 'failedOther';
 // S15, S17: one recording: when it was made, how long it is, the whole clip, its processing state
 // and its drafts still waiting. Header parts are split by a 1px rule, never a dot.
 export function CaptureGroup({ group, layout }: { group: Group; layout: Layout }) {

@@ -62,6 +62,16 @@ function ToastTitle({ className, ...props }: ToastPrimitive.Title.Props) {
   );
 }
 
+function ToastDescription({ className, ...props }: ToastPrimitive.Description.Props) {
+  return (
+    <ToastPrimitive.Description
+      data-slot="toast-description"
+      className={cn('text-sm text-text-muted', className)}
+      {...props}
+    />
+  );
+}
+
 function ToastAction({ className, ...props }: ToastPrimitive.Action.Props) {
   return (
     <ToastPrimitive.Action
@@ -95,6 +105,7 @@ export {
   ToastAction,
   ToastClose,
   ToastContent,
+  ToastDescription,
   ToastPortal,
   ToastProvider,
   ToastRoot,

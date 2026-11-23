@@ -74,7 +74,8 @@ One decision per file. Format: **Status**, **Context**, **Decision**, **Conseque
 | 0068 | Node 26 is the runtime | accepted |
 | 0069 | oxfmt replaces Prettier, and formatting is checked | accepted |
 | 0070 | Voice memos are transcribed by OpenRouter speech-to-text and write themselves into the note | accepted; superseded for new recordings by 0071 |
-| 0071 | Voice captures are reviewed before anything goes live | accepted |
+| 0071 | Voice captures are reviewed before anything goes live | accepted; its "nothing notifies before Approve" superseded for two recorder-only kinds by 0073 |
 | 0072 | Nothing above a streamed page changes before it hydrates | accepted |
+| 0073 | Voice captures tell their recorder when drafts are ready, in one grouped item | accepted |
 
 Open decisions awaiting an ADR: license (see roadmap); chart library confirmation (`recharts`).

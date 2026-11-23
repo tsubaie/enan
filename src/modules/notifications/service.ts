@@ -52,6 +52,7 @@ function draw(row: FeedRow, subjects: Map<string, NotificationSubject>): Notific
     subjectId: row.subjectId,
     title: subject.title,
     href: subject.hrefs?.[kind.data] ?? subject.href,
+    ...(subject.count === undefined ? {} : { count: subject.count }),
     actorName: actorName(row.payload),
     createdAt: row.createdAt.toISOString(),
     readAt: row.readAt?.toISOString() ?? null,

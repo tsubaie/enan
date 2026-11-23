@@ -9,6 +9,10 @@ import { createTask, patchTask } from '@/modules/tasks/service';
 import { TaskCreate, TaskPatch } from '@/modules/tasks/schema/validation';
 import * as service from '../service';
 import { harness } from './fixtures';
+import { insertNotifications } from '@/core/db/notifications-repo';
+import { id } from '@/core/db/ids';
+import { notifyReady } from '@/modules/captures/notifications';
+import { capture, suggestion } from '@/modules/captures/tests/fixtures';
 const { run } = harness;
 const feed = () => run((ctx) => service.feed(ctx, 20, null), harness.member ?? undefined);
 beforeAll(async () => {
@@ -195,4 +199,32 @@ it('NOTIF-B08 NOTIF-B15 the badge counts resolvable unread rows; read rows are c
   expect(page).toMatchObject({ unread: 1, totalCount: 2 });
   const unread = await run((ctx) => service.feed(ctx, 20, null, { unread: true }), member);
   expect(unread).toMatchObject({ unread: 1, totalCount: 1 });
+});
+
+it('NOTIF-B18 the database and the contract take the two capture kinds, and a resolved count reaches the line', async () => {
+  const member = harness.member;
+  if (!member) throw new Error('harness');
+  const recorder = { id: member.id, createdBy: member.id };
+  await run(async (ctx) => {
+    await notifyReady(ctx.db, recorder);
+    await insertNotifications(ctx.db, [
+      {
+        userId: member.id,
+        kind: 'captures.failed',
+        subjectType: 'captures',
+        subjectId: id(),
+        payload: {},
+        actorId: null,
+      },
+    ]);
+  });
+  const rows = await db().select().from(notifications);
+  expect(rows.map((row) => row.kind).sort()).toEqual(['captures.failed', 'captures.ready']);
+  // With nothing ready to review the grouped line does not resolve; once a draft waits, it
+  // carries the number the bell says.
+  expect((await feed()).items).toEqual([]);
+  const ready = await capture(member, { status: 'ready' });
+  await suggestion(ready.id);
+  const [line] = (await feed()).items;
+  expect(line).toMatchObject({ kind: 'captures.ready', count: 1, href: '/captures' });
 });

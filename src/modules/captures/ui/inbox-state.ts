@@ -94,6 +94,14 @@ export function useInboxToken() {
   }, [inbox]);
   return inbox;
 }
+// CAPTURES-B21: the recording a bell line opened takes focus once it is listed, the way a restored
+// one does; one the list does not hold leaves focus on the inbox heading.
+export function useLinkedFocus(focus: string | null, inbox: InboxToken) {
+  // sync: external system — the link's recording goes through the shared pending-focus store.
+  useLayoutEffect(() => {
+    if (focus) focusWhenListed(focus, inbox);
+  }, [focus, inbox]);
+}
 // Whether this recording is the one waiting for focus; only that group re-renders when it changes.
 export function useFocusPending(captureId: string) {
   return useSyncExternalStore(

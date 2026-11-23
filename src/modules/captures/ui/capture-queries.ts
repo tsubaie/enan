@@ -45,23 +45,6 @@ export function useCaptures(
       query.state.data?.data.some((item) => working.has(item.status)) ? 5_000 : 60_000,
   });
 }
-// S11: the capture just recorded, read every few seconds while its jobs run; once it settles the
-// badge and the list are refreshed with it.
-export function useCapture(captureId: string | null) {
-  const client = useQueryClient();
-  return useQuery({
-    queryKey: captureKeys.detail(captureId ?? ''),
-    enabled: Boolean(captureId),
-    queryFn: async () => {
-      const result = await request(`/captures/${captureId}`, one);
-      if (!working.has(result.data.status))
-        void client.invalidateQueries({ queryKey: captureKeys.count });
-      return result;
-    },
-    refetchInterval: (query) =>
-      query.state.data && !working.has(query.state.data.data.status) ? false : 3_000,
-  });
-}
 function useCaptureMutation<I>(send: (input: I) => Promise<z.infer<typeof one>>) {
   const client = useQueryClient();
   return useMutation({

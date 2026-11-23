@@ -113,7 +113,8 @@ Indexes: `(user_id, read_at, created_at desc)` for the feed; a unique partial in
   stops future notifications and leaves existing ones addressed to that user.
 - NOTIF-B14 **Filters.** The feed takes `unread=1` (or `true`), keeping unread rows only, and
   `kind=`, either one kind or a group named for the module its kinds belong to: `tasks` (`task.*`),
-  `notes` (`note.*`), `kpis` (`kpi.*`), `ai` (`job.*`), `updates` (`update.*`), or `all`. Every kind
+  `notes` (`note.*`), `kpis` (`kpi.*`), `ai` (`job.*`), `updates` (`update.*`), `captures`
+  (`captures.*`, «التسجيلات» / "Recordings"), or `all`. Every kind
   belongs to exactly one group. Mark all as read takes the same `kind`.
 - NOTIF-B15 **The bell is a preview.** It lists the newest ten resolvable rows, unread first among
   those ten and newest first within each, at a fixed height with no inner scroll. Under them a link,
@@ -131,6 +132,16 @@ Indexes: `(user_id, read_at, created_at desc)` for the feed; a unique partial in
   and `kpi.off_target` line about that KPI is marked read in the same transaction. A subject
   contributes, per kind, a more specific link than its own (`hrefs`), which the feed uses for that
   kind's line.
+- NOTIF-B18 **A recorder hears about their own recordings** (ADR 0073, CAPTURES-B21). The captures
+  module owns `captures.ready` and `captures.failed`, both written by a job with no actor and an
+  empty payload, to the recorder alone. A subject may carry a `count` the line says, computed when
+  the feed is read and never stored: `captures.ready` is one line per recorder (its subject is the
+  recorder's own user id, so the NOTIF-I02 upsert groups every ready recording into it) reading
+  «تسجيل واحد جاهز للمراجعة» / "1 recording ready to review", «تسجيلان جاهزان للمراجعة» / "2
+  recordings ready to review" and so on (ICU plural, the number in `<bdi>`), with the sub-line
+  «حُدّث …» / "Updated {relative time}"; at zero it does not resolve. `captures.failed` reads
+  «تعذّرت معالجة أحد التسجيلات» / "A recording couldn't be processed" with «تسجيل ١٤:٠٥» / "14:05
+  recording", and opens `/captures?capture=<id>`. No sound and no pop-up.
 
 ## API
 
@@ -183,7 +194,8 @@ invalidates `["notifications", "list"]` and `["notifications", "unread"]`.
 
 - `src/modules/notifications/tests/service.test.ts`: B01 in-transaction with a rolled-back
   mutation writing nothing; B02 self-action; B03 the upsert refreshing rather than stacking and
-  inserting again once read; B07 read marking; B08 the count.
+  inserting again once read; B07 read marking; B08 the count; B18 the capture kinds in the CHECK
+  and the contract, and a resolved `count` reaching the line.
 - `tests/feed.test.ts`: B06 an unresolvable subject omitted from items and from the count, and not
   deleted.
 - `tests/recipients.test.ts`: B04 person→user resolution, B13 the unlinked person.

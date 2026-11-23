@@ -23,4 +23,8 @@ export type JobHandler = {
     job: Claimed,
     result: z.infer<ReturnType<typeof z.json>>,
   ) => Promise<void>;
+  // Runs in the publish transaction, or in the fail transaction once the job has failed for good,
+  // in place of the runner's own `job.finished` line (NOTIF-B04): a handler that has one says for
+  // itself who hears about it, if anyone.
+  finished?: (database: Database, job: Claimed, outcome: 'succeeded' | 'failed') => Promise<void>;
 };

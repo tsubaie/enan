@@ -24,6 +24,7 @@ import {
   takePendingFocus,
   useInbox,
   useInboxToken,
+  useLinkedFocus,
   usePendingFocus,
 } from './inbox-state';
 import { focusWasLost } from './focus';
@@ -40,6 +41,7 @@ function Root({
   scope = 'mine',
   initial,
   actions,
+  focus = null,
   children,
 }: {
   layout: Layout;
@@ -47,6 +49,8 @@ function Root({
   scope?: CaptureScope;
   initial?: { data: Group[]; meta: { nextCursor: string | null } };
   actions?: ReactNode;
+  // CAPTURES-B21: the recording a failed bell line opened, focused once it is listed.
+  focus?: string | null;
   children: ReactNode;
 }) {
   const t = useTranslations('captures');
@@ -56,6 +60,7 @@ function Root({
   const [saves] = useState(() => new Map<string, Promise<boolean>>());
   const reread = async () => (await query.refetch()).data?.data ?? [];
   const inbox = useInboxToken();
+  useLinkedFocus(focus, inbox);
   useUndoFocusFallback(query.data?.data);
   return (
     <InboxContext value={{ inbox, groups, layout, scope, saves, reread, capture }}>

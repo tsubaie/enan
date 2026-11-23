@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { z } from 'zod';
 import { currentUser } from '@/core/auth/session';
 import { readOnlyDb } from '@/core/db/client';
 import { id } from '@/core/db/ids';
@@ -16,9 +17,10 @@ export default async function Page({
 }) {
   const user = await currentUser();
   if (!user) redirect(routes.login());
-  const query = CaptureListQuery.parse({
-    scope: (await searchParams).scope === 'all' ? 'all' : 'mine',
-  });
+  const params = await searchParams;
+  const query = CaptureListQuery.parse({ scope: params.scope === 'all' ? 'all' : 'mine' });
+  // CAPTURES-B21: a failed recording's bell line opens the inbox on it.
+  const focus = z.uuid().safeParse(params.capture).data ?? null;
   const [initial, capture] = await Promise.all([
     listCaptures({ db: readOnlyDb(), user, requestId: id() }, query),
     readerCapture(user.id),
@@ -30,6 +32,7 @@ export default async function Page({
         scope={query.scope}
         admin={user.role === 'admin'}
         capture={capture}
+        focus={focus}
       />
     </PageBody>
   );

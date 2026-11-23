@@ -4,7 +4,7 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
-import { ApiError, request } from '@/core/http/client';
+import { request } from '@/core/http/client';
 import { useToastManager } from '@/ui/primitives/toast';
 import {
   recorderLimits,
@@ -13,13 +13,13 @@ import {
   type Recording,
 } from '@/modules/notes/ui';
 import { CaptureRecorder, type Placement } from './CaptureRecorder';
-import { CaptureProcessing, stageOf } from './CaptureProcessing';
+import { useAfterStop } from './after-stop-toasts';
 import { CaptureShortcut, type ShortcutKeys } from './CaptureShortcut';
 import { registerCapture, setCaptureActive } from './capture-store';
 import { focusWasLost } from './focus';
 import { isWideScreen } from './inbox-state';
-import { refusalOf, type Refusal } from './upload-refusal';
-import { useCapture, useCreateCapture } from './capture-queries';
+import { useLeaveWarning } from './outbox';
+import { type Refusal } from './upload-refusal';
 // S2 is shown once per browser; the browser's own prompt follows it.
 const introKey = 'enan.captures.microphone-intro';
 const wide = '(min-width: 1024px)';
@@ -51,72 +51,7 @@ function useCommitteeName(committeeId: string | null) {
       request(`/committees/${committeeId}`, z.object({ data: z.object({ name: z.string() }) })),
   }).data?.data.name;
 }
-type Phase = 'idle' | 'intro' | 'recording' | 'after';
-type Source = 'recorder' | 'sheet';
-// Sending the audio: it becomes a capture and nothing else. One that does not reach the server is
-// held in this tab only, for Retry (S12). A refused recording stays held with the reason; a
-// refused file from the S3 sheet reopens the sheet with the reason; anything else is said and the
-// panel closes.
-function useSend(opened: () => void, closed: (source: Source) => void) {
-  const t = useTranslations('captures');
-  const toasts = useToastManager();
-  const [committeeId, setCommitteeId] = useState<string | null>(null);
-  const create = useCreateCapture();
-  const [held, setHeld] = useState<{ file: File; seconds: number } | null>(null);
-  const [offline, setOffline] = useState(false);
-  const [refusal, setRefusal] = useState<Refusal | null>(null);
-  const [captureId, setCaptureId] = useState<string | null>(null);
-  function send(file: File, seconds: number, source: Source = 'recorder') {
-    const form = new FormData();
-    form.set('file', file);
-    form.set('durationSeconds', String(Math.min(Math.round(seconds), recorderLimits.maxSeconds)));
-    if (committeeId) form.set('committeeId', committeeId);
-    setHeld({ file, seconds });
-    setOffline(false);
-    setRefusal(null);
-    setCaptureId(null);
-    opened();
-    create.mutate(form, {
-      onSuccess: (created) => {
-        setHeld(null);
-        setCaptureId(created.data.id);
-      },
-      onError: (error) => {
-        if (!(error instanceof ApiError)) return setOffline(true);
-        const refused = refusalOf(error);
-        setRefusal(refused);
-        if (refused && source === 'sheet') return closed('sheet');
-        if (refused) return toasts.add({ title: t(refused), priority: 'high' });
-        toasts.add({ title: error.message });
-        closed('recorder');
-      },
-    });
-  }
-  const reset = () => {
-    setCaptureId(null);
-    setHeld(null);
-    setOffline(false);
-    setRefusal(null);
-  };
-  // S8: just before 15:00 the hook stops by itself and the recording is kept, with a toast to say so.
-  const finish = (recording: Recording) => {
-    if (recording.seconds >= recorderLimits.stopSeconds) toasts.add({ title: t('limitReached') });
-    send(recordingFile(recording, t('fileName')), recording.seconds);
-  };
-  const uploading = create.isPending;
-  return {
-    send,
-    finish,
-    held,
-    offline,
-    refusal,
-    captureId,
-    uploading,
-    reset,
-    committeeId,
-    setCommitteeId,
-  };
-}
+type Phase = 'idle' | 'intro' | 'recording';
 // Starting goes through the store so a control's own click or key event asks for the microphone.
 function useLauncher(launch: () => void) {
   const latest = useRef(launch);
@@ -160,36 +95,59 @@ function useRefocus(close: () => void) {
     });
   };
 }
-// CAPTURES-B01: the one recorder of the shell. A control starts it (`startCapture`); Stop or an
-// upload sends the audio; the panel then follows the capture until the recorder dismisses it.
-// The shell mounts it only while recording is on (CAPTURES-B14), and the chord only with `keys`.
+// The recording (or a picked file) goes to the outbox and the recorder closes at once (`sent`). A
+// file picked from the refused-microphone sheet that the server refuses reopens the sheet with the
+// reason instead of a toast (CAPTURES-B12, `reopen`). S8: just before 15:00 the hook stops by
+// itself and the recording is kept, with a toast to say so.
+function useSend(sent: () => void, reopen: () => void) {
+  const t = useTranslations('captures');
+  const toasts = useToastManager();
+  const afterStop = useAfterStop();
+  const [committeeId, setCommitteeId] = useState<string | null>(null);
+  const [refusal, setRefusal] = useState<Refusal | null>(null);
+  const recorder = useVoiceRecorder((recording: Recording) => {
+    if (recording.seconds >= recorderLimits.stopSeconds) toasts.add({ title: t('limitReached') });
+    afterStop.record(recordingFile(recording, t('fileName')), recording.seconds, committeeId);
+    sent();
+  });
+  function pick(file: File) {
+    setRefusal(null);
+    afterStop.record(file, 0, committeeId, (refused) => {
+      setRefusal(refused);
+      reopen();
+    });
+    sent();
+  }
+  return { recorder, pick, committeeId, setCommitteeId, refusal, setRefusal };
+}
+// CAPTURES-B01 CAPTURES-B20: the one recorder of the shell. A control starts it (`startCapture`);
+// Stop or an upload sends the audio to the outbox and closes the recorder at once, leaving the
+// reader where they were; toasts say what became of it (no sheet after Stop). The shell mounts it
+// only while recording is on (CAPTURES-B14), and the chord only with `keys`.
 export function CaptureHost({ keys }: { keys: ShortcutKeys }) {
   const placement = usePlacement();
   const pageCommittee = usePageCommittee();
   const [phase, setPhase] = useState<Phase>('idle');
-  const upload = useSend(
-    () => setPhase('after'),
-    (source) => setPhase(source === 'sheet' ? 'recording' : 'idle'),
+  useLeaveWarning();
+  // Focus goes back to the opener only if it was lost with the recorder (toasts never take it).
+  const sent = useRefocus(() => setPhase('idle'));
+  const { recorder, pick, committeeId, setCommitteeId, refusal, setRefusal } = useSend(sent, () =>
+    setPhase('recording'),
   );
-  const committee = useCommitteeName(upload.committeeId) ?? null;
-  const recorder = useVoiceRecorder(upload.finish);
+  const committee = useCommitteeName(committeeId) ?? null;
   function begin() {
     localStorage.setItem(introKey, '1');
-    upload.reset();
-    upload.setCommitteeId(pageCommittee);
+    setRefusal(null);
+    setCommitteeId(pageCommittee);
     setPhase('recording');
     void recorder.start();
   }
   useLauncher(
     () => phase === 'idle' && (localStorage.getItem(introKey) ? begin() : setPhase('intro')),
   );
-  const done = () => {
-    setPhase('idle');
-    upload.reset();
-  };
   const discard = useRefocus(() => {
     recorder.cancel();
-    done();
+    setPhase('idle');
   });
   const recording = phase === 'recording' && recorder.state !== 'idle';
   // sync: external system — the header and the phone button show a recording in progress.
@@ -203,8 +161,8 @@ export function CaptureHost({ keys }: { keys: ShortcutKeys }) {
           kind={refused ? 'refused' : 'ask'}
           proceed={begin}
           dismiss={discard}
-          pick={(file) => upload.send(file, 0, 'sheet')}
-          refusal={refused ? upload.refusal : null}
+          pick={pick}
+          refusal={refused ? refusal : null}
         />
       )}
       {recording && (
@@ -212,37 +170,13 @@ export function CaptureHost({ keys }: { keys: ShortcutKeys }) {
           recorder={recorder}
           placement={placement}
           committee={committee}
-          clearCommittee={() => upload.setCommitteeId(null)}
+          clearCommittee={() => setCommitteeId(null)}
           discard={discard}
         >
           <CaptureRecorder.Surface />
           <CaptureRecorder.Actions />
         </CaptureRecorder.Root>
       )}
-      {phase === 'after' && <After placement={placement} upload={upload} done={done} />}
     </>
-  );
-}
-function After({
-  placement,
-  upload,
-  done,
-}: {
-  placement: Placement;
-  upload: ReturnType<typeof useSend>;
-  done: () => void;
-}) {
-  const capture = useCapture(upload.captureId).data?.data;
-  const { held } = upload;
-  return (
-    <CaptureProcessing
-      placement={placement}
-      stage={stageOf(upload.uploading, upload.offline, capture, upload.refusal)}
-      capture={capture}
-      refusal={upload.refusal}
-      seconds={held?.seconds ?? capture?.durationSeconds ?? 0}
-      done={done}
-      retry={() => held && upload.send(held.file, held.seconds)}
-    />
   );
 }

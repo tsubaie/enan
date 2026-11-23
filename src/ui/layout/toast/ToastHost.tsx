@@ -2,11 +2,12 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { z } from 'zod';
-import { buttonVariants } from '@/ui/primitives/button';
+import { Button, buttonVariants } from '@/ui/primitives/button';
 import {
   ToastAction,
   ToastClose,
   ToastContent,
+  ToastDescription,
   ToastPortal,
   ToastProvider,
   ToastRoot,
@@ -19,10 +20,12 @@ import {
 // holds the timer while the viewport is hovered or focused, so a reader who is looking at the
 // toast never loses it mid-reach, and Trash is the recovery path that outlives it either way.
 const TOAST_TIMEOUT = 8000;
-// Three at once, each independently undoable: a newer action never takes an older one's Undo away.
-// Collapsed they peek over one another and cost about one row of height; the stack only opens out
-// while the viewport is hovered or focused, which is the moment the reader wants to read it.
-const TOAST_LIMIT = 3;
+// Two at once, app-wide, each independently undoable: a newer toast never takes an older one's
+// action away. The primitive keeps a third mounted but hidden (`data-limited`) rather than dropping
+// it, so a toast that stays until it is answered (a held recording, CAPTURES-B20) comes back as
+// soon as a newer one closes. Collapsed they peek over one another and cost about one row of
+// height; the stack opens out while the viewport is hovered or focused.
+const TOAST_LIMIT = 2;
 
 export function ToastHost({ children }: { children: ReactNode }) {
   return (
@@ -37,23 +40,55 @@ export function ToastHost({ children }: { children: ReactNode }) {
   );
 }
 
-// One row and exactly one target: the action when the toast carries one, a dismiss when it does
-// not. Undo and a close button side by side are two small neighbours, and the slip that costs the
-// reader their only way back is the one that lands on the wrong one. A notice with nothing to do
-// about it gets the dismiss instead, which is also what a failed undo turns into.
-// A receipt for a record just made may also open it (S26: Undo and View); `data.view` carries the
-// link, which follows the action so Undo keeps the first place.
-const ToastView = z.object({ view: z.object({ href: z.string(), label: z.string() }) });
+// What a toast may carry besides its title, description and action:
+// `view`, a link that follows the action (S26: Undo and View; How it works);
+// `secondary`, a quieter button before the action (Discard before Retry);
+// `tone: 'warning'`, the warning-soft ground for a notice that something is not as asked;
+// `progress`, the label of an indeterminate bar for work under way (the upload cannot say how far
+// it is, CAPTURES-B20).
+const ToastData = z
+  .object({
+    view: z.object({ href: z.string(), label: z.string() }),
+    secondary: z.object({
+      label: z.string(),
+      onClick: z.custom<() => void>((value) => typeof value === 'function'),
+    }),
+    tone: z.literal('warning'),
+    progress: z.string(),
+  })
+  .partial()
+  .catch({});
+// One row and one way out: the action when the toast carries one, a dismiss when it does not. Undo
+// and a close button side by side are two small neighbours, and the slip that costs the reader
+// their only way back is the one that lands on the wrong one. A notice with nothing to do about it
+// gets the dismiss instead, which is also what a failed undo turns into. A toast with a secondary
+// choice is answered by one of its two buttons, and one with work under way is not dismissed.
 function ToastList() {
   const { toasts } = useToastManager();
   return toasts.map((toast) => {
-    const view = ToastView.safeParse(toast.data).data?.view;
+    const { view, secondary, tone, progress } = ToastData.parse(toast.data);
+    const action = Boolean(toast.actionProps?.children);
     return (
-      <ToastRoot key={toast.id} toast={toast}>
+      <ToastRoot key={toast.id} toast={toast} data-tone={tone}>
         <ToastContent>
-          <ToastTitle />
-          {toast.actionProps?.children ? <ToastAction /> : <ToastClose />}
-          {view && (
+          <span className="grid min-w-0 flex-1 gap-1 py-1.5">
+            <ToastTitle />
+            {toast.description ? <ToastDescription className="whitespace-pre-line" /> : null}
+            {progress ? (
+              <span role="progressbar" aria-label={progress} data-slot="toast-progress" />
+            ) : null}
+          </span>
+          {secondary ? (
+            <Button
+              variant="ghost"
+              className="pointer-coarse:min-h-11 pointer-coarse:min-w-11"
+              onClick={secondary.onClick}
+            >
+              {secondary.label}
+            </Button>
+          ) : null}
+          {action ? <ToastAction /> : null}
+          {view ? (
             <Link
               href={view.href}
               className={buttonVariants({
@@ -63,7 +98,8 @@ function ToastList() {
             >
               {view.label}
             </Link>
-          )}
+          ) : null}
+          {action || secondary || progress ? null : <ToastClose />}
         </ToastContent>
       </ToastRoot>
     );

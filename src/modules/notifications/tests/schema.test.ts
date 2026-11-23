@@ -18,7 +18,7 @@ const line = {
   createdAt: '2026-09-10T09:00:00.000Z',
   readAt: null,
 };
-it('NOTIF-I03 NOTIF-B04 ADMIN-B59 ADMIN-B69 KPIS-B30 the kinds are the six of v1, the reading reminder and the seven update kinds, nothing else', () => {
+it('NOTIF-I03 NOTIF-B04 ADMIN-B59 ADMIN-B69 KPIS-B30 NOTIF-B18 the kinds are the six of v1, the reading reminder, the seven update kinds and the two capture kinds, nothing else', () => {
   expect([...NotificationKind.options].sort()).toEqual(
     [
       'task.assigned',
@@ -35,6 +35,8 @@ it('NOTIF-I03 NOTIF-B04 ADMIN-B59 ADMIN-B69 KPIS-B30 the kinds are the six of v1
       'update.blocked',
       'update.stalled',
       'update.updater_outdated',
+      'captures.ready',
+      'captures.failed',
     ].sort(),
   );
   expect(NotificationKind.safeParse('task.commented').success).toBe(false);
@@ -99,6 +101,7 @@ it('NOTIF-B14 every kind belongs to exactly one group, and a filter is a group o
   expect(kindsOf(undefined)).toBeNull();
   expect(kindsOf('notes')).toEqual(['note.mentioned']);
   expect(kindsOf('ai')).toEqual(['job.finished']);
+  expect(kindsOf('captures')).toEqual(['captures.ready', 'captures.failed']);
   expect(kindsOf('task.overdue')).toEqual(['task.overdue']);
   expect(FeedQuery.parse({ kind: 'updates', unread: '1' })).toEqual({
     kind: 'updates',
