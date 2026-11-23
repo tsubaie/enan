@@ -168,6 +168,60 @@ test('EP-B43 a click anywhere outside the record closes it like Esc @desktop', a
   await expect(page).not.toHaveURL(/id=/);
 });
 
+// EP-B23 (#166): the record and the sheets are one glass, dense enough to read over a white page;
+// a reader who asks for less transparency gets solid ground, no blur and a status red that clears
+// 4.5:1 on it. Read from computed style, because each of these was a cascade or token slip.
+// Reduced transparency is emulated over CDP, which every project here (Chrome) speaks.
+test('EP-B23 the record and the sheets share one dense glass, and reduced transparency makes it solid @desktop', async ({
+  page,
+}) => {
+  const alpha = (color: string) => {
+    const parts = color.match(/[\d.]+/gu) ?? [];
+    return parts.length > 3 ? Number(parts[3]) : 1;
+  };
+  const style = (selector: string, property: 'backgroundColor' | 'backdropFilter') =>
+    page
+      .locator(selector)
+      .first()
+      .evaluate((element, key) => getComputedStyle(element)[key], property);
+  await loginAs(page, 'en');
+  await expect(page.locator('html')).toHaveClass(/\bdark\b/u);
+  const prefix = `Glass ${crypto.randomUUID()}`;
+  const id = await createTask(page, prefix);
+  await page.goto(`/tasks?view=all&q=${encodeURIComponent(prefix)}`);
+  await page.locator(`[data-row-id="${id}"]`).click();
+  await expect(page.locator('.entity-detail')).toBeVisible();
+  expect(alpha(await style('.entity-detail', 'backgroundColor'))).toBeGreaterThanOrEqual(0.76);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.entity-detail')).toHaveCount(0);
+  const sheet = "[data-slot='dialog-content'][data-sheet]";
+  const filter = page
+    .getByRole('button', { name: en.common.filter, exact: true })
+    .filter({ visible: true });
+  await filter.first().click();
+  await expect(page.locator(sheet)).toBeVisible();
+  expect(alpha(await style(sheet, 'backgroundColor'))).toBeGreaterThanOrEqual(0.76);
+
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Emulation.setEmulatedMedia', {
+    features: [{ name: 'prefers-reduced-transparency', value: 'reduce' }],
+  });
+  await expect.poll(() => style(sheet, 'backdropFilter')).toBe('none');
+  await page.keyboard.press('Escape');
+  await expect(page.locator(sheet)).toHaveCount(0);
+  await page.getByRole('button', { name: en.common.account, exact: true }).click();
+  await expect(page.locator("[data-slot='popover-content']")).toBeVisible();
+  expect(await style("[data-slot='popover-content']", 'backgroundColor')).toBe('rgb(42, 42, 46)');
+  const statusBad = await page.evaluate(() => {
+    const probe = document.body.appendChild(document.createElement('span'));
+    probe.style.color = 'var(--status-bad)';
+    const color = getComputedStyle(probe).color;
+    probe.remove();
+    return color;
+  });
+  expect(statusBad).toBe('rgb(255, 105, 97)');
+});
+
 // EP-B39: nothing in the bar may sit past the end of the screen. The settings group used to be
 // `shrink-0`, so on a module carrying a period as well as a sort it measured 509 px inside a
 // 390 px viewport: the sort clipped mid-word and Filter and Clear rendered off the end, where no

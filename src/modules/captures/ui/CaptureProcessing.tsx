@@ -74,7 +74,7 @@ export function CaptureProcessing(props: Props) {
       role="status"
       aria-label={t('processingLabel')}
       className={cn(
-        'fixed z-40 grid gap-3 rounded-2xl border bg-popover p-4 text-sm shadow-lg',
+        'fixed z-40 grid gap-3 rounded-2xl border bg-elevated p-4 text-sm shadow-lg',
         props.placement === 'mobile-fullscreen'
           ? 'inset-x-3 bottom-[calc(var(--mobile-nav-clear)+0.5rem)]'
           : 'end-4 bottom-4 w-[380px]',
