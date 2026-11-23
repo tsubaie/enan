@@ -32,6 +32,8 @@ type EditorProps = {
   caret?: number | null | undefined;
   // NOTES-B28: the expanded view adds the formatting toolbar above the text.
   toolbar?: boolean | undefined;
+  // Whether the textarea takes focus on mount: not when focus left the preview while this loaded.
+  focus?: boolean | undefined;
   onChange: (draft: string) => void;
   onLeave: () => void;
 };
@@ -44,18 +46,21 @@ export default function MarkdownEditor({
   mentions,
   caret,
   toolbar = false,
+  focus = true,
   onChange,
   onLeave,
 }: EditorProps) {
   const box = useRef<HTMLTextAreaElement>(null);
+  // Decided once, on mount: the preview's removal blurs it again just after.
+  const [land] = useState(focus);
   // sync: place the caret once, after the textarea has mounted with the draft.
   useEffect(() => {
     const element = box.current;
-    if (!element || !element.value.trim()) return;
+    if (!land || !element || !element.value.trim()) return;
     const at = Math.min(element.value.length, caret ?? element.value.length);
     element.focus();
     element.setSelectionRange(at, at);
-  }, [caret]);
+  }, [caret, land]);
   const menu = useMentionMenu(mentions, box, onChange);
   return (
     <div className="relative grid gap-2">
@@ -64,7 +69,7 @@ export default function MarkdownEditor({
         ref={box}
         id={id}
         name={name}
-        autoFocus={Boolean(draft.trim())}
+        autoFocus={land && Boolean(draft.trim())}
         value={draft}
         maxLength={maxLength}
         // An empty field should look writable, not reserve the room its content would need.

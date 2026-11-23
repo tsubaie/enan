@@ -1,23 +1,12 @@
 'use client';
-import {
-  Suspense,
-  lazy,
-  startTransition,
-  useEffect,
-  useId,
-  useRef,
-  useState,
-  type MouseEvent,
-  type ReactNode,
-} from 'react';
-import { useTranslations } from 'next-intl';
+import { Suspense, lazy, useEffect, useId, useState, useTransition, type ReactNode } from 'react';
 import { cn } from '@/ui/cn';
 import type { Mentions } from './mentions';
 import { toggleChecklistItem } from './checklist';
 import { ExpandToggle, FieldFrame, FieldLabel, type Expand } from './ExpandedField';
-// Both halves load on demand: the renderer only when there is content to show, the editor only
-// when the field is entered, so neither weighs on a route's initial bundle.
-const Markdown = lazy(() => import('./Markdown').then((m) => ({ default: m.Markdown })));
+import { LoadingStatus, Preview } from './MarkdownPreview';
+// Both halves load on demand: the renderer only when there is content to show (MarkdownPreview),
+// the editor only when the field is entered, so neither weighs on a route's initial bundle.
 const Editor = lazy(() => import('./MarkdownEditor'));
 // NOTES-B24: while the field is being edited, a draft is committed this long after it first
 // moves away from the last commit.
@@ -87,6 +76,10 @@ function useDraft(value: string, onCommit: Commit) {
   const [draft, setDraft] = useState(value);
   const [seen, setSeen] = useState(value);
   const [commits] = useState(() => new Commits(value));
+  const [pending, startTransition] = useTransition();
+  // Whether focus left the preview after it was entered: a reader who clicks or tabs away while
+  // the editor loads keeps focus where they moved it.
+  const [away, setAway] = useState(false);
   if (seen !== value) {
     setSeen(value);
     if (!commits.own(value)) setDraft(value);
@@ -115,10 +108,12 @@ function useDraft(value: string, onCommit: Commit) {
   // textarea has focused and so leave the field at once (NOTES-A14).
   const enter = (at: number | null) =>
     startTransition(() => {
+      setAway(false);
       setCaret(at);
       setEditing(true);
     });
-  return { editing, caret, draft, setDraft, leave, toggle, enter };
+  const blur = () => setAway(true);
+  return { editing, caret, draft, setDraft, leave, toggle, enter, pending, away, blur };
 }
 // Markdown editing (ADR 0015): the field shows the rendered preview and becomes a textarea when
 // entered; leaving it commits a changed draft and shows the preview again, and while it is being
@@ -140,7 +135,8 @@ export function MarkdownField({
   expand,
 }: Props) {
   const id = useId();
-  const { editing, caret, draft, setDraft, leave, toggle, enter } = useDraft(value, onCommit);
+  const field = useDraft(value, onCommit);
+  const { editing, draft } = field;
   const body = (
     <div className={cn('grid gap-2', className)}>
       <FieldLabel id={id} label={label} action={action} />
@@ -162,15 +158,17 @@ export function MarkdownField({
               draft={draft}
               maxLength={maxLength}
               mentions={mentions}
-              caret={caret}
+              caret={field.caret}
               toolbar={Boolean(expand?.open)}
-              onChange={setDraft}
-              onLeave={leave}
+              focus={!field.away}
+              onChange={field.setDraft}
+              onLeave={field.leave}
             />
           ) : (
-            <Preview id={id} label={label} draft={draft} name={name} toggle={toggle} edit={enter} />
+            <Preview id={id} label={label} name={name} field={field} />
           )}
         </Suspense>
+        <LoadingStatus pending={field.pending} />
       </div>
     </div>
   );
@@ -178,59 +176,5 @@ export function MarkdownField({
     <FieldFrame id={id} label={label} className={className} expand={expand}>
       {body}
     </FieldFrame>
-  );
-}
-// The rendered content over a button that opens the textarea. The content lets pointer events
-// through to the button beneath it, except its checklist boxes, which toggle in place; the two
-// are siblings because a control cannot contain another control, and links render as text.
-function Preview({
-  id,
-  label,
-  draft,
-  name,
-  edit,
-  toggle,
-}: {
-  id: string;
-  label: string;
-  draft: string;
-  name?: string | undefined;
-  edit: (caret: number | null) => void;
-  toggle: (index: number) => void;
-}) {
-  const t = useTranslations('common');
-  const box = useRef<HTMLDivElement>(null);
-  // A pointer click lands the caret where it hit; keyboard activation lands it at the end.
-  const click = (event: MouseEvent<HTMLButtonElement>) => {
-    const root = event.detail > 0 ? box.current : null;
-    if (!root) return edit(null);
-    const { clientX, clientY } = event;
-    // Loaded on demand: the mapping is only needed for pointer clicks and stays out of routes.
-    void import('./caret').then(({ sourceOffsetFromPoint }) => {
-      // Hit testing for the caret needs the content solid for a moment.
-      root.classList.remove('pointer-events-none');
-      const at = sourceOffsetFromPoint(root, clientX, clientY, draft);
-      root.classList.add('pointer-events-none');
-      edit(at);
-    });
-  };
-  return (
-    <div className={cn('relative grid', draft.trim() ? 'min-h-40' : 'min-h-20')}>
-      {name && <input type="hidden" name={name} value={draft} />}
-      <button
-        type="button"
-        id={id}
-        aria-label={label}
-        title={t('clickToWrite')}
-        data-field-frame=""
-        className="absolute inset-0 cursor-text rounded-lg border hover:border-ring focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-        onClick={click}
-      />
-      <div ref={box} className="pointer-events-none relative px-3 py-2 font-light">
-        <Suspense fallback={<div className="h-20" />}>
-          <Markdown content={draft} interactive={false} onToggle={toggle} />
-        </Suspense>
-      </div>
-    </div>
   );
 }
