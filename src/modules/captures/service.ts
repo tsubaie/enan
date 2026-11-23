@@ -169,14 +169,20 @@ export const interpretOrHold = transactional(async function interpretOrHold(
 export async function createCapture(ctx: Context, input: z.output<typeof CaptureCreate>) {
   const committeeId = input.committeeId ?? null;
   await requireCommittee(ctx, committeeId);
+  // CAPTURES-B14: checked again once the body has arrived and before anything is written, so a
+  // switch turned off during the upload stores no file.
+  await requireRecording(ctx);
   const audio = await storeVoiceAudio(input.file);
   const transcript = input.transcript || null;
   // F1: the declared length is the client's word; the reservation and the row take the longer.
   const durationSeconds = Math.max(input.durationSeconds, audio.durationSeconds);
   return withTransaction(ctx.db, async (database) => {
     const scoped = { ...ctx, db: database };
-    // CAPTURES-B14: the switch may have gone off while the body arrived. A refusal here rolls the
-    // rows back; the blob already written is left to the content-addressed sweep.
+    // CAPTURES-B14: and once more inside the write, so no row lands after the switch went off. A
+    // refusal here rolls the rows back, but the file stored a moment ago stays without a `files`
+    // row (the switch went off between the two checks). Unreferenced voice files are left to a
+    // scheduled sweep (#186), never deleted inline: identical uploads share one
+    // content-addressed name, so another request may be about to reference it.
     await requireRecording(scoped);
     const fileId = await upsertAudioFile(database, {
       storageKey: audio.storageKey,

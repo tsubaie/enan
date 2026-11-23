@@ -128,4 +128,8 @@ function DialogDescription({ className, ...props }: DialogPrimitive.Description.
   );
 }
 
-export { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle };
+function DialogClose(props: DialogPrimitive.Close.Props) {
+  return <DialogPrimitive.Close data-slot="dialog-close" {...props} />;
+}
+
+export { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogTitle };

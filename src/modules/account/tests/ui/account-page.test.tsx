@@ -326,7 +326,7 @@ describe.each(['en', 'ar'] as const)('%s', (locale) => {
   });
   it(`ACCT-B11 with the workspace switch off the section is greyed with the reason and offers no control ${locale}`, () => {
     state.query.data = {
-      data: account({ captures: { allowed: false, enabled: true, shortcut: true } }),
+      data: account({ captures: { ...account().captures, allowed: false } }),
     };
     mount(<AccountPage />, locale);
     expect(screen.getByText(m.account.voiceOffByAdmin)).toBeTruthy();
@@ -337,11 +337,105 @@ describe.each(['en', 'ar'] as const)('%s', (locale) => {
 });
 it('ACCT-B11 with voice capture off the shortcut row is not offered', () => {
   state.query.data = {
-    data: account({ captures: { allowed: true, enabled: false, shortcut: true } }),
+    data: account({ captures: { ...account().captures, enabled: false } }),
   };
   mount(<AccountPage />);
   expect(screen.getByRole('switch', { name: en.account.voice }).getAttribute('aria-checked')).toBe(
     'false',
   );
   expect(screen.queryByRole('switch', { name: en.account.voiceShortcut })).toBeNull();
+});
+// ACCT-B11 CAPTURES-B16: where the record control lives, as radio lists: the phone's (shown on a
+// phone) and the computer's (shown on a computer), each led by the workspace default it names.
+describe.each(['en', 'ar'] as const)('%s', (locale) => {
+  const m = messages[locale];
+  it(`ACCT-B11 CAPTURES-B16 the placement radios name the workspace default and save the reader's choice ${locale}`, () => {
+    router.refresh.mockReset();
+    state.patch.mutate.mockReset();
+    state.patch.mutate.mockImplementation((_input, options: { onSuccess: () => void }) =>
+      options.onSuccess(),
+    );
+    state.query.data = {
+      data: account({
+        captures: {
+          ...account().captures,
+          workspaceMobile: 'floating-start',
+          workspaceDesktop: 'hidden',
+        },
+      }),
+    };
+    mount(<AccountPage />, locale);
+    const [phone, computer] = screen.getAllByRole('radiogroup');
+    expect(phone?.parentElement?.className).toContain('lg:hidden');
+    expect(computer?.parentElement?.classList.contains('hidden')).toBe(true);
+    expect(computer?.parentElement?.classList.contains('lg:grid')).toBe(true);
+    const phoneRadios = within(phone as HTMLElement).getAllByRole('radio');
+    expect(phoneRadios.map((radio) => radio.parentElement?.textContent)).toEqual([
+      m.account.voiceWorkspaceDefault.replace('{value}', m.captures['placement_floating-start']),
+      m.account.voiceFloating,
+      m.captures.placement_more,
+    ]);
+    expect((phoneRadios[0] as HTMLInputElement).checked).toBe(true);
+    expect(
+      within(computer as HTMLElement)
+        .getAllByRole('radio')
+        .map((radio) => radio.parentElement?.textContent),
+    ).toEqual([
+      m.account.voiceWorkspaceDefault.replace('{value}', m.captures.placement_hidden),
+      m.captures.placement_header,
+      m.captures['placement_account-menu'],
+      m.captures.placement_hidden,
+    ]);
+    // No side is offered until Floating is the choice; a new Floating choice starts at End.
+    expect(screen.queryByText(m.account.voiceSide)).toBeNull();
+    fireEvent.click(phoneRadios[1] as HTMLElement);
+    expect(state.patch.mutate).toHaveBeenLastCalledWith(
+      { revision: 3, captures: { mobile: 'floating', side: 'end' } },
+      expect.anything(),
+    );
+    fireEvent.click(
+      within(computer as HTMLElement).getByRole('radio', {
+        name: m.captures['placement_account-menu'],
+      }),
+    );
+    expect(state.patch.mutate).toHaveBeenLastCalledWith(
+      { revision: 3, captures: { desktop: 'account-menu' } },
+      expect.anything(),
+    );
+    expect(router.refresh).toHaveBeenCalledTimes(2);
+  });
+  it(`ACCT-B11 CAPTURES-B16 Floating shows the side as cards naming the physical side, and Workspace default clears ${locale}`, () => {
+    state.patch.mutate.mockReset();
+    state.query.data = {
+      data: account({ captures: { ...account().captures, mobile: 'floating', side: 'start' } }),
+    };
+    mount(<AccountPage />, locale);
+    const side = screen.getByRole('radiogroup', { name: m.account.voiceSide });
+    const [start, end] = within(side).getAllByRole('radio');
+    expect(start?.parentElement?.textContent).toContain(m.account.voiceStartCaption);
+    expect(end?.parentElement?.textContent).toContain(m.account.voiceEndCaption);
+    expect((start as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(end as HTMLElement);
+    expect(state.patch.mutate).toHaveBeenLastCalledWith(
+      { revision: 3, captures: { side: 'end' } },
+      expect.anything(),
+    );
+    const [phone] = screen.getAllByRole('radiogroup');
+    fireEvent.click(within(phone as HTMLElement).getAllByRole('radio')[0] as HTMLElement);
+    expect(state.patch.mutate).toHaveBeenLastCalledWith(
+      { revision: 3, captures: { mobile: 'workspace' } },
+      expect.anything(),
+    );
+  });
+});
+it('ACCT-B11 CAPTURES-B16 placement is not offered while the workspace or the reader has recording off', () => {
+  for (const captures of [
+    { ...account().captures, allowed: false },
+    { ...account().captures, enabled: false },
+  ]) {
+    state.query.data = { data: account({ captures }) };
+    mount(<AccountPage />);
+    expect(screen.queryAllByRole('radiogroup')).toHaveLength(0);
+    cleanup();
+  }
 });

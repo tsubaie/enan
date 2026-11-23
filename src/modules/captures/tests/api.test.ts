@@ -277,13 +277,17 @@ it.each([
   ['workspace', 'captures.enabled'],
   ['account', 'user.captures.enabled'],
 ] as const)(
-  'CAPTURES-B14 recording turned off (%s) while the body is arriving refuses POST /captures with 403 recording_off and stores no row',
+  'CAPTURES-B14 recording turned off (%s) while the body is arriving refuses POST /captures with 403 recording_off and stores no row and no file',
   async (scope, key) => {
+    // The switch goes off while the body streams in, so the check made once it has arrived, before
+    // anything is written, refuses it: no file on disk either. (Only a switch turned off after that
+    // check and before the in-transaction one could leave an unreferenced file, for #186.)
+    const before = await storageUsage();
     const off = async () => {
       if (key === 'captures.enabled') await writeSetting(db(), key, false, admin.id);
       else await writeSetting(db(), key, false, recorder.id, recorder.id);
     };
-    const answer = await record(api.create, webm(45), { durationSeconds: '12' }, off);
+    const answer = await record(api.create, unique(webm(45)), { durationSeconds: '12' }, off);
     expect(answer.status).toBe(403);
     expect(answer.body.error).toMatchObject({
       code: 'forbidden',
@@ -291,6 +295,7 @@ it.each([
     });
     expect(await db().select().from(captures)).toEqual([]);
     expect(await db().select().from(files)).toEqual([]);
+    expect(await storageUsage()).toBe(before);
   },
 );
 it('CAPTURES-B14 with recording off an existing recording can still be listed, opened, played, typed, retried, deleted and restored', async () => {
@@ -319,3 +324,9 @@ it('CAPTURES-B14 with recording off an existing recording can still be listed, o
   });
   expect(restored.status).toBe(200);
 });
+// Bytes no earlier run stored: files are content-addressed and FILES_DIR outlives a run, so a
+// repeated upload would find its file already there and "nothing written" would prove nothing.
+function unique(bytes: Uint8Array) {
+  crypto.getRandomValues(bytes.subarray(bytes.length - 16));
+  return bytes;
+}

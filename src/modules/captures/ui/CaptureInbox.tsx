@@ -11,12 +11,13 @@ import { blockers, type CaptureGroup as Group, type CaptureSetup } from '../sche
 import { startCapture } from './capture-store';
 import { useCaptures, useReviewMutations, type CaptureScope } from './capture-queries';
 import { CaptureGroup } from './CaptureGroup';
+import { inboxEntry } from './entries';
 import { InboxEducation } from './InboxEducation';
 import { RecordingOff } from './RecordingOff';
 import type { Layout } from './SuggestionCard';
 import { useApprovedMessage } from './suggestion-text';
 import { useReviewToast } from './review-toast';
-import { listedDraft, useReviewAction } from './review-action';
+import { failedSaves, listedDraft, useReviewAction } from './review-action';
 import {
   InboxContext,
   pendingFocusId,
@@ -60,16 +61,21 @@ function Root({
     <InboxContext value={{ inbox, groups, layout, scope, saves, reread, capture }}>
       <div className="grid gap-4" data-inbox>
         <header className="flex flex-wrap items-start gap-3">
-          <div className="grid flex-1 gap-0.5">
-            <h1 tabIndex={-1} className="font-display text-2xl">
+          {/* On a phone the title takes its own row and the actions wrap under it, so a long
+              Approve N ready never squeezes the word; from 1024 px they share one row. */}
+          <div className="grid min-w-0 basis-full gap-0.5 lg:flex-1 lg:basis-0">
+            <h1 tabIndex={-1} className="font-display text-2xl whitespace-nowrap">
               {t('review')}
             </h1>
             <p className="text-sm text-text-muted">
               {t('waiting', { count: pendingOf(groups).length })}
             </p>
           </div>
-          {groups.length > 0 && <ApproveReadyButton approval={approval} />}
-          {actions}
+          <div className="flex flex-wrap items-center gap-2">
+            {inboxEntry(capture)}
+            {groups.length > 0 && <ApproveReadyButton approval={approval} />}
+            {actions}
+          </div>
         </header>
         {approval.error && <ErrorPanel error={approval.error} />}
         {query.isPending ? (
@@ -103,17 +109,6 @@ function useUndoFocusFallback(listed: Group[] | undefined) {
       if (focusWasLost()) focusInboxHeading();
     }
   }, [pending, listed]);
-}
-// The drafts whose latest save failed, once every save in flight has answered.
-async function failedSaves(saves: Map<string, Promise<boolean>>) {
-  const ids = [...saves.keys()];
-  const outcomes = await Promise.allSettled(saves.values());
-  return new Set(
-    ids.filter((_, at) => {
-      const outcome = outcomes[at];
-      return outcome?.status !== 'fulfilled' || !outcome.value;
-    }),
-  );
 }
 // S23: every draft shown with nothing required left to settle; a type flag never holds one back.
 // An edit still being saved is waited for, then the list is read again, so the batch is what the
@@ -177,9 +172,6 @@ export function ApproveReadyButton({
     </Button>
   );
 }
-function Education() {
-  return <InboxEducation />;
-}
 function Groups() {
   const { groups, layout } = useInbox();
   if (!groups.length) return null;
@@ -242,7 +234,7 @@ function Scope() {
 export const CaptureInbox = {
   Root,
   Off: RecordingOff,
-  Education,
+  Education: InboxEducation,
   Group: CaptureGroup,
   Groups,
   Empty,

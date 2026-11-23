@@ -8,7 +8,7 @@ import { NextIntlClientProvider, createTranslator } from 'next-intl';
 import requestConfig from '@/core/i18n/request';
 import en from '@/core/i18n/messages/en.json';
 import ar from '@/core/i18n/messages/ar.json';
-import { CaptureGroup } from '../../schema/validation';
+import { CaptureGroup, type CaptureSetup } from '../../schema/validation';
 import { CapturesPage } from '../../ui/CapturesPage';
 import { useReviewToast } from '../../ui/review-toast';
 import { mount, newClient } from '../../../../../tests/fixtures/mount';
@@ -173,7 +173,13 @@ beforeEach(() => {
   }));
 });
 afterEach(() => vi.unstubAllGlobals());
-const on = { allowed: true, enabled: true, shortcut: true };
+const on: CaptureSetup = {
+  allowed: true,
+  enabled: true,
+  shortcut: true,
+  mobile: 'floating-end',
+  desktop: 'header',
+};
 const page = (locale: 'en' | 'ar' = 'en', capture = on) =>
   mount(
     <CapturesPage initial={spies.list as never} scope="mine" admin={false} capture={capture} />,
@@ -1131,7 +1137,7 @@ it.each(['en', 'ar'] as const)(
   'CAPTURES-B14 the workspace switch off shows the recording-off note and keeps the drafts reviewable (%s)',
   (locale) => {
     const m = locale === 'ar' ? ar : en;
-    page(locale, { allowed: false, enabled: false, shortcut: false });
+    page(locale, { ...on, allowed: false, enabled: false, shortcut: false });
     const banner = screen
       .getAllByRole('note')
       .find((note) => note.textContent?.includes(m.captures.recordingOffTitle));
@@ -1143,14 +1149,50 @@ it('CAPTURES-B14 an empty inbox offers Record only while recording is on, and na
   spies.list = { data: [], meta: { nextCursor: null } };
   const record = () =>
     screen.queryByRole('button', { name: new RegExp(en.captures.recordNote, 'u') });
-  page('en', { allowed: false, enabled: false, shortcut: false });
+  page('en', { ...on, allowed: false, enabled: false, shortcut: false });
   expect(record()).toBeNull();
-  page('en', { allowed: true, enabled: false, shortcut: false });
+  page('en', { ...on, allowed: true, enabled: false, shortcut: false });
   expect(record()).toBeNull();
   expect(screen.queryByText(en.captures.recordingOffTitle)).toBeNull();
-  page('en', { allowed: true, enabled: true, shortcut: false });
+  page('en', { ...on, allowed: true, enabled: true, shortcut: false });
   expect(record()?.getAttribute('aria-keyshortcuts')).toBeNull();
   expect(record()?.querySelector('kbd')).toBeNull();
   page('en', on);
   expect(record()?.getAttribute('aria-keyshortcuts')).toBe('Alt+V');
 });
+// CAPTURES-B18: the inbox header offers Record whenever recording is on, drafts or none, beside
+// Approve N ready; the chord is named beside it only with the header button hidden and the
+// shortcut on.
+it.each(['en', 'ar'] as const)(
+  'CAPTURES-B18 the inbox header offers Record beside Approve N ready while drafts are waiting (%s)',
+  (locale) => {
+    const m = locale === 'ar' ? ar : en;
+    page(locale);
+    const header = document.querySelector('[data-inbox] > header') as HTMLElement;
+    const record = within(header).getByRole('button', { name: m.captures.record });
+    expect(record.hasAttribute('data-capture-opener')).toBe(true);
+    const approve = within(header).getByRole('button', { name: /Approve|اعتماد/u });
+    expect(record.compareDocumentPosition(approve) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  },
+);
+it('CAPTURES-B18 the inbox header has no Record while recording is off for the reader', () => {
+  page('en', { ...on, enabled: false, shortcut: false });
+  expect(screen.queryByRole('button', { name: en.captures.record })).toBeNull();
+});
+it.each([
+  ['hidden', true, true],
+  ['hidden', false, false],
+  ['header', true, false],
+  ['account-menu', true, false],
+] as const)(
+  'CAPTURES-B18 computer %s with the shortcut %s: the Alt+V hint is shown %s',
+  (desktop, shortcut, shown) => {
+    page('en', { ...on, desktop, shortcut });
+    const hint = screen.queryByText(
+      (_, node) => node?.tagName === 'P' && node.textContent === 'Press Alt+V to record',
+    );
+    expect(Boolean(hint)).toBe(shown);
+    if (hint) expect(hint.className).toContain('lg:inline-flex');
+    expect(screen.getByRole('button', { name: en.captures.record })).toBeTruthy();
+  },
+);

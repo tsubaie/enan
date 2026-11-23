@@ -4,10 +4,12 @@ import { useTranslations } from 'next-intl';
 import { useToastManager } from '@/ui/primitives/toast';
 import { useSettings, useSaveSetting } from './queries';
 import type { Save } from './SettingControls';
-// Numerals, the default language, the time zone, the wallpaper and the record controls
-// (CAPTURES-B14) are applied when a page is rendered on the server, so a change to one of them
-// re-renders the page to show it at once.
+// Numerals, the default language, the time zone, the wallpaper and the record controls with their
+// default placement (CAPTURES-B14, CAPTURES-B16) are applied when a page is rendered on the server,
+// so a change to one of them re-renders the page to show it at once.
 const rendered = new Set([
+  'captures.default_desktop_placement',
+  'captures.default_mobile_placement',
   'captures.enabled',
   'workspace.arabic_numerals',
   'workspace.default_locale',

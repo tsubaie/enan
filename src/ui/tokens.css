@@ -1680,11 +1680,67 @@ main:has(.home-page)::-webkit-scrollbar {
   max-width: 32rem;
   margin-inline: auto;
 }
-/* On a phone the capture microphone floats at the inline end just above the bar (S1), so while it
-   is shown a toast stands above it instead of covering it: 0.75rem lift, its 3.5rem, then a gap. */
+/* On a phone the capture microphone floats at the inline end or start just above the bar (S1), so
+   while it is shown a toast stands above it instead of covering it: 0.75rem lift, its 3.5rem, then
+   a gap. The viewport spans the width, so either side is cleared.
+   CAPTURES-B17: the circle goes wherever the bar does (a record's sheet is open) and while the
+   on-screen keyboard is up (a touch device with a text field focused); it never shrinks and never
+   hides on scroll. A hidden circle lifts no toast.
+   The page reserves the same ground at its end while the circle is shown, so its last rows (a
+   form's last option, a footer) can scroll clear of it rather than sit under it. While the
+   keyboard hides the circle the reservation stays: dropping it as the reader types would move the
+   page under the caret, and the keyboard covers that ground anyway. */
 @media (max-width: 1023.98px) {
   body:has([data-capture-fab]) [data-slot='toast-viewport'] {
     inset-block-end: calc(var(--mobile-nav-clear) + 0.75rem + 3.5rem + 0.5rem);
+  }
+  body:has([data-capture-fab]) #content {
+    padding-block-end: calc(var(--mobile-nav-clear) + 0.75rem + 3.5rem + 0.5rem);
+  }
+  body:has([data-capture-fab]):has(.entity-page-open) #content {
+    padding-block-end: var(--mobile-nav-clear);
+  }
+  body:has(.entity-page-open) [data-capture-fab] {
+    display: none;
+  }
+  body:has([data-capture-fab]):has(.entity-page-open) [data-slot='toast-viewport'] {
+    inset-block-end: var(--mobile-nav-clear);
+  }
+}
+@media (max-width: 1023.98px) and (pointer: coarse) {
+  body:has(
+      :is(
+        input:not(
+          [type='checkbox'],
+          [type='radio'],
+          [type='range'],
+          [type='button'],
+          [type='submit']
+        ),
+        textarea,
+        select,
+        [contenteditable]:not([contenteditable='false'])
+      ):focus
+    )
+    [data-capture-fab] {
+    display: none;
+  }
+  body:has([data-capture-fab]):has(
+      :is(
+        input:not(
+          [type='checkbox'],
+          [type='radio'],
+          [type='range'],
+          [type='button'],
+          [type='submit']
+        ),
+        textarea,
+        select,
+        [contenteditable]:not([contenteditable='false'])
+      ):focus
+    )
+    [data-slot='toast-viewport'] {
+    inset-block-end: var(--mobile-nav-clear);
   }
 }
 @media (min-width: 1024px) {

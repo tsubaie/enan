@@ -37,7 +37,16 @@ export const account = (overrides: Partial<Account> = {}): Account => ({
   sessions: [current, other],
   signInMethods: ['password'],
   passkeys: [],
-  captures: { allowed: true, enabled: true, shortcut: true },
+  captures: {
+    allowed: true,
+    enabled: true,
+    shortcut: true,
+    mobile: 'workspace',
+    side: 'end',
+    desktop: 'workspace',
+    workspaceMobile: 'floating-end',
+    workspaceDesktop: 'header',
+  },
   ...overrides,
 });
 export function mutation() {

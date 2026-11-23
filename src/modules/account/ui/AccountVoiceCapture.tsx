@@ -6,12 +6,14 @@ import { ShieldOff, UserRound } from 'lucide-react';
 import { Switch } from '@/ui/primitives/switch';
 import { ErrorPanel } from '@/ui/layout/ErrorPanel';
 import { usePatchAccount } from './queries';
-import type { Account } from '../schema/validation';
-type Captures = Account['captures'];
-// ACCT-B11: the reader's own voice capture switch and Alt+V (CAPTURES-B15). The shell draws the
-// record controls on the server, so a save re-renders it (`router.refresh`) rather than reloading.
-// While the workspace has recording off (CAPTURES-B14) the section stays, greyed, with the reason,
-// and offers nothing to change.
+import { AccountCapturePlacement } from './AccountCapturePlacement';
+import type { Account, AccountPatch } from '../schema/validation';
+type Patch = NonNullable<AccountPatch['captures']>;
+// ACCT-B11: the reader's own voice capture switch, where the record control lives on a phone and
+// on a computer (CAPTURES-B16) and Alt+V (CAPTURES-B15). The shell draws the record controls on the
+// server, so a save re-renders it (`router.refresh`) rather than reloading. While the workspace has
+// recording off (CAPTURES-B14) the section stays, greyed, with the reason, and offers nothing to
+// change, placement included.
 export function AccountVoiceCapture({ account }: { account: Account }) {
   const t = useTranslations('account');
   const off = useId();
@@ -44,7 +46,7 @@ function VoiceSwitches({ account }: { account: Account }) {
   const router = useRouter();
   const { enabled, shortcut } = account.captures;
   const id = { voice: useId(), shortcut: useId() };
-  const save = (captures: Partial<Pick<Captures, 'enabled' | 'shortcut'>>) =>
+  const save = (captures: Patch) =>
     patch.mutate(
       { revision: account.user.revision, captures },
       { onSuccess: () => router.refresh() },
@@ -65,6 +67,7 @@ function VoiceSwitches({ account }: { account: Account }) {
             onCheckedChange={(next) => save({ enabled: next })}
           />
         </Row>
+        {enabled ? <AccountCapturePlacement captures={account.captures} save={save} /> : null}
         {/* The chord is a computer's (CAPTURES-B19); a phone has no row for it. */}
         {enabled ? (
           <div className="hidden lg:grid">

@@ -5,7 +5,9 @@ import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import en from '@/core/i18n/messages/en.json';
 import ar from '@/core/i18n/messages/ar.json';
 import { CaptureHost } from '../../ui/CaptureHost';
-import { CaptureFab } from '../../ui/CaptureFab';
+import { CaptureEntry } from '../../ui/CaptureEntry';
+import { captureEntries } from '../../ui/entries';
+import type { CaptureSetup } from '../../schema/validation';
 import { CaptureHeaderControls } from '../../ui/CaptureHeaderButton';
 import { ApiError } from '@/core/http/client';
 import { mount } from '../../../../../tests/fixtures/mount';
@@ -81,7 +83,21 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
-const on = { allowed: true, enabled: true, shortcut: true };
+const on: CaptureSetup = {
+  allowed: true,
+  enabled: true,
+  shortcut: true,
+  mobile: 'floating-end',
+  desktop: 'header',
+};
+// The header as the shell draws it: the record slot, then Review and its panel.
+function Header({ capture }: { capture: CaptureSetup }) {
+  return (
+    <>
+      <CaptureHeaderControls capture={capture} record={captureEntries(capture).header} />
+    </>
+  );
+}
 // Only the desktop form is a named region; on a phone the dialog around it carries the name.
 const recorder = () => document.querySelector<HTMLFormElement>('form[data-placement]');
 async function startRecording(locale: 'en' | 'ar' = 'en') {
@@ -89,7 +105,7 @@ async function startRecording(locale: 'en' | 'ar' = 'en') {
   mount(
     <>
       <CaptureHost keys="Alt+V" />
-      <CaptureFab />
+      <CaptureEntry.Floating side="end" />
     </>,
     locale,
   );
@@ -103,7 +119,7 @@ it('CAPTURES-B01 S2 the first start asks first, says the audio leaves when trans
   mount(
     <>
       <CaptureHost keys="Alt+V" />
-      <CaptureFab />
+      <CaptureEntry.Floating side="end" />
     </>,
   );
   await act(async () => {
@@ -288,7 +304,7 @@ it('CAPTURES-B19 with the shortcut off nothing listens and no control names the 
   const listen = vi.spyOn(document, 'addEventListener');
   mount(
     <>
-      <CaptureHeaderControls capture={{ ...on, shortcut: false }} />
+      <Header capture={{ ...on, shortcut: false }} />
       <CaptureHost keys={null} />
     </>,
   );
@@ -307,7 +323,7 @@ it('CAPTURES-B19 with the shortcut on the header names it and one listener is re
   const listen = vi.spyOn(document, 'addEventListener');
   mount(
     <>
-      <CaptureHeaderControls capture={on} />
+      <Header capture={on} />
       <CaptureHost keys="Alt+V" />
     </>,
   );
@@ -318,7 +334,7 @@ it('CAPTURES-B19 with the shortcut on the header names it and one listener is re
   listen.mockRestore();
 });
 it('CAPTURES-B14 with recording off the header keeps Review and draws no Record a note', () => {
-  mount(<CaptureHeaderControls capture={{ allowed: false, enabled: false, shortcut: false }} />);
+  mount(<Header capture={{ ...on, allowed: false, enabled: false, shortcut: false }} />);
   expect(
     screen.queryByRole('button', { name: new RegExp(en.captures.recordNote, 'u') }),
   ).toBeNull();
@@ -401,7 +417,7 @@ it('CAPTURES-B01 on a phone the recorder is a modal: the page and the bar behind
   const view = mount(
     <>
       <CaptureHost keys="Alt+V" />
-      <CaptureFab />
+      <CaptureEntry.Floating side="end" />
     </>,
   );
   await start();
@@ -423,7 +439,7 @@ it('CAPTURES-B01 on a phone the recorder is a modal: the page and the bar behind
   const again = mount(
     <>
       <CaptureHost keys="Alt+V" />
-      <CaptureFab />
+      <CaptureEntry.Floating side="end" />
     </>,
   );
   await start();
@@ -476,7 +492,7 @@ it('CAPTURES-B01 on a desktop a cancel returns focus to the header Record a note
   localStorage.setItem('enan.captures.microphone-intro', '1');
   mount(
     <>
-      <CaptureHeaderControls capture={on} />
+      <Header capture={on} />
       <CaptureHost keys="Alt+V" />
     </>,
   );
@@ -516,7 +532,7 @@ it('CAPTURES-B01 under StrictMode the phone dialog makes the page inert while op
   const view = mount(
     <StrictMode>
       <CaptureHost keys="Alt+V" />
-      <CaptureFab />
+      <CaptureEntry.Floating side="end" />
     </StrictMode>,
   );
   await start();
@@ -532,3 +548,32 @@ it('CAPTURES-B01 under StrictMode the phone dialog makes the page inert while op
   expect(page.live()).toBe(true);
   page.remove();
 });
+// CAPTURES-B17 CAPTURES-B18: Record in More and in the account menu opens from inside a sheet or a
+// menu that closes; focus returns to its door. The avatar holds Record on a computer only, so on a
+// phone it is passed over for the More tab, and on a computer it is the one taken.
+it.each([
+  [false, 'more'],
+  [true, 'avatar'],
+] as const)(
+  'CAPTURES-B17 CAPTURES-B18 desktop %s: a cancel returns focus to the %s door',
+  async (desktop, expected) => {
+    media.desktop = desktop;
+    localStorage.setItem('enan.captures.microphone-intro', '1');
+    mount(
+      <>
+        <button type="button" data-capture-opener="wide" data-testid="avatar" />
+        <button type="button" data-capture-opener data-testid="more" />
+        <CaptureHost keys="Alt+V" />
+      </>,
+    );
+    await act(async () => {
+      press(document.body, {});
+    });
+    expect(recorder()).not.toBeNull();
+    fireEvent.click(
+      screen.getByRole('button', { name: new RegExp(`^${en.captures.cancel}`, 'u') }),
+    );
+    await act(() => vi.advanceTimersByTimeAsync(100));
+    expect(document.activeElement?.getAttribute('data-testid')).toBe(expected);
+  },
+);

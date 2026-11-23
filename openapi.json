@@ -5400,11 +5400,35 @@
           "captures": {
             "additionalProperties": false,
             "properties": {
+              "desktop": {
+                "enum": [
+                  "workspace",
+                  "header",
+                  "account-menu",
+                  "hidden"
+                ],
+                "type": "string"
+              },
               "enabled": {
                 "type": "boolean"
               },
+              "mobile": {
+                "enum": [
+                  "workspace",
+                  "floating",
+                  "more"
+                ],
+                "type": "string"
+              },
               "shortcut": {
                 "type": "boolean"
+              },
+              "side": {
+                "enum": [
+                  "end",
+                  "start"
+                ],
+                "type": "string"
               }
             },
             "type": "object"
@@ -7226,17 +7250,62 @@
                   "allowed": {
                     "type": "boolean"
                   },
+                  "desktop": {
+                    "enum": [
+                      "workspace",
+                      "header",
+                      "account-menu",
+                      "hidden"
+                    ],
+                    "type": "string"
+                  },
                   "enabled": {
                     "type": "boolean"
                   },
+                  "mobile": {
+                    "enum": [
+                      "workspace",
+                      "floating",
+                      "more"
+                    ],
+                    "type": "string"
+                  },
                   "shortcut": {
                     "type": "boolean"
+                  },
+                  "side": {
+                    "enum": [
+                      "end",
+                      "start"
+                    ],
+                    "type": "string"
+                  },
+                  "workspaceDesktop": {
+                    "enum": [
+                      "header",
+                      "account-menu",
+                      "hidden"
+                    ],
+                    "type": "string"
+                  },
+                  "workspaceMobile": {
+                    "enum": [
+                      "floating-end",
+                      "floating-start",
+                      "more"
+                    ],
+                    "type": "string"
                   }
                 },
                 "required": [
                   "allowed",
                   "enabled",
-                  "shortcut"
+                  "shortcut",
+                  "mobile",
+                  "side",
+                  "desktop",
+                  "workspaceMobile",
+                  "workspaceDesktop"
                 ],
                 "type": "object"
               },

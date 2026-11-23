@@ -438,7 +438,7 @@ test('ACCT-A06 ACCT-B11 a member turns their own voice capture off and the short
       'false',
     );
     await expect(other.page.getByRole('button', { name: en.captures.recordNote })).toHaveCount(0);
-    expect((await account(other.page)).body.data?.captures).toEqual({
+    expect((await account(other.page)).body.data?.captures).toMatchObject({
       allowed: true,
       enabled: false,
       shortcut: false,

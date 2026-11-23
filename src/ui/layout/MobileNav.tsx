@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { isValidElement, useState, type ReactNode } from 'react';
 import { IntentLink } from '@/ui/layout/IntentLink';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -7,7 +7,13 @@ import { Ellipsis } from 'lucide-react';
 import { navigation } from '@/core/modules/client';
 import type { NavEntry } from '@/core/modules/manifest';
 import { LanguageToggle } from '@/ui/layout/LanguageToggle';
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/ui/primitives/dialog';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from '@/ui/primitives/dialog';
 // ADMIN-B19: the bar carries four destinations and a way to the rest. Seven entries were drawn as
 // seven 44 px slots with no gap between them while their labels ran to 84 px, so at every width a
 // phone offers the labels overlapped — "People" and "Committees" read as one word and
@@ -24,7 +30,18 @@ function split(entries: NavEntry[]): { bar: NavEntry[]; behind: NavEntry[] } {
 function isCurrent(path: string, href: string) {
   return path.startsWith(href.split('/').slice(0, 2).join('/'));
 }
-export function MobileNav({ role }: { role: string }) {
+// `action` is an action the sheet puts first and `dot` the door's mark beside it (CAPTURES-B17);
+// both may be empty. The action opens from inside the sheet, so the door is where focus returns
+// when a recorder it started closes (`data-capture-opener`).
+export function MobileNav({
+  role,
+  action,
+  dot,
+}: {
+  role: string;
+  action: ReactNode;
+  dot: ReactNode;
+}) {
   const t = useTranslations('common');
   const path = usePathname();
   const [open, setOpen] = useState(false);
@@ -41,7 +58,8 @@ export function MobileNav({ role }: { role: string }) {
         type="button"
         aria-expanded={open}
         aria-current={elsewhere ? 'page' : undefined}
-        className="group/nav flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-3xl px-3 text-text-muted transition-colors duration-150 hover:bg-[var(--nav-hover)] hover:text-text aria-[current=page]:bg-[var(--nav-selected)] aria-[current=page]:text-text"
+        data-capture-opener={action ? '' : undefined}
+        className="group/nav relative flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-3xl px-3 text-text-muted transition-colors duration-150 hover:bg-[var(--nav-hover)] hover:text-text aria-[current=page]:bg-[var(--nav-selected)] aria-[current=page]:text-text"
         onClick={() => setOpen(true)}
       >
         <Ellipsis
@@ -49,11 +67,14 @@ export function MobileNav({ role }: { role: string }) {
           aria-hidden={true}
         />
         <span className="max-w-full min-w-0 truncate">{t('navMore')}</span>
+        {dot}
       </button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent sheet className="max-h-[85dvh] overflow-y-auto">
           <DialogTitle>{t('navMore')}</DialogTitle>
           <DialogDescription>{t('navMoreDescription')}</DialogDescription>
+          {/* The action is drawn as the sheet's close part, so its own click closes the sheet too. */}
+          {isValidElement(action) ? <DialogClose render={action} /> : null}
           <nav className="grid gap-1">
             {behind.map((entry) => (
               <SheetLink key={entry.href} entry={entry} path={path} close={() => setOpen(false)} />

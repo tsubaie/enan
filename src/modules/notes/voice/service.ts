@@ -106,11 +106,14 @@ export function voiceNoteTitle(transcript: string | undefined, today: string) {
 // The audio is stored before the transaction; the note and its memo go in together. No
 // refinement starts: a rewrite that applies itself is not part of the rollback.
 export async function createNoteFromVoice(ctx: Context, input: z.output<typeof VoiceCreate>) {
+  // CAPTURES-B14: checked again before anything is written, as `createCapture` does.
+  await requireRecording(ctx);
   const audio = await storeVoiceAudio(input.file);
   const transcript = input.transcript || undefined;
   return withTransaction(ctx.db, async (database) => {
     const scoped = { ...ctx, db: database };
-    // CAPTURES-B14: re-checked inside the write, as `createCapture` does; the blob is left to the sweep.
+    // CAPTURES-B14: and inside the write, as `createCapture` does; a switch turned off between the
+    // two checks leaves the stored file unreferenced, for the scheduled sweep (#186).
     await requireRecording(scoped);
     const today = dayAt(await getSetting(database, 'workspace.timezone'));
     const note = await createNote(

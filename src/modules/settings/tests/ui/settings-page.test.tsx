@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, screen } from '@testing-library/react';
+import { fireEvent, screen, within } from '@testing-library/react';
 import en from '@/core/i18n/messages/en.json';
 import ar from '@/core/i18n/messages/ar.json';
 import { ApiError } from '@/core/http/client';
@@ -207,4 +207,63 @@ it('ADMIN-B07 the page waits on its query and reports a failed one', () => {
   };
   mount(<SettingsPage />);
   expect(screen.getByRole('alert').textContent).toContain('This action is not allowed.');
+});
+// ADMIN-B77 CAPTURES-B16: the workspace's default placement, phone and computer, written through
+// the same save as every workspace setting; the switch's helper names every control it governs.
+describe.each(['en', 'ar'] as const)('%s', (locale) => {
+  const m = locale === 'ar' ? ar : en;
+  it(`ADMIN-B77 CAPTURES-B16 the default placement radios write the workspace keys ${locale}`, () => {
+    const row = (key: string, value: Setting['value'], fallback: Setting['value']): Setting => ({
+      key,
+      value,
+      default: fallback,
+      type: typeof value === 'boolean' ? 'boolean' : 'enum',
+    });
+    state.query = {
+      isPending: false,
+      error: null,
+      data: {
+        data: [
+          name,
+          row('captures.enabled', true, true),
+          row('captures.default_mobile_placement', 'floating-end', 'floating-end'),
+          row('captures.default_desktop_placement', 'hidden', 'header'),
+        ],
+      },
+    };
+    mount(<SettingsPage />, locale);
+    expect(screen.getByText(m.admin.voiceCaptureHelper)).toBeTruthy();
+    expect(m.admin.voiceCaptureHelper).toContain(
+      locale === 'ar' ? 'في قائمة الحساب' : 'in the account menu',
+    );
+    expect(screen.getByText(m.admin.voicePlacementIntro)).toBeTruthy();
+    expect(screen.getByText(m.admin.voicePlacementKept)).toBeTruthy();
+    const phone = screen.getByRole('radiogroup', { name: m.admin.voicePlacementPhone });
+    const computer = screen.getByRole('radiogroup', { name: m.admin.voicePlacementComputer });
+    const labels = (group: HTMLElement) =>
+      within(group)
+        .getAllByRole('radio')
+        .map((radio) => radio.parentElement?.textContent);
+    expect(labels(phone)).toEqual([
+      m.captures['placement_floating-end'],
+      m.captures['placement_floating-start'],
+      m.captures.placement_more,
+    ]);
+    expect(labels(computer)).toEqual([
+      m.captures.placement_header,
+      m.captures['placement_account-menu'],
+      m.captures.placement_hidden,
+    ]);
+    expect(
+      (
+        within(computer).getByRole('radio', {
+          name: m.captures.placement_hidden,
+        }) as HTMLInputElement
+      ).checked,
+    ).toBe(true);
+    fireEvent.click(within(phone).getByRole('radio', { name: m.captures.placement_more }));
+    expect(lastSave()).toEqual({ key: 'captures.default_mobile_placement', value: 'more' });
+    fireEvent.click(within(computer).getByRole('radio', { name: m.captures.placement_header }));
+    expect(lastSave()).toEqual({ key: 'captures.default_desktop_placement', value: 'header' });
+  });
 });

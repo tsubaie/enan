@@ -376,15 +376,18 @@ it.each([
   ['workspace', 'captures.enabled'],
   ['account', 'user.captures.enabled'],
 ] as const)(
-  'CAPTURES-B07 CAPTURES-B14 recording turned off (%s) while the body is arriving refuses the rolled-back route with 403 recording_off and stores no row',
+  'CAPTURES-B07 CAPTURES-B14 recording turned off (%s) while the body is arriving refuses the rolled-back route with 403 recording_off and stores no row and no file',
   async (scope, key) => {
+    // As for POST /captures: the switch goes off while the body streams in, so the check made
+    // before the audio is stored refuses it and nothing reaches the disk.
+    const before = await storageUsage();
     const actor = session.user?.id ?? '';
     await writeSetting(db(), 'captures.inbox', false, actor);
     const off = async () => {
       if (key === 'captures.enabled') await writeSetting(db(), key, false, actor);
       else await writeSetting(db(), key, false, actor, actor);
     };
-    const answer = await createFromVoice(webm(35), { durationSeconds: '12' }, off);
+    const answer = await createFromVoice(unique(webm(35)), { durationSeconds: '12' }, off);
     expect(answer.status).toBe(403);
     expect(answer.body.error).toMatchObject({
       code: 'forbidden',
@@ -393,5 +396,12 @@ it.each([
     expect(await db().select().from(notes)).toEqual([]);
     expect(await db().select().from(noteVoiceMemos)).toEqual([]);
     expect(await db().select().from(files)).toEqual([]);
+    expect(await storageUsage()).toBe(before);
   },
 );
+// Bytes no earlier run stored: files are content-addressed and FILES_DIR outlives a run, so a
+// repeated upload would find its file already there and "nothing written" would prove nothing.
+function unique(bytes: Uint8Array) {
+  crypto.getRandomValues(bytes.subarray(bytes.length - 16));
+  return bytes;
+}
