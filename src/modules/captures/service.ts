@@ -15,7 +15,7 @@ import { dayAt } from '@/core/time/notes';
 import { committeeChoices, requireCommittee } from '@/modules/committees';
 import { noteTypes } from '@/modules/notes';
 import { assignablePeople } from '@/modules/people';
-import { assertCaptureAccess } from './access';
+import { assertCaptureAccess, ownsCapture } from './access';
 import * as repo from './repo';
 import { InterpretInput } from './ai/interpret';
 import {
@@ -251,15 +251,37 @@ export const retryInterpretation = transactional(async function retryInterpretat
 });
 // S17 «حذف التسجيل»: the capture and its drafts are soft-deleted; the binary stays (ADR 0034).
 // A job still running for it publishes nothing (`jobs.ts`).
+// A repeat delete by the recorder or an administrator answers with the first delete's operation id
+// and changes nothing; anyone else still gets `not_found` (CAPTURES-B02).
 export const removeCapture = transactional(async function removeCapture(
   ctx: Context,
   captureId: string,
 ) {
+  const stored = await repo.selectStoredCapture(ctx.db, captureId);
+  if (stored?.deletedAt && stored.deletedOpId && ownsCapture(ctx.user, stored))
+    return { opId: stored.deletedOpId };
   await visibleCapture(ctx, captureId);
   const opId = id();
   await repo.softDeleteCapture(ctx.db, captureId, ctx.user.id, opId);
   await writeAudit(ctx.db, ctx.user.id, 'delete', 'capture', captureId, {}, opId);
   return { opId };
+});
+// S17 Undo: the capture and the drafts its delete took come back together, for the recorder or an
+// administrator naming that delete's operation id. A wrong id, someone else, or a capture that is
+// not deleted all answer `not_found`, so a restore reveals nothing. No notification (CAPTURES-B03).
+export const restoreCapture = transactional(async function restoreCapture(
+  ctx: Context,
+  captureId: string,
+  opId: string,
+) {
+  const stored = await repo.selectStoredCapture(ctx.db, captureId);
+  if (
+    !ownsCapture(ctx.user, stored) ||
+    !(await repo.restoreCapture(ctx.db, captureId, opId, ctx.user.id))
+  )
+    throw new AppError('not_found', { entityType: 'capture' });
+  await writeAudit(ctx.db, ctx.user.id, 'restore', 'capture', captureId, {}, opId);
+  return getCapture(ctx, captureId);
 });
 // CAPTURES-B02: a draft's audio, only for whoever may see the draft. Never a public URL.
 export async function captureAudio(user: Context['user'], captureId: string) {

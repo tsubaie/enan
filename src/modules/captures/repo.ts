@@ -1,6 +1,7 @@
 import 'server-only';
 import { and, desc, eq, inArray, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
 import type { Database } from '@/core/db/client';
+import { restoreEntity } from '@/core/db/entity';
 import { files, jobs } from '@/core/db/system-schema';
 import { captures, captureSuggestions } from './schema/db';
 export type CaptureRow = typeof captures.$inferSelect;
@@ -149,6 +150,23 @@ export async function softDeleteCapture(
     .update(captureSuggestions)
     .set({ deletedAt, deletedOpId: opId, updatedAt: deletedAt })
     .where(and(eq(captureSuggestions.captureId, captureId), isNull(captureSuggestions.deletedAt)));
+}
+// The undo of `softDeleteCapture`: only rows carrying that delete's operation id come back.
+export async function restoreCapture(
+  database: Database,
+  captureId: string,
+  opId: string,
+  userId: string,
+) {
+  const restored = await restoreEntity<CaptureRow>(database, captures, captureId, opId, userId);
+  if (!restored) return undefined;
+  await database
+    .update(captureSuggestions)
+    .set({ deletedAt: null, deletedOpId: null, updatedAt: new Date() })
+    .where(
+      and(eq(captureSuggestions.captureId, captureId), eq(captureSuggestions.deletedOpId, opId)),
+    );
+  return restored;
 }
 // Interpretation replaces the drafts still waiting for review; reviewed ones stay as they are.
 export async function replacePendingSuggestions(

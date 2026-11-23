@@ -7,8 +7,12 @@ type Owned = Pick<CaptureRow, 'createdBy' | 'deletedAt'>;
 // CAPTURES-B02: a draft is the recorder's and the administrators' alone. This is the row-level
 // twin of `visibleCaptures` in the repo, which lists and counts use; the two must agree.
 export function canViewCapture(user: Reader, capture: Owned | undefined): capture is Owned {
-  if (!capture || capture.deletedAt) return false;
-  return user.role === 'admin' || capture.createdBy === user.id;
+  return Boolean(capture && !capture.deletedAt && ownsCapture(user, capture));
+}
+// The recorder or an administrator, whether or not the capture is deleted: who may repeat a delete
+// or undo it. Never a reason to show a deleted capture.
+export function ownsCapture(user: Reader, capture: Pick<Owned, 'createdBy'> | undefined) {
+  return Boolean(capture && (user.role === 'admin' || capture.createdBy === user.id));
 }
 // Whoever may see a draft may act on it; kept separate so a narrower rule has one place to go.
 export function canMutateCapture(user: Reader, capture: Owned | undefined): capture is Owned {
