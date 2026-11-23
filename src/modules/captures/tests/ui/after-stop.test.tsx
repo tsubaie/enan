@@ -132,6 +132,10 @@ it('CAPTURES-B20 a recording saved without transcription warns until closed and 
   expect(warning.dataset.tone).toBe('warning');
   expect(ar.captures.unavailable).toContain('التفريغ');
   expect(buttonsIn(warning)).toEqual([ar.captures.view, ar.common.close]);
+  // Its words take the whole width and View and Close sit on a row of their own.
+  const content = warning.querySelector('[data-slot="toast-content"]');
+  expect(content?.className).toMatch(/\bflex-wrap\b/u);
+  expect(content?.firstElementChild?.className).toMatch(/\bbasis-full\b/u);
   expect(localStorage.getItem(firstRunKey)).toBeNull();
   await act(() => vi.advanceTimersByTimeAsync(60_000));
   expect(screen.getByText(ar.captures.unavailable)).toBeTruthy();

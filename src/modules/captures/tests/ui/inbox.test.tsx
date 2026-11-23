@@ -26,7 +26,11 @@ const spies = vi.hoisted(() => ({
   close: vi.fn(),
   removeCapture: vi.fn(),
   restoreCapture: vi.fn(),
-  list: { data: [] as object[], meta: { nextCursor: null } },
+  retry: vi.fn(),
+  list: {
+    data: [] as object[],
+    meta: { nextCursor: null, transcription: 'available' as 'off' | 'available' },
+  },
   // The inbox re-reads after a review action, as the real query does once it is invalidated.
   listeners: new Set<() => void>(),
 }));
@@ -61,7 +65,7 @@ vi.mock('../../ui/capture-queries', async () => {
     useAssignablePeople: () => [
       { id: '01a08a9f-1991-760a-b73a-568f6f8665a1', fullName: 'Finance Lead', displayName: null },
     ],
-    useRetryCapture: () => ({ mutate: vi.fn(), isPending: false, error: null }),
+    useRetryCapture: () => ({ mutate: spies.retry, isPending: false, error: null }),
   };
 });
 // The request configuration as the server builds it, here without a reader or a database: it
@@ -162,7 +166,8 @@ beforeEach(() => {
     spies.restoreCapture,
   ])
     spy.mockReset().mockResolvedValue({ data: {} });
-  spies.list = { data: [group], meta: { nextCursor: null } };
+  spies.list = { data: [group], meta: { nextCursor: null, transcription: 'available' } };
+  spies.retry.mockReset();
   localStorage.clear();
   play.mockReset().mockResolvedValue(undefined);
   vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(play);
@@ -180,12 +185,12 @@ const on: CaptureSetup = {
   mobile: 'floating-end',
   desktop: 'header',
 };
-const page = (locale: 'en' | 'ar' = 'en', capture = on) =>
+const page = (locale: 'en' | 'ar' = 'en', capture = on, admin = false) =>
   mount(
     <CapturesPage
       initial={spies.list as never}
       scope="mine"
-      admin={false}
+      admin={admin}
       capture={capture}
       focus={null}
     />,
@@ -293,7 +298,10 @@ const secondTask = draft({
 let shown: { id: string }[] = [];
 const withDrafts = (...suggestions: { id: string }[]) => {
   shown = suggestions;
-  spies.list = { data: [{ ...group, suggestions }], meta: { nextCursor: null } };
+  spies.list = {
+    data: [{ ...group, suggestions }],
+    meta: { nextCursor: null, transcription: 'available' },
+  };
   for (const listener of spies.listeners) listener();
 };
 const cardOf = (id: string) => document.querySelector(`[data-draft="${id}"]`);
@@ -553,7 +561,7 @@ it('CAPTURES-B10 Approve N ready waits for an edit being saved, then approves fr
   // The save answers; the list as read again now holds the edited task and a second ready draft.
   spies.list = {
     data: [{ ...group, suggestions: [edited, secondTask] }],
-    meta: { nextCursor: null },
+    meta: { nextCursor: null, transcription: 'available' },
   };
   await act(async () => saving.resolve({ data: edited }));
   expect(spies.approveReady).toHaveBeenCalledTimes(1);
@@ -606,7 +614,10 @@ it('CAPTURES-B10 Approve N ready says a draft no longer ready after the list is 
   page();
   spies.approveReady.mockResolvedValue({ data: { approved: [approvalOf(task)] } });
   const blocked = { ...secondTask, revision: 2, payload: { title: '', ownerId: null } };
-  spies.list = { data: [{ ...group, suggestions: [task, blocked] }], meta: { nextCursor: null } };
+  spies.list = {
+    data: [{ ...group, suggestions: [task, blocked] }],
+    meta: { nextCursor: null, transcription: 'available' },
+  };
   await act(async () => {
     fireEvent.click(
       screen.getByRole('button', {
@@ -683,7 +694,7 @@ it('CAPTURES-B01 drafts and the failed and unavailable boxes stand on a solid su
     });
   spies.list = {
     data: [group, box('failed'), box('needs_transcript')],
-    meta: { nextCursor: null },
+    meta: { nextCursor: null, transcription: 'available' },
   };
   page();
   for (const card of screen.getAllByTestId('suggestion-card')) {
@@ -693,9 +704,10 @@ it('CAPTURES-B01 drafts and the failed and unavailable boxes stand on a solid su
   const failed = screen.getByText(en.captures.failedOther).closest('div');
   expect(failed?.className).toMatch(/\bbg-elevated\b/u);
   expect(failed?.className).toMatch(/\bborder\b.*\bborder-danger\b/u);
-  const unavailable = screen.getByText(en.captures.unavailable).closest('div');
-  expect(unavailable?.className).toMatch(/\bbg-elevated\b/u);
-  expect(unavailable?.className).toMatch(/\bborder\b/u);
+  // CAPTURES-B22: the waiting card is the whole group, on the warning edge.
+  const waiting = screen.getByText(en.captures.waitingTranscription).closest('section');
+  expect(waiting?.className).toMatch(/\bbg-elevated\b/u);
+  expect(waiting?.className).toMatch(/\bborder\b.*\bborder-warning\b/u);
 });
 
 // S17 S29: deleting a recording from Review, with Undo.
@@ -706,7 +718,7 @@ const recording = (id: string, status: string, createdAt: string) =>
 const unavailable = recording(unavailableId, 'needs_transcript', '2026-09-10T05:40:00.000Z');
 const failed = recording(failedId, 'failed', '2026-09-10T04:40:00.000Z');
 const listOf = (...groups: object[]) => {
-  spies.list = { data: groups, meta: { nextCursor: null } };
+  spies.list = { data: groups, meta: { ...spies.list.meta } };
   for (const listener of spies.listeners) listener();
 };
 const groupOf = (id: string) => document.querySelector<HTMLElement>(`[data-capture="${id}"]`);
@@ -1104,7 +1116,7 @@ it('CAPTURES-B10 a recording made now, hydrated a moment after the server render
   try {
     spies.list = {
       data: [{ ...group, createdAt: new Date().toISOString() }],
-      meta: { nextCursor: null },
+      meta: { nextCursor: null, transcription: 'available' },
     };
     const config = await requestConfig({ requestLocale: Promise.resolve(undefined) });
     const client = newClient();
@@ -1158,7 +1170,7 @@ it.each(['en', 'ar'] as const)(
   },
 );
 it('CAPTURES-B14 an empty inbox offers Record only while recording is on, and names the chord only with the shortcut', () => {
-  spies.list = { data: [], meta: { nextCursor: null } };
+  spies.list = { data: [], meta: { nextCursor: null, transcription: 'available' } };
   const record = () =>
     screen.queryByRole('button', { name: new RegExp(en.captures.recordNote, 'u') });
   page('en', { ...on, allowed: false, enabled: false, shortcut: false });
@@ -1208,3 +1220,118 @@ it.each([
     expect(screen.getByRole('button', { name: en.captures.record })).toBeTruthy();
   },
 );
+
+// CAPTURES-B22: a recording waiting for transcription, as a member and as an administrator, with
+// transcription switched off or only unavailable for now.
+const waitingCard = () => groupOf(unavailableId) as HTMLElement;
+const actionOf = (name: string) => within(waitingCard()).getByRole('button', { name });
+function waitingFor(transcription: 'off' | 'available') {
+  spies.list = { data: [unavailable], meta: { nextCursor: null, transcription } };
+}
+it('CAPTURES-B22 the waiting card shows its chip, the member reason and three working actions while transcription is only unavailable', async () => {
+  waitingFor('available');
+  page();
+  const card = waitingCard();
+  expect(within(card).getByText(en.captures.waitingTranscription)).toBeTruthy();
+  const reason = document.getElementById(`capture-${unavailableId}-reason`);
+  expect(reason?.textContent).toBe(en.captures.transcriptionUnavailable);
+  expect(within(card).queryByRole('link', { name: en.captures.openAiSettings })).toBeNull();
+  for (const name of [en.captures.retry, en.captures.typeTranscript]) {
+    expect(actionOf(name).getAttribute('aria-disabled')).toBeNull();
+    expect(actionOf(name).getAttribute('aria-describedby')).toBeNull();
+  }
+  await act(async () => {
+    fireEvent.click(actionOf(en.captures.retry));
+  });
+  expect(spies.retry).toHaveBeenCalledWith(unavailable);
+});
+it('CAPTURES-B22 with transcription switched off Retry and Type the transcript are aria-disabled, focusable, described by the reason and do nothing', async () => {
+  waitingFor('off');
+  page();
+  const reasonId = `capture-${unavailableId}-reason`;
+  expect(document.getElementById(reasonId)?.textContent).toBe(en.captures.transcriptionUnavailable);
+  for (const name of [en.captures.retry, en.captures.typeTranscript]) {
+    const button = actionOf(name);
+    expect(button.getAttribute('aria-disabled')).toBe('true');
+    expect(button.getAttribute('aria-describedby')).toBe(reasonId);
+    expect(button.hasAttribute('disabled')).toBe(false);
+    button.focus();
+    expect(document.activeElement).toBe(button);
+    await act(async () => {
+      fireEvent.click(button);
+    });
+  }
+  expect(spies.retry).not.toHaveBeenCalled();
+  expect(actionOf(en.captures.typeTranscript).getAttribute('aria-expanded')).toBe('false');
+  expect(within(waitingCard()).queryByRole('textbox')).toBeNull();
+  // Delete recording still works, with its Undo receipt.
+  deletesFrom(unavailable);
+  await act(async () => {
+    fireEvent.click(actionOf(en.captures.deleteRecording));
+  });
+  expect(spies.removeCapture).toHaveBeenCalledWith(unavailableId);
+  expect(lastToast()).toMatchObject({ title: en.captures.recordingDeleted, timeout: 10000 });
+});
+it('CAPTURES-B22 an administrator is told transcription is off in AI settings, with Open settings; while it is only unavailable they read the member line', () => {
+  waitingFor('off');
+  page('ar', on, true);
+  const reason = document.getElementById(`capture-${unavailableId}-reason`);
+  expect(reason?.textContent).toContain(ar.captures.transcriptionOffAdmin);
+  const link = within(reason as HTMLElement).getByRole('link', {
+    name: ar.captures.openAiSettings,
+  });
+  expect(link.getAttribute('href')).toBe('/admin/ai');
+  for (const name of [ar.captures.retry, ar.captures.typeTranscript])
+    expect(
+      within(waitingCard()).getByRole('button', { name }).getAttribute('aria-describedby'),
+    ).toBe(reason?.id);
+  cleanup();
+  waitingFor('available');
+  page('en', on, true);
+  expect(document.getElementById(`capture-${unavailableId}-reason`)?.textContent).toBe(
+    en.captures.transcriptionUnavailable,
+  );
+  expect(screen.queryByRole('link', { name: en.captures.openAiSettings })).toBeNull();
+});
+it('CAPTURES-B22 the actions read Retry, Type the transcript, then Delete recording, in both languages', () => {
+  for (const [locale, messages] of [
+    ['en', en],
+    ['ar', ar],
+  ] as const) {
+    waitingFor('off');
+    page(locale);
+    expect(
+      within(waitingCard())
+        .getAllByRole('button')
+        .slice(-3)
+        .map((button) => button.textContent),
+    ).toEqual([
+      messages.captures.retry,
+      messages.captures.typeTranscript,
+      messages.captures.deleteRecording,
+    ]);
+    cleanup();
+  }
+});
+it('CAPTURES-B22 Type the transcript opens with focus in the labelled, hinted field and Cancel returns focus to it', async () => {
+  waitingFor('available');
+  page();
+  const toggle = actionOf(en.captures.typeTranscript);
+  await act(async () => {
+    toggle.focus();
+    fireEvent.click(toggle);
+  });
+  expect(toggle.getAttribute('aria-expanded')).toBe('true');
+  const field = within(waitingCard()).getByRole('textbox', { name: en.captures.transcriptLabel });
+  expect(document.activeElement).toBe(field);
+  expect(document.getElementById(field.getAttribute('aria-describedby') ?? '')?.textContent).toBe(
+    en.captures.transcriptHint,
+  );
+  expect(actionOf(en.captures.saveTranscript).getAttribute('type')).toBe('submit');
+  await act(async () => {
+    fireEvent.click(actionOf(en.captures.cancel));
+  });
+  expect(within(waitingCard()).queryByRole('textbox')).toBeNull();
+  expect(toggle.getAttribute('aria-expanded')).toBe('false');
+  expect(document.activeElement).toBe(toggle);
+});

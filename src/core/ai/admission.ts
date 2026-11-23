@@ -12,6 +12,7 @@ import { AiCapability } from '@/core/config/ai-capabilities';
 import { AppError } from '@/core/http/errors';
 import { env } from '@/core/config/env';
 import { loadModels } from './models';
+import { credentialStatus } from './credentials';
 import { aiConnection, checkConnection } from './client';
 import { framedInput } from './framing';
 import { AiPayload } from './job-schema';
@@ -65,6 +66,15 @@ export async function aiAvailability(ctx: Context) {
   const configured =
     env().JOBS_ENABLED && aiConnection().state !== 'disabled' && enabled.length > 0;
   return { capabilities, configured };
+}
+// CAPTURES-B22: transcription is switched off in this workspace (jobs off, no provider key, or the
+// capability not enabled), as distinct from unavailable for now (provider down, budget, rate
+// limit), which Retry may outlast. Reads settings only, never the provider: the connection state
+// is unknown until its first check, so it cannot say whether a key exists.
+export async function transcriptionSwitchedOff(ctx: Context) {
+  if (!env().JOBS_ENABLED) return true;
+  if ((await credentialStatus(ctx.db)).source === 'none') return true;
+  return !(await getSetting(ctx.db, 'ai.enabled_capabilities')).includes('notes.transcribe');
 }
 export async function admitAi(
   ctx: Context,

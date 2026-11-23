@@ -1,20 +1,17 @@
 'use client';
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
-import { CircleAlert, CircleCheck, LoaderCircle, PenLine, RefreshCw } from 'lucide-react';
-import { Button } from '@/ui/primitives/button';
-import { Textarea } from '@/ui/primitives/textarea';
-import { ErrorPanel } from '@/ui/layout/ErrorPanel';
+import { CircleAlert, LoaderCircle } from 'lucide-react';
 import { useRelativeTime } from '@/ui/format';
 import { clock } from '@/modules/notes/ui';
 import type { CaptureGroup as Group } from '../schema/validation';
 import { CaptureListen } from './CaptureListen';
 import { MergeSheet } from './MergeSheet';
 import { SuggestionCardView, type Layout } from './SuggestionCard';
-import { useRetryCapture, useReviewMutations } from './capture-queries';
-import { ProcessingGroupMenu, ReadyGroupMenu, RecoverDeleteButton } from './DeleteRecording';
+import { ProcessingGroupMenu, ReadyGroupMenu } from './DeleteRecording';
+import { RecoverActions, WaitingChip, WaitingReason } from './RecoverActions';
 import { focusWasLost } from './focus';
-import { takePendingFocus, useFocusPending } from './inbox-state';
+import { takePendingFocus, useFocusPending, useInbox } from './inbox-state';
 const working = ['queued', 'transcribing', 'interpreting'];
 const failures: Record<string, 'failedNoSpeech' | 'failedTimeout' | 'failedInterrupted'> = {
   no_speech: 'failedNoSpeech',
@@ -38,15 +35,20 @@ export function CaptureGroup({ group, layout }: { group: Group; layout: Layout }
     if (focusPending && takePendingFocus(group.id) && focusWasLost())
       section.current?.querySelector<HTMLElement>('button')?.focus();
   }, [focusPending, group.id]);
+  // CAPTURES-B22: a recording waiting for transcription is one warning-edged card, chip first.
+  const waiting = group.status === 'needs_transcript';
   return (
     <CaptureListen.Provider group={group}>
       <section
         ref={section}
         aria-labelledby={`capture-${group.id}`}
-        className="grid gap-3"
+        className={
+          waiting ? 'grid gap-3 rounded-xl border border-warning bg-elevated p-4' : 'grid gap-3'
+        }
         data-testid="capture-group"
         data-capture={group.id}
       >
+        {waiting ? <WaitingChip /> : null}
         <Header group={group} drafts={pending.length}>
           {group.status === 'ready' && <ReadyGroupMenu group={group} />}
           {working.includes(group.status) && <ProcessingGroupMenu group={group} />}
@@ -114,10 +116,11 @@ function Header({
     </header>
   );
 }
-// S15 processing lines, S17 failure and S29 AI unavailable, each with Retry / Type the transcript /
-// Delete recording.
+// S15 processing lines, S17 failure and S29 waiting for transcription, each with Retry / Type the
+// transcript / Delete recording.
 function State({ group }: { group: Group }) {
   const t = useTranslations('captures');
+  const { transcription } = useInbox();
   if (working.includes(group.status))
     return (
       <p role="status" className="flex items-center gap-2 text-sm text-text-muted">
@@ -132,88 +135,17 @@ function State({ group }: { group: Group }) {
           <CircleAlert aria-hidden className="size-4" />
           {t(failure(group.errorCode))}
         </p>
-        <RecoverActions group={group} />
+        <RecoverActions group={group} blockedBy={null} />
       </div>
     );
-  if (group.status === 'needs_transcript')
+  if (group.status === 'needs_transcript') {
+    const reason = `capture-${group.id}-reason`;
     return (
-      <div className="grid gap-3 rounded-xl border bg-elevated p-4">
-        <p className="flex items-start gap-2 font-medium">
-          <CircleCheck aria-hidden className="mt-0.5 size-4 shrink-0" />
-          {t('unavailable')}
-        </p>
-        <RecoverActions group={group} />
-      </div>
+      <>
+        <WaitingReason id={reason} />
+        <RecoverActions group={group} blockedBy={transcription === 'off' ? reason : null} />
+      </>
     );
+  }
   return null;
-}
-// S17, S29: Retry, Type the transcript, then Delete recording last, wrapping in reading order.
-function RecoverActions({ group }: { group: Group }) {
-  const t = useTranslations('captures');
-  const retry = useRetryCapture();
-  const [typing, setTyping] = useState(false);
-  return (
-    <>
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={retry.isPending}
-          onClick={() => retry.mutate(group)}
-        >
-          <RefreshCw aria-hidden />
-          {t('retry')}
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          aria-expanded={typing}
-          onClick={() => setTyping(!typing)}
-        >
-          <PenLine aria-hidden />
-          {t('typeTranscript')}
-        </Button>
-        <RecoverDeleteButton group={group} />
-      </div>
-      {typing && <TypeTranscript group={group} done={() => setTyping(false)} />}
-      {retry.error && <ErrorPanel error={retry.error} />}
-    </>
-  );
-}
-// S17 «كتابة النص»: a typed transcript replaces what the recording held and is interpreted anew.
-function TypeTranscript({ group, done }: { group: Group; done: () => void }) {
-  const t = useTranslations('captures');
-  const mutations = useReviewMutations();
-  const [error, setError] = useState<Error | null>(null);
-  const [saving, setSaving] = useState(false);
-  return (
-    <form
-      className="grid gap-2"
-      onSubmit={(event) => {
-        event.preventDefault();
-        const transcript = String(new FormData(event.currentTarget).get('transcript') ?? '').trim();
-        if (!transcript) return;
-        setSaving(true);
-        mutations.typeTranscript(group.id, transcript).then(done, (failure: unknown) => {
-          setSaving(false);
-          setError(failure instanceof Error ? failure : null);
-        });
-      }}
-    >
-      <label className="grid gap-1 text-sm">
-        <span className="font-medium">{t('transcriptLabel')}</span>
-        <Textarea
-          name="transcript"
-          dir="auto"
-          rows={4}
-          required
-          defaultValue={group.transcript ?? ''}
-        />
-      </label>
-      <Button type="submit" size="sm" className="justify-self-start" disabled={saving}>
-        {t('saveTranscript')}
-      </Button>
-      {error && <ErrorPanel error={error} />}
-    </form>
-  );
 }

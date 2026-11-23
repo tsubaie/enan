@@ -2047,10 +2047,18 @@
                   "string",
                   "null"
                 ]
+              },
+              "transcription": {
+                "enum": [
+                  "off",
+                  "available"
+                ],
+                "type": "string"
               }
             },
             "required": [
-              "nextCursor"
+              "nextCursor",
+              "transcription"
             ],
             "type": "object"
           }

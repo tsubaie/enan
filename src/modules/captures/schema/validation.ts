@@ -154,7 +154,12 @@ export const CaptureGroup = Capture.extend({
 export type CaptureGroup = z.infer<typeof CaptureGroup>;
 export const CaptureList = z.object({
   data: z.array(CaptureGroup),
-  meta: z.object({ nextCursor: z.string().nullable() }),
+  meta: z.object({
+    nextCursor: z.string().nullable(),
+    // CAPTURES-B22: `off` when the workspace has transcription switched off, so Retry and Type the
+    // transcript wait for an administrator; `available` otherwise, even while the provider is down.
+    transcription: z.enum(['off', 'available']),
+  }),
 });
 // What each kind of draft must hold before Approve (§ Data model). Shared with the inbox, so the
 // disabled Approve and the server's refusal give the same reason.

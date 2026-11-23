@@ -7,7 +7,7 @@ import { laneBaseURL } from './lanes';
 import { seedDrafts } from './fixtures/captures';
 import en from '../src/core/i18n/messages/en.json' with { type: 'json' };
 import ar from '../src/core/i18n/messages/ar.json' with { type: 'json' };
-// CAPTURES-A01–A04, A06–A11 (A05 is NOTES-A15). AI is off in the browser suite, so a recording is
+// CAPTURES-A01–A04, A06–A18 (A05 is NOTES-A15). AI is off in the browser suite, so a recording is
 // stored without a transcript; `scripts/db/e2e-capture-drafts.ts` stands in for the interpreter
 // where a scenario needs drafts. The microphone is refused in the page, so the recorder offers
 // its upload fallback (S3) and the scenarios send a real WAV through it.
@@ -150,16 +150,17 @@ test('CAPTURES-A01 a recording made from Home is waiting in Review after leaving
   await openReview(page, en);
   const group = page.locator(`[aria-labelledby="capture-${captureId}"]`);
   await expect(group).toHaveCount(1);
-  await expect(group.getByText(en.captures.unavailable)).toBeVisible();
+  await expect(group.getByText(en.captures.waitingTranscription)).toBeVisible();
   // The badge counts a recording that failed (here: AI is off, so a typed transcript cannot be
-  // interpreted), deferred from the recorder's own release.
+  // interpreted), deferred from the recorder's own release. With transcription off the card does
+  // not offer typing (CAPTURES-B22); the server still takes it (CAPTURES-B23).
   const before: number = (await api(page, '/captures/count')).body.data.pending;
-  await group.getByRole('button', { name: en.captures.typeTranscript }).click();
-  await group.getByRole('textbox', { name: en.captures.transcriptLabel }).fill('Send the quote.');
-  await group.getByRole('button', { name: en.captures.saveTranscript }).click();
+  const typed = await api(page, `/captures/${captureId}/transcript`, 'POST', {
+    transcript: 'Send the quote.',
+  });
+  expect(typed.status).toBe(200);
+  await gotoReady(page, '/captures');
   await expect(group.getByText(en.captures.failedOther)).toBeVisible();
-  // Closes the desktop side panel, so the header is in reach again; harmless on the page.
-  await page.keyboard.press('Escape');
   await expect(
     page.getByRole('link', { name: fill(en.captures.reviewCount, { count: before + 1 }) }),
   ).toBeVisible();
@@ -272,7 +273,7 @@ test('CAPTURES-A08 from Review the recorder deletes a recording AI could not tak
     await gotoReady(page, '/captures');
     const group = page.locator(`[data-capture="${captureId}"]`);
     await expect(page.locator(`[data-capture="${captureId}"]`)).toHaveCount(1);
-    await expect(group.getByText(en.captures.unavailable)).toBeVisible();
+    await expect(group.getByText(en.captures.waitingTranscription)).toBeVisible();
     const deleted = page.waitForResponse(
       (response) =>
         new URL(response.url()).pathname === `/api/v1/captures/${captureId}` &&
@@ -294,7 +295,7 @@ test('CAPTURES-A08 from Review the recorder deletes a recording AI could not tak
     await page.getByRole('button', { name: en.common.undo }).click();
     await expect(page.getByText(en.captures.recordingRestored)).toBeVisible();
     await expect(page.locator(`[data-capture="${captureId}"]`)).toHaveCount(1);
-    await expect(group.getByText(en.captures.unavailable)).toBeVisible();
+    await expect(group.getByText(en.captures.waitingTranscription)).toBeVisible();
     // Focus lands on the restored group's first action, its play button, never on the page.
     await expect(group.getByRole('button', { name: en.captures.playRecording })).toBeFocused();
   } finally {
@@ -860,3 +861,118 @@ for (const [locale, m, line] of [
       await close();
     }
   });
+// CAPTURES-A17: AI is off in the browser suite, which is transcription switched off: the waiting
+// card says why (the administrator with the way to AI settings), Retry and Type the transcript are
+// aria-disabled, described by that reason and send nothing, and Delete recording with Undo works.
+for (const [locale, m] of [
+  ['en', en],
+  ['ar', ar],
+] as const) {
+  test(`CAPTURES-A17 CAPTURES-B22 a recording AI could not take waits for transcription with the member reason, the administrator sees the settings reason with Open settings, and Retry and Type the transcript are aria-disabled while it is off (${locale})`, async ({
+    page,
+    browser,
+  }) => {
+    await refuseMicrophone(page);
+    await loginAs(page, locale);
+    const captureId = await recordByUpload(page, m);
+    await gotoReady(page, '/captures');
+    const group = page.locator(`[data-capture="${captureId}"]`);
+    await expect(group.getByText(m.captures.waitingTranscription)).toBeVisible();
+    const reason = page.locator(`#capture-${captureId}-reason`);
+    await expect(reason).toContainText(m.captures.transcriptionOffAdmin);
+    await expect(reason.getByRole('link', { name: m.captures.openAiSettings })).toHaveAttribute(
+      'href',
+      '/admin/ai',
+    );
+    const actions = [m.captures.retry, m.captures.typeTranscript].map((name) =>
+      group.getByRole('button', { name }),
+    );
+    let sent = 0;
+    page.on('request', (request) => {
+      if (/\/api\/v1\/captures\/[^/]+\/(transcribe|interpret|transcript)$/u.test(request.url()))
+        sent += 1;
+    });
+    for (const action of actions) {
+      await expect(action).toHaveAttribute('aria-disabled', 'true');
+      await expect(action).toHaveAttribute('aria-describedby', `capture-${captureId}-reason`);
+      await action.focus();
+      await expect(action).toBeFocused();
+      // Playwright refuses to click what is aria-disabled; a reader can still press it.
+      await page.keyboard.press('Enter');
+      await page.keyboard.press('Space');
+    }
+    await expect(group.getByRole('button', { name: m.captures.typeTranscript })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+    await expect(group.getByRole('textbox')).toHaveCount(0);
+    expect(sent).toBe(0);
+    await group.getByRole('button', { name: m.captures.deleteRecording }).click();
+    await expect(group).toHaveCount(0);
+    await page.getByRole('button', { name: m.common.undo }).click();
+    await expect(group.getByText(m.captures.waitingTranscription)).toBeVisible();
+    // A member reads the member line about their own recording, with no link.
+    const { other, close } = await member(page, browser);
+    try {
+      await other.context().addCookies([{ name: 'eos_locale', value: locale, url: laneBaseURL() }]);
+      await refuseMicrophone(other);
+      await reloadReady(other);
+      const theirs = await recordByUpload(other, m);
+      await gotoReady(other, '/captures');
+      const line = other.locator(`#capture-${theirs}-reason`);
+      await expect(line).toHaveText(m.captures.transcriptionUnavailable);
+      await expect(line.getByRole('link')).toHaveCount(0);
+      await expect(
+        other.locator(`[data-capture="${theirs}"]`).getByRole('button', { name: m.captures.retry }),
+      ).toHaveAttribute('aria-disabled', 'true');
+    } finally {
+      await close();
+    }
+  });
+}
+// CAPTURES-A18: a recording that failed (here, restored after its job ended while it was deleted)
+// takes a typed transcript; AI cannot prepare drafts from it, and the words stay: the failed card
+// shows them after a reload, and Retry asks for interpretation of them, never transcription.
+test('CAPTURES-A18 CAPTURES-B23 a transcript typed while drafts cannot be prepared is kept, and Retry prepares drafts from it (en)', async ({
+  page,
+}) => {
+  const typed = 'Send the risk report before the committee meets on Sunday.';
+  await refuseMicrophone(page);
+  await loginAs(page, 'en');
+  const captureId = await recordByUpload(page, en);
+  seedDrafts(captureId, 'processing');
+  await gotoReady(page, '/captures');
+  const group = page.locator(`[data-capture="${captureId}"]`);
+  await group.getByRole('button', { name: en.captures.moreActions }).click();
+  await page
+    .locator("[data-slot='popover-content']")
+    .getByRole('button', { name: en.captures.deleteRecording })
+    .click();
+  await expect(group).toHaveCount(0);
+  seedDrafts(captureId, 'finished');
+  await page.getByRole('button', { name: en.common.undo }).click();
+  await expect(group.getByText(en.captures.failedInterrupted)).toBeVisible();
+  const toggle = group.getByRole('button', { name: en.captures.typeTranscript });
+  await toggle.click();
+  const field = group.getByRole('textbox', { name: en.captures.transcriptLabel });
+  await expect(field).toBeFocused();
+  await field.fill(typed);
+  const saved = page.waitForResponse((response) =>
+    response.url().endsWith(`/api/v1/captures/${captureId}/transcript`),
+  );
+  await group.getByRole('button', { name: en.captures.saveTranscript }).click();
+  expect((await saved).status()).toBe(200);
+  await expect(group.getByText(en.captures.failedOther)).toBeVisible();
+  await reloadReady(page);
+  await expect(group.getByText(en.captures.failedOther)).toBeVisible();
+  await group.getByText(en.captures.fullTranscript).click();
+  await expect(group.getByText(typed)).toBeVisible();
+  const retried = page.waitForRequest((request) =>
+    /\/api\/v1\/captures\/[^/]+\/(interpret|transcribe)$/u.test(request.url()),
+  );
+  await group.getByRole('button', { name: en.captures.retry }).click();
+  expect((await retried).url()).toMatch(new RegExp(`/captures/${captureId}/interpret$`, 'u'));
+  await reloadReady(page);
+  await group.getByText(en.captures.fullTranscript).click();
+  await expect(group.getByText(typed)).toBeVisible();
+});

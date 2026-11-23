@@ -17,7 +17,12 @@ export type Inbox = {
   reread: () => Promise<CaptureGroup[]>;
   // CAPTURES-B14: whether recording is on here, as the server resolved it for the shell.
   capture: CaptureSetup;
+  // CAPTURES-B22: whether the workspace has transcription switched off (from the list's own
+  // answer), and whether the reader is an administrator (from the shell's user, a prop).
+  transcription: 'off' | 'available';
+  reader: Reader;
 };
+export type Reader = 'admin' | 'member';
 export const InboxContext = createContext<Inbox | null>(null);
 export function useInbox() {
   const inbox = use(InboxContext);

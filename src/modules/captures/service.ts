@@ -7,7 +7,7 @@ import { id } from '@/core/db/ids';
 import { writeAudit } from '@/core/db/audit-repo';
 import { upsertAudioFile } from '@/core/db/files-repo';
 import { getSetting } from '@/core/db/settings-repo';
-import { admitAi, contentHash } from '@/core/ai/admission';
+import { admitAi, contentHash, transcriptionSwitchedOff } from '@/core/ai/admission';
 import { readStoredFile } from '@/core/files/storage';
 import { storeVoiceAudio } from '@/core/files/voice-audio';
 import { AppError } from '@/core/http/errors';
@@ -79,12 +79,18 @@ export async function listCaptures(ctx: Context, query: z.output<typeof CaptureL
     if (!parsed.success) throw new AppError('validation_failed', { field: 'cursor' });
     after = { createdAt: new Date(parsed.data.at), id: parsed.data.id };
   }
-  const rows = await repo.selectCaptures(ctx.db, ctx.user, query.limit + 1, after, query.scope);
+  const [rows, off] = await Promise.all([
+    repo.selectCaptures(ctx.db, ctx.user, query.limit + 1, after, query.scope),
+    transcriptionSwitchedOff(ctx),
+  ]);
   const page = rows.slice(0, query.limit);
   const last = page.at(-1);
+  // CAPTURES-B22: read once per request, never stored on a row, where it would go stale.
+  const transcription: 'off' | 'available' = off ? 'off' : 'available';
   return {
     data: await group(ctx, page),
     meta: {
+      transcription,
       nextCursor:
         rows.length > query.limit && last
           ? Buffer.from(JSON.stringify({ at: last.createdAt.getTime(), id: last.id })).toString(
@@ -226,7 +232,20 @@ async function idleCapture(ctx: Context, captureId: string) {
   return { capture, stored };
 }
 // S17 «كتابة النص»: a typed transcript replaces whatever the capture held and is interpreted anew.
-export const typeTranscript = transactional(async function typeTranscript(
+// CAPTURES-B23: typed words are never lost. They are committed in their own transaction first,
+// with the capture marked failed, and only then interpreted in a second one; so a refusal there
+// (a full queue, or anything else interpretOrHold does not hold) still answers as it always did,
+// and leaves the S17 failed card holding the transcript, whose Retry interprets it again.
+export async function typeTranscript(
+  ctx: Context,
+  captureId: string,
+  input: z.output<typeof CaptureTranscript>,
+) {
+  await storeTranscript(ctx, captureId, input);
+  await interpretOrHold(ctx, captureId);
+  return getCapture(ctx, captureId);
+}
+const storeTranscript = transactional(async function storeTranscript(
   ctx: Context,
   captureId: string,
   input: z.output<typeof CaptureTranscript>,
@@ -235,11 +254,12 @@ export const typeTranscript = transactional(async function typeTranscript(
   await repo.updateCapture(ctx.db, captureId, {
     transcript: input.transcript,
     revision: stored.revision + 1,
+    status: 'failed',
+    errorCode: null,
+    errorDetail: null,
     updatedBy: ctx.user.id,
   });
   await writeAudit(ctx.db, ctx.user.id, 'update', 'capture', captureId, { transcript: true });
-  await interpretOrHold(ctx, captureId);
-  return getCapture(ctx, captureId);
 });
 // S17 «إعادة المحاولة»: transcription again, for a capture with no usable transcript yet.
 export const retryTranscription = transactional(async function retryTranscription(

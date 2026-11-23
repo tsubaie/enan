@@ -15,16 +15,19 @@ import type { CaptureSetup } from '../schema/validation';
 // drafts already made are still the reader's to review.
 export function CaptureHeaderControls({
   capture,
+  role,
   record,
 }: {
   capture: CaptureSetup;
+  // CAPTURES-B22: the shell's user role, so the panel can give an administrator their reason.
+  role: string;
   record: ReactNode;
 }) {
   return (
     <>
       {record}
       <CaptureReviewLink />
-      <CaptureReviewPanel capture={capture} />
+      <CaptureReviewPanel capture={capture} reader={role === 'admin' ? 'admin' : 'member'} />
     </>
   );
 }

@@ -68,6 +68,9 @@ export const transcript = defineHandler({
   guard: 'session',
   input: CaptureTranscript,
   response,
+  // CAPTURES-B23: the transcript and its interpretation commit separately (service), so the route
+  // holds no transaction of its own around them.
+  transaction: false,
   enqueues: true,
   handler: async (input, ctx, params) => ({
     data: await service.typeTranscript(authenticated(ctx), captureId(params), input),

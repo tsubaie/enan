@@ -13,7 +13,15 @@ declare global {
 const exempt: Record<string, string[]> = {
   account: ['getAccount', 'readerTheme', 'readerLocale', 'changeEmail', 'changePassword'],
   // CAPTURES-B01: a capture's audio is stored before the transaction its rows go in, as a memo's.
-  captures: ['getCapture', 'pendingCaptureCount', 'listCaptures', 'captureAudio', 'createCapture'],
+  // CAPTURES-B23: a typed transcript commits before, and apart from, its interpretation.
+  captures: [
+    'getCapture',
+    'pendingCaptureCount',
+    'listCaptures',
+    'captureAudio',
+    'createCapture',
+    'typeTranscript',
+  ],
   // The interpreter's answer checked against its catalogue; it reads and writes nothing.
   'captures/ai/interpret': ['toSuggestions'],
   committees: [

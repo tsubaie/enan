@@ -28,6 +28,7 @@ export function CapturesPage({
         scope={scope}
         initial={initial}
         capture={capture}
+        reader={admin ? 'admin' : 'member'}
         focus={focus}
       >
         <CaptureInbox.Off />

@@ -2,17 +2,22 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { CheckCheck, Inbox, LoaderCircle, Mic } from 'lucide-react';
+import { CheckCheck, LoaderCircle } from 'lucide-react';
 import { routes } from '@/core/routes';
 import { Button } from '@/ui/primitives/button';
 import { ErrorPanel } from '@/ui/layout/ErrorPanel';
 import Loading from '@/ui/layout/Loading';
 import { blockers, type CaptureGroup as Group, type CaptureSetup } from '../schema/validation';
-import { startCapture } from './capture-store';
-import { useCaptures, useReviewMutations, type CaptureScope } from './capture-queries';
+import {
+  useCaptures,
+  useReviewMutations,
+  type CapturePage,
+  type CaptureScope,
+} from './capture-queries';
 import { CaptureGroup } from './CaptureGroup';
 import { inboxEntry } from './entries';
 import { InboxEducation } from './InboxEducation';
+import { InboxEmpty } from './InboxEmpty';
 import { RecordingOff } from './RecordingOff';
 import type { Layout } from './SuggestionCard';
 import { useApprovedMessage } from './suggestion-text';
@@ -21,6 +26,7 @@ import { failedSaves, listedDraft, useReviewAction } from './review-action';
 import {
   InboxContext,
   pendingFocusId,
+  type Reader,
   takePendingFocus,
   useInbox,
   useInboxToken,
@@ -34,10 +40,12 @@ const pendingOf = (groups: Group[]) =>
 const readyOf = (groups: Group[]) => pendingOf(groups).filter((draft) => !blockers(draft).length);
 // S14: the reader's recordings, newest first, each with its drafts. The page hands in what the
 // server already read; the panel reads it here. `actions` sits beside Approve N ready (the
-// panel's expand and close). `capture` says whether recording is on (CAPTURES-B14).
+// panel's expand and close). `capture` says whether recording is on (CAPTURES-B14); `reader`
+// whether an administrator reads it (CAPTURES-B22).
 function Root({
   layout,
   capture,
+  reader,
   scope = 'mine',
   initial,
   actions,
@@ -46,16 +54,17 @@ function Root({
 }: {
   layout: Layout;
   capture: CaptureSetup;
+  reader: Reader;
   scope?: CaptureScope;
-  initial?: { data: Group[]; meta: { nextCursor: string | null } };
+  initial?: CapturePage;
   actions?: ReactNode;
   // CAPTURES-B21: the recording a failed bell line opened, focused once it is listed.
   focus?: string | null;
   children: ReactNode;
 }) {
-  const t = useTranslations('captures');
   const query = useCaptures(scope, initial);
   const groups = query.data?.data ?? [];
+  const transcription = query.data?.meta.transcription ?? 'available';
   const approval = useReviewAction<'ready'>();
   const [saves] = useState(() => new Map<string, Promise<boolean>>());
   const reread = async () => (await query.refetch()).data?.data ?? [];
@@ -63,25 +72,11 @@ function Root({
   useLinkedFocus(focus, inbox);
   useUndoFocusFallback(query.data?.data);
   return (
-    <InboxContext value={{ inbox, groups, layout, scope, saves, reread, capture }}>
+    <InboxContext
+      value={{ inbox, groups, layout, scope, saves, reread, capture, transcription, reader }}
+    >
       <div className="grid gap-4" data-inbox>
-        <header className="flex flex-wrap items-start gap-3">
-          {/* On a phone the title takes its own row and the actions wrap under it, so a long
-              Approve N ready never squeezes the word; from 1024 px they share one row. */}
-          <div className="grid min-w-0 basis-full gap-0.5 lg:flex-1 lg:basis-0">
-            <h1 tabIndex={-1} className="font-display text-2xl whitespace-nowrap">
-              {t('review')}
-            </h1>
-            <p className="text-sm text-text-muted">
-              {t('waiting', { count: pendingOf(groups).length })}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {inboxEntry(capture)}
-            {groups.length > 0 && <ApproveReadyButton approval={approval} />}
-            {actions}
-          </div>
-        </header>
+        <Heading approval={approval} actions={actions} />
         {approval.error && <ErrorPanel error={approval.error} />}
         {query.isPending ? (
           <Loading />
@@ -92,6 +87,36 @@ function Root({
         )}
       </div>
     </InboxContext>
+  );
+}
+// The inbox's title, how many drafts wait, Record, Approve N ready and the caller's `actions`.
+function Heading({
+  approval,
+  actions,
+}: {
+  approval: ReturnType<typeof useReviewAction<'ready'>>;
+  actions: ReactNode;
+}) {
+  const t = useTranslations('captures');
+  const { groups, capture } = useInbox();
+  return (
+    <header className="flex flex-wrap items-start gap-3">
+      {/* On a phone the title takes its own row and the actions wrap under it, so a long
+          Approve N ready never squeezes the word; from 1024 px they share one row. */}
+      <div className="grid min-w-0 basis-full gap-0.5 lg:flex-1 lg:basis-0">
+        <h1 tabIndex={-1} className="font-display text-2xl whitespace-nowrap">
+          {t('review')}
+        </h1>
+        <p className="text-sm text-text-muted">
+          {t('waiting', { count: pendingOf(groups).length })}
+        </p>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        {inboxEntry(capture)}
+        {groups.length > 0 && <ApproveReadyButton approval={approval} />}
+        {actions}
+      </div>
+    </header>
   );
 }
 // S17 Undo: a restored recording takes focus when it is listed (CaptureGroup). The list it was
@@ -188,41 +213,6 @@ function Groups() {
     </div>
   );
 }
-// S16: nothing waiting, and the way to record while recording is on (CAPTURES-B14), naming the
-// chord only while the shortcut is (CAPTURES-B19).
-function Empty() {
-  const t = useTranslations('captures');
-  const { groups, capture } = useInbox();
-  if (groups.length) return null;
-  return (
-    <div className="grid justify-items-center gap-3 py-16 text-center">
-      <span className="grid size-14 place-items-center rounded-2xl bg-accent-soft">
-        <Inbox aria-hidden className="size-7" />
-      </span>
-      <p className="font-medium">{t('emptyTitle')}</p>
-      <p className="text-sm text-text-muted">{t('emptyHint')}</p>
-      {capture.enabled ? (
-        <Button
-          variant="outline"
-          onClick={startCapture}
-          aria-keyshortcuts={capture.shortcut ? t('shortcut') : undefined}
-        >
-          <Mic aria-hidden />
-          {t('recordNote')}
-          {capture.shortcut ? (
-            <kbd
-              translate="no"
-              aria-hidden
-              className="hidden rounded border px-1.5 py-0.5 text-[11px] lg:inline"
-            >
-              {t('shortcut')}
-            </kbd>
-          ) : null}
-        </Button>
-      ) : null}
-    </div>
-  );
-}
 // Administrators may look at everyone's drafts (CAPTURES-B02, §9 decision 6).
 function Scope() {
   const t = useTranslations('captures');
@@ -242,6 +232,6 @@ export const CaptureInbox = {
   Education: InboxEducation,
   Group: CaptureGroup,
   Groups,
-  Empty,
+  Empty: InboxEmpty,
   Scope,
 };
