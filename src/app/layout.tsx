@@ -2,7 +2,7 @@ import { type ReactNode } from 'react';
 import type { Viewport } from 'next';
 import { Inter, Noto_Sans_Arabic } from 'next/font/google';
 import { NextIntlClientProvider } from 'next-intl';
-import { getLocale, getTranslations } from 'next-intl/server';
+import { getLocale, getNow, getTranslations } from 'next-intl/server';
 import { headers } from 'next/headers';
 import { Providers } from '@/ui/layout/Providers';
 import { Locale } from '@/core/config/defaults';
@@ -60,7 +60,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     >
       <body>
         {ownFonts && <link rel="stylesheet" href={`${fontsPath}/faces.css`} precedence="default" />}
-        <NextIntlClientProvider>
+        <NextIntlClientProvider now={await getNow()}>
           <Providers nonce={nonce} theme={theme}>
             <a
               href="#content"

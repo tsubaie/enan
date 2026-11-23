@@ -33,6 +33,10 @@ export const formats = {
     signedPercent: { style: 'percent', maximumFractionDigits: 0, signDisplay: 'exceptZero' },
   },
 } as const;
+// The provider's clock. The app reads it only while hydrating (src/ui/format.ts) and the device's
+// clock after that, so a scenario that depends on "today" also pins Date to it:
+// vi.useFakeTimers({ toFake: ['Date'], now: new Date(clock) }).
+export const clock = '2026-09-10T09:00:00Z';
 // Unmounted after every scenario, not only before the next: a file's last scenario would otherwise
 // leave React work queued that runs after the jsdom environment is gone ("window is not defined").
 afterEach(() => cleanup());
@@ -46,7 +50,7 @@ export function mount(node: ReactNode, locale: 'en' | 'ar' = 'en', client = newC
       locale={locale}
       messages={locale === 'ar' ? ar : en}
       timeZone="UTC"
-      now={new Date('2026-09-10T09:00:00Z')}
+      now={new Date(clock)}
       formats={formats}
     >
       <QueryClientProvider client={client}>{node}</QueryClientProvider>

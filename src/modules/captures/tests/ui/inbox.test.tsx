@@ -1,13 +1,17 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { createTranslator } from 'next-intl';
+import { renderToString } from 'react-dom/server';
+import { hydrateRoot } from 'react-dom/client';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { NextIntlClientProvider, createTranslator } from 'next-intl';
+import requestConfig from '@/core/i18n/request';
 import en from '@/core/i18n/messages/en.json';
 import ar from '@/core/i18n/messages/ar.json';
 import { CaptureGroup } from '../../schema/validation';
 import { CapturesPage } from '../../ui/CapturesPage';
 import { useReviewToast } from '../../ui/review-toast';
-import { mount } from '../../../../../tests/fixtures/mount';
+import { mount, newClient } from '../../../../../tests/fixtures/mount';
 // CAPTURES-B08 CAPTURES-B09 CAPTURES-B10: the inbox as the page renders it, with the review
 // actions as spies; nothing reaches a server.
 const spies = vi.hoisted(() => ({
@@ -34,7 +38,11 @@ vi.mock('../../ui/capture-queries', async () => {
   };
   return {
     useCaptures: () => ({
-      data: useSyncExternalStore(subscribe, () => spies.list),
+      data: useSyncExternalStore(
+        subscribe,
+        () => spies.list,
+        () => spies.list,
+      ),
       isPending: false,
       error: null,
       refetch: async () => ({ data: spies.list }),
@@ -56,6 +64,16 @@ vi.mock('../../ui/capture-queries', async () => {
     useRetryCapture: () => ({ mutate: vi.fn(), isPending: false, error: null }),
   };
 });
+// The request configuration as the server builds it, here without a reader or a database: it
+// falls back to the workspace defaults.
+vi.mock('next-intl/server', () => ({ getRequestConfig: <Build,>(build: Build) => build }));
+vi.mock('next/headers', () => ({ cookies: async () => ({ get: () => undefined }) }));
+vi.mock('@/core/auth/session', () => ({ currentUser: async () => null }));
+vi.mock('@/core/db/client', () => ({
+  db: () => {
+    throw new Error('no database in a component scenario');
+  },
+}));
 vi.mock('@/modules/committees/ui', () => ({
   useCommitteeChoices: () => ({ data: { data: [] } }),
   CommitteePicker: () => <div data-testid="committee-picker" />,
@@ -1061,4 +1079,45 @@ it('CAPTURES-B13 a restore that fails after its inbox has gone does not focus a 
     expect.objectContaining({ title: en.captures.restoreFailed }),
   );
   expect(document.activeElement).not.toBe(screen.getByRole('heading', { level: 1 }));
+});
+// The page is rendered on the server, then hydrated a second later, as on a slow phone.
+// The client's first render reads the request's clock, so the relative age matches what the server
+// wrote; a mismatch would make React drop the server's markup and render the page again.
+it('CAPTURES-B10 a recording made now, hydrated a moment after the server rendered it, is one group with no mismatch', async () => {
+  vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-09-10T09:00:00Z') });
+  try {
+    spies.list = {
+      data: [{ ...group, createdAt: new Date().toISOString() }],
+      meta: { nextCursor: null },
+    };
+    const config = await requestConfig({ requestLocale: Promise.resolve(undefined) });
+    const client = newClient();
+    // As the root layout hands it to the client: the request configuration, `now` included.
+    const app = () => (
+      <NextIntlClientProvider {...config}>
+        <QueryClientProvider client={client}>
+          <CapturesPage initial={spies.list as never} scope="mine" admin={false} />
+        </QueryClientProvider>
+      </NextIntlClientProvider>
+    );
+    const container = document.createElement('div');
+    container.innerHTML = renderToString(app());
+    document.body.append(container);
+    expect(container.querySelector('time')?.textContent).toBe('now');
+    vi.setSystemTime(new Date('2026-09-10T09:00:01Z'));
+    const recoverable = vi.fn();
+    const logged = vi.spyOn(console, 'error');
+    const root = await act(async () =>
+      hydrateRoot(container, app(), { onRecoverableError: recoverable }),
+    );
+    expect(recoverable).not.toHaveBeenCalled();
+    expect(logged).not.toHaveBeenCalled();
+    expect(container.querySelectorAll('[data-testid="capture-group"]')).toHaveLength(1);
+    // Once hydrated, the age follows the device's clock rather than staying at the request's.
+    expect(container.querySelector('time')?.textContent).toBe('1 second ago');
+    act(() => root.unmount());
+    container.remove();
+  } finally {
+    vi.useRealTimers();
+  }
 });

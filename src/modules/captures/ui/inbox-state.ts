@@ -24,7 +24,9 @@ export function useInbox() {
 }
 // Small client stores for the inbox: whether the reader has dismissed the S30 line (on this
 // device, §9 decision 4), whether the desktop side panel is open, and whether the screen is wide
-// enough for it. The server renders as if dismissed, closed and narrow, so nothing flashes.
+// enough for it. The server renders as if dismissed and closed, so nothing flashes, and as if wide
+// (the desktop layout); a phone switches to its own after hydration, which useSyncExternalStore
+// does without a mismatch because hydration reads the server snapshot.
 const educationKey = 'enan.captures.education-dismissed';
 const listeners = new Set<() => void>();
 let panelOpen = false;
