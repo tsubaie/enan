@@ -273,6 +273,25 @@ it('CAPTURES-B02 a job publishes nothing onto a deleted capture or once a newer 
   await withTransaction(db(), (database) => handler(stale.kind).publish(database, stale, result));
   expect(await db().select().from(captureSuggestions)).toEqual([]);
 });
+it('CAPTURES-B24 a transcription that lands after a transcript was typed leaves the typed words', async () => {
+  const created = await createCapture(
+    ctx(),
+    CaptureCreate.parse({ file: new File([webm(8)], 'Debrief.webm'), durationSeconds: 5 }),
+  );
+  const job = await jobRow(created.transcribeJobId);
+  sdk.post.mockResolvedValue({ text: 'Machine words.', usage: { cost: 0.0001 } });
+  const result = await handler(job.kind).run(job, signal());
+  // The attempt is reported failed, the recorder types the words, then the old result lands.
+  await db().update(jobs).set({ status: 'failed' }).where(eq(jobs.id, job.id));
+  const typed = await typeTranscript(ctx(), created.id, { transcript: 'Typed words.' });
+  expect(typed.transcribeJobId).toBe(job.id);
+  await withTransaction(db(), (database) => handler(job.kind).publish(database, job, result));
+  expect(await getCapture(ctx(), created.id)).toMatchObject({
+    transcript: 'Typed words.',
+    status: 'interpreting',
+    interpretJobId: typed.interpretJobId,
+  });
+});
 it('CAPTURES-B01 publishing the same interpretation twice leaves one set of drafts', async () => {
   const capture = await transcribed('Send the minutes.', 7);
   answer({ suggestions: [proposal({ title: 'Send the minutes' })] });

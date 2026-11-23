@@ -347,12 +347,14 @@ it('CAPTURES-B14 with recording off an existing recording can still be listed, o
     transcript: 'Typed while recording is off.',
   });
   expect(typed.status).toBe(200);
-  // AI is off in this suite, so Retry answers as it does with recording on (503), never 403.
-  for (const retried of [
-    await call(api.interpret, 'POST', `/captures/${mine.id}/interpret`, params, {}),
-    await call(api.transcribe, 'POST', `/captures/${mine.id}/transcribe`, params, {}),
-  ])
-    expect(retried.status).toBe(503);
+  // AI is off in this suite, so Retry answers as it does with recording on (503), never 403;
+  // transcription is refused first, the capture holding the typed words (CAPTURES-B24).
+  const retry = (step: 'interpret' | 'transcribe') =>
+    call(api[step], 'POST', `/captures/${mine.id}/${step}`, params, {});
+  expect((await retry('interpret')).status).toBe(503);
+  const transcribed = await retry('transcribe');
+  expect(transcribed.status).toBe(409);
+  expect(transcribed.body.error).toMatchObject({ details: { reason: 'transcript_exists' } });
   const removed = await call(api.remove, 'DELETE', `/captures/${mine.id}`, params);
   expect(removed.status).toBe(204);
   const opId = removed.response.headers.get('X-Op-Id') ?? '';

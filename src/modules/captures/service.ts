@@ -262,12 +262,15 @@ const storeTranscript = transactional(async function storeTranscript(
   await writeAudit(ctx.db, ctx.user.id, 'update', 'capture', captureId, { transcript: true });
 });
 // S17 «إعادة المحاولة»: transcription again, for a capture with no usable transcript yet.
+// CAPTURES-B24: one that holds a transcript is refused, so it can never be replaced; its Retry
+// interprets the stored words instead.
 export const retryTranscription = transactional(async function retryTranscription(
   ctx: Context,
   captureId: string,
 ) {
   const { capture, stored } = await idleCapture(ctx, captureId);
   if (capture.status === 'ready') throw new AppError('conflict', { reason: 'state' });
+  if (stored.transcript) throw new AppError('conflict', { reason: 'transcript_exists' });
   await startTranscription(ctx, stored);
   return getCapture(ctx, captureId);
 });
