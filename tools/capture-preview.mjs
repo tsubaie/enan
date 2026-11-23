@@ -51,7 +51,6 @@ for (const locale of ['en', 'ar'])
       viewport,
     });
     await context.addCookies([{ name: 'eos_locale', value: 'en', url: 'http://localhost:3000' }]);
-    await context.addInitScript(() => localStorage.setItem('theme', 'dark'));
     const page = await context.newPage();
     if (!state) await signIn(page);
     await context.addCookies([{ name: 'eos_locale', value: locale, url: 'http://localhost:3000' }]);
@@ -99,21 +98,22 @@ for (const locale of ['en', 'ar'])
       // The theme toggle moved from the header into the account menu; the light capture sets the
       // theme the way the page reads it rather than clicking a control that is no longer there.
       if (name === 'home' || name === 'people-list') {
-        // next-themes applies a theme written by another tab through the storage event; firing it
-        // here switches the page in place, under the init script that pins every load to dark.
-        await page.evaluate(() => {
-          localStorage.setItem('theme', 'light');
-          window.dispatchEvent(new StorageEvent('storage', { key: 'theme', newValue: 'light' }));
-        });
+        // The theme is the class and colour scheme on <html> (ADR 0072); setting them here switches
+        // the page in place, as the pre-paint script does on a load.
+        const draw = (theme) =>
+          page.evaluate((next) => {
+            const root = document.documentElement;
+            root.classList.remove('dark', 'light');
+            root.classList.add(next);
+            root.style.colorScheme = next;
+          }, theme);
+        await draw('light');
         await expect(page.locator('html')).toHaveClass(/light/);
         await page.screenshot({
           path: 'tmp/screenshots/' + name + '-' + locale + '-' + size + '-light.png',
           animations: 'disabled',
         });
-        await page.evaluate(() => {
-          localStorage.setItem('theme', 'dark');
-          window.dispatchEvent(new StorageEvent('storage', { key: 'theme', newValue: 'dark' }));
-        });
+        await draw('dark');
       }
     }
     await context.close();

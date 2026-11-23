@@ -5,6 +5,7 @@ import { test, expect } from './fixtures/test';
 import { laneBaseURL } from './lanes';
 import { loginAs } from './fixtures/auth';
 import en from '../src/core/i18n/messages/en.json' with { type: 'json' };
+import { gotoReady, reloadReady } from './fixtures/ready';
 // ADMIN-B42, ADMIN-B47 (ADR 0037): the workspace wallpaper, built in or uploaded, and the accent it
 // sets. The wallpaper is shared by every page of the lane, so each scenario puts the setting back
 // and deletes what it uploaded.
@@ -70,7 +71,7 @@ test('ADMIN-B42 the built-ins are jade by default, sky and neon each set the acc
       (await api(page, '/admin/settings', 'PATCH', { key: 'workspace.wallpaper', value: 'jade' }))
         .status,
     ).toBe(200);
-    await page.goto('/admin/settings');
+    await gotoReady(page, '/admin/settings');
     await expect(html(page)).toHaveAttribute('data-wallpaper', 'jade');
     const radios = builtIns(page).getByRole('radio');
     await expect(radios).toHaveText([
@@ -107,7 +108,7 @@ test('ADMIN-B42 the built-ins are jade by default, sky and neon each set the acc
     await expect.poll(() => accent(page)).not.toBe(sky);
     expect(await wallpaper(page)).toBe('neon');
     // It holds across a reload: every page reads it while rendering.
-    await page.reload();
+    await reloadReady(page);
     await expect(html(page)).toHaveAttribute('data-wallpaper', 'neon');
   } finally {
     await api(page, '/admin/settings', 'PATCH', { key: 'workspace.wallpaper', value: before });
@@ -148,7 +149,7 @@ test('ADMIN-B47 an uploaded image becomes the wallpaper and its accent, a small 
   const small = await image('small', 800, 500);
   try {
     await api(page, '/admin/settings', 'PATCH', { key: 'workspace.wallpaper', value: 'jade' });
-    await page.goto('/admin/settings');
+    await gotoReady(page, '/admin/settings');
     await expect(html(page)).toHaveAttribute('data-wallpaper', 'jade');
     const jade = await accent(page);
 
@@ -231,7 +232,7 @@ test('ADMIN-B47 an uploaded image becomes the wallpaper and its accent, a small 
       .click();
     await expect(tile).toHaveCount(0);
     await expect.poll(() => wallpaper(page)).toBe('jade');
-    await page.reload();
+    await reloadReady(page);
     await expect(html(page)).toHaveAttribute('data-wallpaper', 'jade');
     expect((await uploaded(page)).some((row) => row.id === id)).toBe(false);
     expect((await page.request.get(`/api/v1/wallpapers/${id}`)).status()).toBe(404);

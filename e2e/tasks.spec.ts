@@ -3,6 +3,7 @@ import { test, expect } from './fixtures/test';
 import { loginAs } from './fixtures/auth';
 import en from '../src/core/i18n/messages/en.json' with { type: 'json' };
 import ar from '../src/core/i18n/messages/ar.json' with { type: 'json' };
+import { gotoReady, reloadReady } from './fixtures/ready';
 const created = new WeakMap<Page, Promise<string>[]>();
 test.beforeEach(async ({ page }) => {
   const records: Promise<string>[] = [];
@@ -52,7 +53,7 @@ test('TASKS-B02 TASKS-B08 EP-B20 task rows retain an independent completion cont
   const title = `Horizontal task ${Date.now()}`;
   const result = await api(page, '', 'POST', { title, priority: 'high' });
   const id = String(result.body.data.id);
-  await page.goto(`/tasks?view=all&q=${encodeURIComponent(title)}`);
+  await gotoReady(page, `/tasks?view=all&q=${encodeURIComponent(title)}`);
   // EP-B35: the strip stands in for the rail and never doubles it. Where the rail is showing the
   // same views and counts the strip is not drawn, and collapsing the rail is what brings it back;
   // where there is no rail at all it is simply there. Either way it reads Inbox first and rounded.
@@ -105,7 +106,7 @@ for (const locale of ['en', 'ar'])
   }) => {
     const m = locale === 'ar' ? ar : en;
     await loginAs(page, locale);
-    await page.goto('/tasks?view=inbox');
+    await gotoReady(page, '/tasks?view=inbox');
     await expect(page.getByRole('heading', { name: m.common.tasks, exact: true })).toBeVisible();
     const title = `Office review ${crypto.randomUUID()}`;
     await page.getByRole('button', { name: m.common.create, exact: true }).first().click();
@@ -147,7 +148,7 @@ for (const locale of ['en', 'ar'])
     await expect
       .poll(async () => (await api(page, `/${id}`)).body.data.subtasks[0].status)
       .toBe('inbox');
-    await page.goto(`/tasks?view=all&id=${id}`);
+    await gotoReady(page, `/tasks?view=all&id=${id}`);
     // EP-B36: a reversible delete runs on the press, with no confirmation in front of it.
     await page
       .locator('aside.entity-detail')
@@ -156,13 +157,13 @@ for (const locale of ['en', 'ar'])
       .click();
     await expect(page).not.toHaveURL(/id=/);
     await expect(page.getByRole('button', { name: m.common.undo, exact: true })).toBeVisible();
-    await page.goto(`/tasks?view=trash&id=${id}`);
+    await gotoReady(page, `/tasks?view=trash&id=${id}`);
     await page
       .locator('aside.entity-detail')
       .getByRole('button', { name: m.common.restore, exact: true })
       .click();
     await expect(page).not.toHaveURL(/id=/);
-    await page.goto(`/tasks?view=all&id=${id}`);
+    await gotoReady(page, `/tasks?view=all&id=${id}`);
     await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(page.locator('html')).toHaveAttribute('dir', locale === 'ar' ? 'rtl' : 'ltr');
@@ -200,7 +201,7 @@ test(
     const children = [];
     for (const suffix of ['One', 'Two', 'Three'])
       children.push((await api(page, '', 'POST', { title: `${prefix} ${suffix}` })).body.data);
-    await page.goto(`/tasks?view=all&q=${encodeURIComponent(prefix)}`);
+    await gotoReady(page, `/tasks?view=all&q=${encodeURIComponent(prefix)}`);
     await page.getByRole('button', { name: en.common.select, exact: true }).click();
     for (const child of children)
       await page.getByRole('checkbox', { name: `Select ${child.title}`, exact: true }).click();
@@ -228,7 +229,7 @@ test('TASKS-A09 EP-B08 stale editor offers reload and reapply without resetting 
   const task = (
     await api(page, '', 'POST', { title: `Conflict ${crypto.randomUUID()}`, priority: 'high' })
   ).body.data;
-  await page.goto(`/tasks?view=all&id=${task.id}`);
+  await gotoReady(page, `/tasks?view=all&id=${task.id}`);
   await expect(page.getByLabel(en.tasks.title, { exact: true })).toHaveValue(task.title);
   await api(page, `/${task.id}`, 'PATCH', {
     revision: task.revision,
@@ -277,7 +278,7 @@ test('TASKS-B08 TASKS-I04 reorder children and restore an independently deleted 
   const children = [];
   for (const title of ['Prepare materials', 'Confirm attendance', 'Review agenda'])
     children.push((await api(page, '', 'POST', { title, parentId: parent.id })).body.data);
-  await page.goto(`/tasks?view=all&id=${parent.id}`);
+  await gotoReady(page, `/tasks?view=all&id=${parent.id}`);
   await expect(
     page.locator('aside.entity-detail').getByRole('heading', { name: parent.title }),
   ).toBeVisible();
@@ -288,7 +289,7 @@ test('TASKS-B08 TASKS-I04 reorder children and restore an independently deleted 
   );
   const current = (await api(page, `/${children[0].id}`)).body.data;
   await api(page, `/${current.id}`, 'DELETE', { revision: current.revision });
-  await page.reload();
+  await reloadReady(page);
   await page.locator('aside.entity-detail summary').click();
   await page
     .locator('aside.entity-detail details')
@@ -309,13 +310,13 @@ test('TASKS-B10 TASKS-B15 HOME-B01 assigned work appears in People and Home', as
       status: 'waiting_on',
     })
   ).body.data;
-  await page.goto(`/people?id=${owners[0].id}`);
+  await gotoReady(page, `/people?id=${owners[0].id}`);
   await expect(page.getByRole('link', { name: task.title, exact: true })).toBeVisible();
   await page.getByRole('link', { name: task.title, exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`id=${task.id}`));
   // HOME-B10: Home answers "who do I chase" rather than listing each held task, so the owner's row
   // is what appears, opening their waiting queue.
-  await page.goto('/home');
+  await gotoReady(page, '/home');
   await expect(page.locator(`a[href*="ownerId=${owners[0].id}"]`)).toBeVisible();
 });
 
@@ -329,7 +330,7 @@ for (const locale of ['en', 'ar']) {
       await api(page, '', 'POST', { title: `UX ${crypto.randomUUID()}`, priority: 'low' })
     ).body.data;
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto(`/tasks?view=all&q=${encodeURIComponent(task.title)}`);
+    await gotoReady(page, `/tasks?view=all&q=${encodeURIComponent(task.title)}`);
     await expect(page.getByRole('button', { name: m.tasks.group, exact: true })).toBeHidden();
     const toggle = page.getByRole('checkbox', {
       name: m.tasks.completeNamed.replace('{name}', task.title),
@@ -356,7 +357,7 @@ for (const locale of ['en', 'ar']) {
     await row.click();
     await page.getByRole('button', { name: m.common.close, exact: true }).click();
     await expect(row).toBeFocused();
-    await page.goto(`/tasks?view=all&priority=urgent&id=${task.id}`);
+    await gotoReady(page, `/tasks?view=all&priority=urgent&id=${task.id}`);
     await expect(page.getByText(m.common.outside, { exact: true })).toBeVisible();
     await page.getByRole('button', { name: m.common.showAll }).click();
     await expect(page).toHaveURL(new RegExp(`view=all&id=${task.id}`));
@@ -373,7 +374,7 @@ for (const locale of ['en', 'ar']) {
     await expect(page).not.toHaveURL(/priority=/);
     for (const width of [320, 1024, 1280]) {
       await page.setViewportSize({ width, height: 900 });
-      await page.goto(`/tasks?view=all&id=${task.id}`);
+      await gotoReady(page, `/tasks?view=all&id=${task.id}`);
       await expect(page.getByRole('heading', { name: task.title, exact: true })).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(
         false,
@@ -391,7 +392,7 @@ test('EP-B10 EP-B11 queued save failure blocks view changes and preserves the dr
 }) => {
   await loginAs(page, 'en');
   const task = (await api(page, '', 'POST', { title: `UX save ${crypto.randomUUID()}` })).body.data;
-  await page.goto(`/tasks?view=all&id=${task.id}`);
+  await gotoReady(page, `/tasks?view=all&id=${task.id}`);
   const title = page.getByLabel(en.tasks.title, { exact: true });
   await title.fill('');
   await page.getByLabel(en.tasks.description, { exact: true }).click();
@@ -420,7 +421,7 @@ test('EP-B01 EP-B02 search keeps typing focus, debounces and follows browser his
   await loginAs(page, 'en');
   const title = `UX search ${crypto.randomUUID()}`;
   await api(page, '', 'POST', { title });
-  await page.goto('/tasks?view=all');
+  await gotoReady(page, '/tasks?view=all');
   const search = page.getByRole('textbox', { name: en.tasks.searchList });
   await search.pressSequentially(title, { delay: 10 });
   await expect(search).toBeFocused();
@@ -438,7 +439,7 @@ test('EP-B06 EP-B11 Escape closes the detail after edits through a field and a p
 }) => {
   await loginAs(page, 'en');
   const task = (await api(page, '', 'POST', { title: `Escape ${crypto.randomUUID()}` })).body.data;
-  await page.goto(`/tasks?view=all&id=${task.id}`);
+  await gotoReady(page, `/tasks?view=all&id=${task.id}`);
   const title = page.getByLabel(en.tasks.title, { exact: true });
   await title.fill(`${task.title} edited`);
   await page.keyboard.press('Escape');

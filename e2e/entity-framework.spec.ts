@@ -4,6 +4,7 @@ import { loginAs } from './fixtures/auth';
 import { selectView } from './fixtures/views';
 import en from '../src/core/i18n/messages/en.json' with { type: 'json' };
 import ar from '../src/core/i18n/messages/ar.json' with { type: 'json' };
+import { gotoReady } from './fixtures/ready';
 
 // EP-B23: opening a record has to make that record the subject of the page. Every part of this is
 // CSS, and the part that kept failing was a cascade problem rather than a missing rule, so the
@@ -29,7 +30,7 @@ test('EP-B23 the page hands the open record the foreground @desktop', async ({ p
   const prefix = `Focus ${crypto.randomUUID()}`;
   const id = await createTask(page, `${prefix} first`);
   await createTask(page, `${prefix} second`);
-  await page.goto(`/tasks?view=all&q=${encodeURIComponent(prefix)}`);
+  await gotoReady(page, `/tasks?view=all&q=${encodeURIComponent(prefix)}`);
   const row = page.locator(`[data-row-id="${id}"]`);
   await expect(row).toBeVisible();
 
@@ -99,7 +100,7 @@ test('EP-B26 the record slides over the list instead of displacing it @desktop',
   const prefix = `Slide ${crypto.randomUUID()}`;
   const id = await createTask(page, `${prefix} first`);
   await createTask(page, `${prefix} second`);
-  await page.goto(`/tasks?view=all&q=${encodeURIComponent(prefix)}`);
+  await gotoReady(page, `/tasks?view=all&q=${encodeURIComponent(prefix)}`);
   const list = page.locator('[data-entity-list]:visible');
   const row = page.locator(`[data-row-id="${id}"]`);
   await expect(row).toBeVisible();
@@ -155,7 +156,7 @@ test('EP-B43 a click anywhere outside the record closes it like Esc @desktop', a
   await loginAs(page, 'en');
   const prefix = `Away ${crypto.randomUUID()}`;
   const id = await createTask(page, `${prefix} first`);
-  await page.goto(`/tasks?view=all&q=${encodeURIComponent(prefix)}`);
+  await gotoReady(page, `/tasks?view=all&q=${encodeURIComponent(prefix)}`);
   await page.locator(`[data-row-id="${id}"]`).click();
   const panel = page.locator('.entity-detail');
   await expect(panel).toBeVisible();
@@ -188,7 +189,7 @@ test('EP-B23 the record and the sheets share one dense glass, and reduced transp
   await expect(page.locator('html')).toHaveClass(/\bdark\b/u);
   const prefix = `Glass ${crypto.randomUUID()}`;
   const id = await createTask(page, prefix);
-  await page.goto(`/tasks?view=all&q=${encodeURIComponent(prefix)}`);
+  await gotoReady(page, `/tasks?view=all&q=${encodeURIComponent(prefix)}`);
   await page.locator(`[data-row-id="${id}"]`).click();
   await expect(page.locator('.entity-detail')).toBeVisible();
   expect(alpha(await style('.entity-detail', 'backgroundColor'))).toBeGreaterThanOrEqual(0.76);
@@ -236,7 +237,7 @@ for (const locale of ['en', 'ar'] as const) {
       const m = locale === 'ar' ? ar : en;
       await loginAs(page, locale);
       await page.setViewportSize({ width, height: 844 });
-      await page.goto('/kpis?view=all');
+      await gotoReady(page, '/kpis?view=all');
       const toolbar = page.locator('.entity-toolbar:visible');
       await expect(toolbar).toBeVisible();
       const overflowing = await toolbar.evaluate((bar) =>
@@ -267,7 +268,7 @@ for (const locale of ['en', 'ar'] as const) {
     const m = locale === 'ar' ? ar : en;
     await loginAs(page, locale);
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto('/tasks?view=all');
+    await gotoReady(page, '/tasks?view=all');
     await expect(page.locator('.entity-toolbar:visible')).toBeVisible();
     await expect(page.locator('[data-entity-stats]:visible')).toHaveCount(0);
     await page
@@ -339,9 +340,9 @@ for (const locale of ['en', 'ar'] as const) {
     const twoDaysAgo = new Date(Date.now() - 2 * 86_400_000).toISOString().slice(0, 10);
     const created = await call(page, '/tasks', 'POST', { title, dueDate: twoDaysAgo });
     const id = String(created.body.data.id);
-    await page.goto('/tasks?view=overdue');
+    await gotoReady(page, '/tasks?view=overdue');
     await expect(page.locator('.entity-toolbar:visible')).toBeVisible();
-    await page.goto(`/tasks?view=overdue&id=${id}`);
+    await gotoReady(page, `/tasks?view=overdue&id=${id}`);
     // During the page transition the outgoing page can still hold its panel and its list, so only
     // the visible one is on screen (as with the toolbar above).
     const panel = page.locator('aside.entity-detail:visible');
@@ -390,7 +391,7 @@ for (const locale of ['en', 'ar'] as const) {
     const first = await call(page, '/tasks', 'POST', { title: `${prefix} first` });
     const second = await call(page, '/tasks', 'POST', { title: `${prefix} second` });
     const ids = [String(first.body.data.id), String(second.body.data.id)];
-    await page.goto(`/tasks?view=all&q=${encodeURIComponent(prefix)}`);
+    await gotoReady(page, `/tasks?view=all&q=${encodeURIComponent(prefix)}`);
     await expect(page.locator('[data-row-id]')).toHaveCount(2);
     // The arrows follow the list's own order, whichever way the view sorts the two records.
     const order = await page
@@ -482,7 +483,7 @@ test('EP-A04 a conflicting save keeps the draft and reapplies it on the reloaded
       }),
     });
   });
-  await page.goto(`/tasks?view=all&id=${id}`);
+  await gotoReady(page, `/tasks?view=all&id=${id}`);
   const panel = page.locator('aside.entity-detail');
   const field = panel.getByLabel(en.tasks.title, { exact: true });
   await expect(field).toHaveValue(title);
@@ -529,7 +530,7 @@ for (const locale of ['en', 'ar'] as const) {
       ids.push(
         String((await call(page, '/notes', 'POST', { title: `${prefix} ${suffix}` })).body.data.id),
       );
-    await page.goto(`/notes?view=all&q=${encodeURIComponent(prefix)}`);
+    await gotoReady(page, `/notes?view=all&q=${encodeURIComponent(prefix)}`);
     const rows = page.locator('[data-row-id]');
     await expect(rows).toHaveCount(3);
     const selectAllThree = async () => {
@@ -581,7 +582,7 @@ test('EP-A06 RTL: the record sits on the left, enters from the left, and arrows 
   const first = await call(page, '/tasks', 'POST', { title: `${prefix} أول` });
   const second = await call(page, '/tasks', 'POST', { title: `${prefix} ثانٍ` });
   const ids = [String(first.body.data.id), String(second.body.data.id)];
-  await page.goto(`/tasks?view=all&q=${encodeURIComponent(prefix)}`);
+  await gotoReady(page, `/tasks?view=all&q=${encodeURIComponent(prefix)}`);
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   const rows = page.locator('[data-row-id]');
   await expect(rows).toHaveCount(2);
@@ -626,7 +627,7 @@ test('EP-B30 opening a record requests no page, and a changed list query keeps i
   const first = await call(page, '/tasks', 'POST', { title: `${prefix} first` });
   const second = await call(page, '/tasks', 'POST', { title: `${prefix} second` });
   const ids = [String(first.body.data.id), String(second.body.data.id)];
-  await page.goto(`/tasks?view=inbox&q=${encodeURIComponent(prefix)}`);
+  await gotoReady(page, `/tasks?view=inbox&q=${encodeURIComponent(prefix)}`);
   const rows = page.locator('[data-entity-list] [data-row-id]');
   await expect(rows).toHaveCount(2);
   const pageRequests: string[] = [];
@@ -680,7 +681,7 @@ for (const locale of ['en', 'ar'] as const) {
   }) => {
     const m = locale === 'ar' ? ar : en;
     await loginAs(page, locale);
-    await page.goto('/tasks?view=all');
+    await gotoReady(page, '/tasks?view=all');
     // `:visible` throughout: while React streams the page in, the finished segment waits in a
     // hidden `<div id="S:…">` beside what is on screen, so for a moment there are two bars.
     const toolbar = page.locator('.entity-toolbar:visible');
@@ -718,7 +719,7 @@ test('EP-B34 the bar keeps clear of the open record and drops the list-wide sett
   await loginAs(page, 'en');
   const prefix = `Clear ${crypto.randomUUID()}`;
   const id = await createTask(page, `${prefix} first`);
-  await page.goto(`/tasks?view=all&q=${encodeURIComponent(prefix)}`);
+  await gotoReady(page, `/tasks?view=all&q=${encodeURIComponent(prefix)}`);
   const toolbar = page.locator('.entity-toolbar:visible');
   await expect(toolbar.getByLabel(en.common.sort)).toHaveCount(1);
   await expect(toolbar.getByRole('button', { name: en.common.select, exact: true })).toHaveCount(1);
@@ -763,7 +764,7 @@ test('EP-B35 the strip and the view summary appear only where the rail is not sh
   page,
 }) => {
   await loginAs(page, 'en');
-  await page.goto('/tasks?view=all');
+  await gotoReady(page, '/tasks?view=all');
   const toolbar = page.locator('.entity-toolbar:visible');
   await expect(toolbar).toBeVisible();
   const rail = page.locator('.entity-rail:visible');

@@ -1,4 +1,5 @@
 import { ViewTransition, type ReactNode } from 'react';
+import { HydrationMark } from './HydrationMark';
 // ADR 0019: one pair of names covers both moments where a screen is replaced. A route change runs
 // the outgoing page's exit against the incoming page's enter; a Suspense boundary resolving runs
 // the placeholder's exit against the real content's enter. Both are the same handoff, so both use
@@ -10,6 +11,8 @@ import { ViewTransition, type ReactNode } from 'react';
 export function PageBody({ children }: { children: ReactNode }) {
   return (
     <ViewTransition enter="page-in" exit="page-out" default="none">
+      {/* ADR 0072: set once this page's own boundary has hydrated. */}
+      <HydrationMark part="page" />
       {children}
     </ViewTransition>
   );

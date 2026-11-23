@@ -4,6 +4,7 @@ import { expect, type Page } from '@playwright/test';
 import en from '../../src/core/i18n/messages/en.json' with { type: 'json' };
 import ar from '../../src/core/i18n/messages/ar.json' with { type: 'json' };
 import { credentialsFile, laneBaseURL } from '../lanes';
+import { waitReady } from './ready';
 export const Credentials = z.object({
   email: z.string(),
   password: z.string(),
@@ -23,4 +24,5 @@ export async function loginAs(page: Page, locale: string) {
   await page.getByLabel(messages.auth.password).fill(account.password);
   await page.getByRole('button', { name: messages.auth.login, exact: true }).click();
   await expect(page).toHaveURL(/home/);
+  await waitReady(page);
 }

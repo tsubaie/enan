@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import en from '@/core/i18n/messages/en.json';
 import ar from '@/core/i18n/messages/ar.json';
 import { useAuditChanges, type Change } from '@/modules/users/ui/audit-changes';
 import { AuditList } from '@/modules/users/ui/AuditList';
 import { mount } from './harness';
+import { clock } from '../../../../../tests/fixtures/mount';
 // ADMIN-B43: the audit log reads as a history. The changes are read through the hook inside the
 // app's providers (the harness's clock is 2026-09-10 09:00 UTC), and the list is read as rendered.
 type Json = Parameters<ReturnType<typeof useAuditChanges>>[1];
@@ -115,6 +116,8 @@ describe('ADMIN-B43 audit changes', () => {
   });
 });
 describe('ADMIN-B43 audit list', () => {
+  beforeEach(() => vi.useFakeTimers({ toFake: ['Date'], now: new Date(clock) }));
+  afterEach(() => vi.useRealTimers());
   const rows = [
     {
       id: '1',

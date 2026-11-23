@@ -2,6 +2,7 @@ import { expect, test } from './fixtures/test';
 import { loginAs } from './fixtures/auth';
 import en from '../src/core/i18n/messages/en.json' with { type: 'json' };
 import ar from '../src/core/i18n/messages/ar.json' with { type: 'json' };
+import { gotoReady, reloadReady } from './fixtures/ready';
 
 for (const locale of ['en', 'ar']) {
   test(`ADMIN-B24 save, reload, replace and remove an API key (${locale})`, async ({
@@ -38,7 +39,7 @@ for (const locale of ['en', 'ar']) {
       });
     });
     await loginAs(page, locale);
-    await page.goto('/admin/ai');
+    await gotoReady(page, '/admin/ai');
     // ADMIN-B45: the key is one row of the Connection section; a saved key is never shown.
     await expect(
       page.getByRole('heading', { name: messages.admin.aiConnection, exact: true }),
@@ -57,7 +58,7 @@ for (const locale of ['en', 'ar']) {
     await expect(replace).toBeVisible();
     await expect(remove).toBeVisible();
     await expect(key).toHaveCount(0);
-    await page.reload();
+    await reloadReady(page);
     await expect(replace).toBeVisible();
     await expect(key).toHaveCount(0);
     await page.screenshot({ path: testInfo.outputPath('ai-key-saved.png'), fullPage: true });
@@ -69,7 +70,7 @@ for (const locale of ['en', 'ar']) {
     await save.click();
     await expect(page.getByText('Save failed', { exact: true })).toBeVisible();
     fail = false;
-    await page.reload();
+    await reloadReady(page);
     await remove.click();
     await expect(key).toBeVisible();
     await expect(replace).toHaveCount(0);

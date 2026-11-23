@@ -6,6 +6,7 @@ import en from '../src/core/i18n/messages/en.json' with { type: 'json' };
 import ar from '../src/core/i18n/messages/ar.json' with { type: 'json' };
 import { addDays } from '../src/core/time/days';
 import { personDraft } from '../src/modules/people/schema/validation';
+import { gotoReady } from './fixtures/ready';
 
 // HOME-B13: a grid item does not shrink below its own min-content, and a committee named after a
 // UUID has no break in it, so the column grew past its track and carried every section's "View
@@ -25,7 +26,7 @@ for (const locale of ['en', 'ar'] as const) {
     const { today } = await homePayload(page);
     await task(page, `Phone width ${crypto.randomUUID()}`, { dueDate: today });
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto('/home');
+    await gotoReady(page, '/home');
     // The grid and every tile in it (HOME-B15: the tiles are the grid's own children).
     const columns = page.locator('.home-column, .home-column > *');
     await expect(columns.first()).toBeVisible();
@@ -160,7 +161,7 @@ for (const locale of ['en', 'ar'] as const) {
     await task(page, `Open memo ${suffix}`, { committeeId: committee.id });
     await task(page, `Awaiting reply ${suffix}`, { status: 'waiting_on', ownerId: holder.id });
     await task(page, `Awaiting figures ${suffix}`, { status: 'waiting_on', ownerId: holder.id });
-    await page.goto('/home');
+    await gotoReady(page, '/home');
     // HOME-A05: an overdue row states how many days late it is.
     const late = page.getByRole('link', { name: lateTitle });
     await expect(late).toBeVisible();
@@ -211,7 +212,7 @@ for (const locale of ['en', 'ar'] as const) {
     await task(page, `Also soon ${suffix}`, { dueDate: plus(2) });
     await task(page, `Later ${suffix}`, { dueDate: plus(9) });
     await task(page, `Late ${suffix}`, { dueDate: plus(-3650) });
-    await page.goto('/home');
+    await gotoReady(page, '/home');
     // The overdue count is its own capsule in the week tile's head, apart from the days (HOME-B14),
     // and the strip below it is the seven days from today.
     const overdue = page.locator('.home-lead a[href="/tasks?view=overdue"]');
@@ -242,7 +243,7 @@ test('HOME-A06 HOME-B08 completing a due-today row from Home removes it and lowe
   const title = `Due today ${crypto.randomUUID()}`;
   await task(page, title, { dueDate: today });
   const dueCount = (await homePayload(page)).section('today').count;
-  await page.goto('/home');
+  await gotoReady(page, '/home');
   // Kept loose while the home redesign settles: the headline speaks of the day's work, and it
   // changes when a task due today is completed, without a reload.
   const headline = page.getByRole('heading', { level: 1 });

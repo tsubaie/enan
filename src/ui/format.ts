@@ -1,4 +1,5 @@
 'use client';
+import { useSyncExternalStore } from 'react';
 import { useFormatter, useNow, useTimeZone } from 'next-intl';
 import { dayAt } from '@/core/time/tasks';
 import { defaults } from '@/core/config/defaults';
@@ -47,15 +48,48 @@ export function useRelative() {
   const numberingSystem = useNumberingSystem();
   return (value: Date, now: Date) => format.relativeTime(value, { now, numberingSystem });
 }
+// The clock every relative time and "today" reads. While hydrating it is the request's (the
+// provider's `now`, src/core/i18n/request.ts), so the client's first render writes the server's
+// text; a mismatch would make React throw the page's server markup away and render it again.
+// Afterwards it is the device's, read again every half minute while anything shows it, because the
+// root layout's `now` is not sent again on a client-side navigation.
+let deviceNow = new Date();
+const clockListeners = new Set<() => void>();
+let ticking: ReturnType<typeof setInterval> | undefined;
+function tick() {
+  deviceNow = new Date();
+  for (const listener of clockListeners) listener();
+}
+function subscribeClock(listener: () => void) {
+  clockListeners.add(listener);
+  if (!ticking) {
+    tick();
+    ticking = setInterval(tick, 30_000);
+  }
+  return () => {
+    clockListeners.delete(listener);
+    if (clockListeners.size) return;
+    clearInterval(ticking);
+    ticking = undefined;
+  };
+}
+function useClock() {
+  const requestNow = useNow();
+  return useSyncExternalStore(
+    subscribeClock,
+    () => deviceNow,
+    () => requestNow,
+  );
+}
 // Relative wording for timestamps ("2 hours ago"); pair it with the absolute value in a title.
 export function useRelativeTime() {
   const relative = useRelative();
-  const now = useNow();
+  const now = useClock();
   return (value: string) => relative(new Date(value), now);
 }
 // Today's calendar day in the user's timezone (docs/05 § Internationalization).
 export function useToday() {
-  const now = useNow();
+  const now = useClock();
   const timeZone = useTimeZone() ?? defaults.timezone;
   return dayAt(timeZone, now.toISOString());
 }
@@ -98,7 +132,7 @@ export function useSignedPercent() {
 // so it is relativised at UTC midnight the way every other plain date is rendered.
 export function useRelativeDay() {
   const relative = useRelative();
-  const now = useNow();
+  const now = useClock();
   return (day: string) => relative(plainDateValue(day), now);
 }
 // Up to two initials from a display name; works for Arabic and Latin names (PEOPLE-A06).

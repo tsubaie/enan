@@ -5,6 +5,7 @@ import { fill } from './fixtures/messages';
 import { credentials, loginAs } from './fixtures/auth';
 import en from '../src/core/i18n/messages/en.json' with { type: 'json' };
 import ar from '../src/core/i18n/messages/ar.json' with { type: 'json' };
+import { reloadReady } from './fixtures/ready';
 // Every scenario here is one member being told what another did (NOTIF-B02 makes a one-account
 // run vacuous), so each provisions a fresh member through the admin API and signs them in from a
 // second browser context.
@@ -145,7 +146,7 @@ for (const locale of ['en', 'ar']) {
     await expect(row).toBeVisible();
     await expect(row).toContainText(admin.name);
     // A's own bell is unchanged: assigning is not news to the one who assigned (NOTIF-B02).
-    await page.reload();
+    await reloadReady(page);
     await expect(bell(page, m)).toHaveAttribute('aria-label', before ?? '');
     // NOTIF-A03 / NOTIF-B09: opening the row goes to the task with the record open and the badge
     // drops to zero.
@@ -196,7 +197,7 @@ test('NOTIF-A04 NOTIF-B06 NOTIF-B12 a trashed task leaves the feed and the count
   await expect(unreadBell(other, en, 'one')).toBeVisible();
   const removed = await api(page, `/tasks/${task.id}`, 'DELETE', { revision: task.revision });
   expect(removed.status).toBe(204);
-  await other.reload();
+  await reloadReady(other);
   await expect(quietBell(other, en)).toBeVisible();
   await quietBell(other, en).click();
   // NOTIF-B12: nothing has arrived, and nothing is offered.
@@ -206,7 +207,7 @@ test('NOTIF-A04 NOTIF-B06 NOTIF-B12 a trashed task leaves the feed and the count
   // The row was hidden, not deleted: restoring the task brings it back (NOTIF-B06).
   const restored = await api(page, `/tasks/${task.id}/restore`, 'POST', { opId: removed.opId });
   expect(restored.status).toBe(200);
-  await other.reload();
+  await reloadReady(other);
   await expect(unreadBell(other, en, 'one')).toBeVisible();
   await unreadBell(other, en, 'one').click();
   await expect(centre(other).getByRole('button').filter({ hasText: title })).toBeVisible();
@@ -312,7 +313,7 @@ for (const locale of ['en', 'ar']) {
     await expect(other).toHaveURL(/kind=notes/u);
     // NOTIF-B12: filtered to Unread and empty, the page says the reader is caught up.
     await expect(other.getByText(m.notifications.caughtUp, { exact: true })).toBeVisible();
-    await other.reload();
+    await reloadReady(other);
     await expect(other.getByText(m.notifications.caughtUp, { exact: true })).toBeVisible();
     await other.getByRole('button', { name: m.notifications.showAll, exact: true }).click();
     await expect(other.getByText(m.notifications.empty, { exact: true })).toBeVisible();

@@ -3,6 +3,7 @@ import { test, expect } from './fixtures/test';
 import { laneBaseURL } from './lanes';
 import { loginAs } from './fixtures/auth';
 import en from '../src/core/i18n/messages/en.json' with { type: 'json' };
+import { gotoReady } from './fixtures/ready';
 // The browser-test administrator is shared by every spec, so these scenarios only ever create,
 // edit and deactivate accounts of their own; the shared account is never touched.
 async function invite(page: Page, name: string, email: string, role: 'admin' | 'member') {
@@ -37,7 +38,7 @@ test('ADMIN-B03 an invited member signs in with the one-time password and is sig
   browser,
 }) => {
   await loginAs(page, 'en');
-  await page.goto('/admin/users');
+  await gotoReady(page, '/admin/users');
   const email = `member-${crypto.randomUUID()}@example.test`;
   const name = `Member ${crypto.randomUUID().slice(0, 8)}`;
   const password = await invite(page, name, email, 'member');
@@ -69,7 +70,7 @@ test('ADMIN-B03 ADMIN-B04 an administrator can be renamed and demoted while anot
   page,
 }) => {
   await loginAs(page, 'en');
-  await page.goto('/admin/users');
+  await gotoReady(page, '/admin/users');
   const email = `admin-${crypto.randomUUID()}@example.test`;
   await invite(page, 'Second Administrator', email, 'admin');
   const listed = row(page, email);

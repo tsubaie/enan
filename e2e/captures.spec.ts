@@ -1,6 +1,7 @@
 import type { Browser, Page } from '@playwright/test';
 import { test, expect } from './fixtures/test';
 import { loginAs } from './fixtures/auth';
+import { gotoReady, waitReady } from './fixtures/ready';
 import { fill } from './fixtures/messages';
 import { laneBaseURL } from './lanes';
 import { seedDrafts } from './fixtures/captures';
@@ -105,6 +106,7 @@ async function member(page: Page, browser: Browser) {
   await other.getByLabel(en.auth.password).fill(created.body.meta.temporaryPassword);
   await other.getByRole('button', { name: en.auth.login, exact: true }).click();
   await expect(other).toHaveURL(/home/u);
+  await waitReady(other);
   return { other, close: () => context.close() };
 }
 test('CAPTURES-A01 a recording made from Home is waiting in Review after leaving, and its draft shows there (en)', async ({
@@ -113,9 +115,10 @@ test('CAPTURES-A01 a recording made from Home is waiting in Review after leaving
   await refuseMicrophone(page);
   await loginAs(page, 'en');
   const captureId = await recordByUpload(page, en);
-  await page.goto('/notes');
+  await gotoReady(page, '/notes');
   await openReview(page, en);
   const group = page.locator(`[aria-labelledby="capture-${captureId}"]`);
+  await expect(group).toHaveCount(1);
   await expect(group.getByText(en.captures.unavailable)).toBeVisible();
   // The badge counts a recording that failed (here: AI is off, so a typed transcript cannot be
   // interpreted), deferred from the recorder's own release.
@@ -130,7 +133,8 @@ test('CAPTURES-A01 a recording made from Home is waiting in Review after leaving
     page.getByRole('link', { name: fill(en.captures.reviewCount, { count: before + 1 }) }),
   ).toBeVisible();
   seedDrafts(captureId);
-  await page.goto('/captures');
+  await gotoReady(page, '/captures');
+  await expect(page.locator(`[aria-labelledby="capture-${captureId}"]`)).toHaveCount(1);
   await expect(
     page
       .locator(`[aria-labelledby="capture-${captureId}"]`)
@@ -144,7 +148,7 @@ test('CAPTURES-A02 of two drafts from one recording, one approved and one discar
   await loginAs(page, 'en');
   const captureId = await recordByUpload(page, en);
   seedDrafts(captureId);
-  await page.goto('/captures');
+  await gotoReady(page, '/captures');
   const card = (kind: string) =>
     page.locator(`[data-testid="suggestion-card"][data-kind="${kind}"]`).first();
   const task = card('task');
@@ -196,7 +200,7 @@ test('CAPTURES-A03 CAPTURES-A04 a member cannot open another person’s draft or
     const audio = await other.request.get(`/api/v1/captures/${mine}/audio`);
     expect(audio.status()).toBe(404);
     expect((await api(other, '/captures?scope=all')).body.data).toEqual([]);
-    await other.goto('/captures?scope=all');
+    await gotoReady(other, '/captures?scope=all');
     await expect(other.getByText(en.captures.emptyTitle)).toBeVisible();
     // The member's own recording, sent through the API as the recorder sends it.
     const theirs = await other.evaluate(
@@ -216,7 +220,9 @@ test('CAPTURES-A03 CAPTURES-A04 a member cannot open another person’s draft or
     seedDrafts(theirs);
     expect((await api(page, `/captures/${theirs}`)).status).toBe(200);
     expect((await page.request.get(`/api/v1/captures/${theirs}/audio`)).status()).toBe(200);
-    await page.goto('/captures?scope=all');
+    await gotoReady(page, '/captures?scope=all');
+    // One section per recording: a hydration mismatch once left the streamed copy beside it.
+    await expect(page.locator(`[aria-labelledby="capture-${theirs}"]`)).toHaveCount(1);
     await expect(page.locator(`[aria-labelledby="capture-${theirs}"]`)).toBeVisible();
   } finally {
     await close();
@@ -232,7 +238,7 @@ test('CAPTURES-A08 from Review the recorder deletes a recording AI could not tak
   const { other, close } = await member(page, browser);
   try {
     expect((await api(other, `/captures/${captureId}`, 'DELETE')).status).toBe(404);
-    await page.goto('/captures');
+    await gotoReady(page, '/captures');
     const group = page.locator(`[data-capture="${captureId}"]`);
     await expect(page.locator(`[data-capture="${captureId}"]`)).toHaveCount(1);
     await expect(group.getByText(en.captures.unavailable)).toBeVisible();
@@ -274,7 +280,7 @@ test('CAPTURES-A11 a recording deleted while it transcribes comes back from Undo
   await loginAs(page, 'en');
   const captureId = await recordByUpload(page, en);
   seedDrafts(captureId, 'processing');
-  await page.goto('/captures');
+  await gotoReady(page, '/captures');
   const group = page.locator(`[data-capture="${captureId}"]`);
   await expect(group).toHaveCount(1);
   await expect(group.getByText(en.captures.transcribing)).toBeVisible();
@@ -317,7 +323,7 @@ test('CAPTURES-A09 the More actions menu is opaque in night and under reduced tr
   await expect(page.locator('html')).toHaveClass(/\bdark\b/u);
   const captureId = await recordByUpload(page, en);
   seedDrafts(captureId);
-  await page.goto('/captures');
+  await gotoReady(page, '/captures');
   const group = page.locator(`[data-capture="${captureId}"]`);
   await expect(group).toHaveCount(1);
   await group.getByRole('button', { name: en.captures.moreActions }).click();
@@ -407,7 +413,7 @@ for (const [locale, m, dir] of [
   }) => {
     await refuseMicrophone(page);
     await loginAs(page, locale);
-    await page.goto('/captures');
+    await gotoReady(page, '/captures');
     await expect(page.locator('html')).toHaveAttribute('dir', dir);
     await expect(page.getByRole('heading', { level: 1, name: m.captures.review })).toBeVisible();
     await page
@@ -436,7 +442,7 @@ test('CAPTURES-A07 on a phone Tab and Shift+Tab never leave the recorder while i
     });
   });
   await loginAs(page, 'ar');
-  await page.goto('/tasks?view=all');
+  await gotoReady(page, '/tasks?view=all');
   await page
     .getByRole('button', { name: ar.captures.recordNote })
     .filter({ visible: true })

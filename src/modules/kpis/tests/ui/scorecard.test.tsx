@@ -16,6 +16,7 @@ import { KpiHeadline, KpiSummary, LatestNote } from '../../ui/KpiHeadline';
 import { KpiTrend } from '../../ui/KpiTrend';
 import { KpiTargets } from '../../ui/KpiTargets';
 import { mount } from './harness';
+import { clock } from '../../../../../tests/fixtures/mount';
 const base = {
   id: '01a08a9f-1991-760a-b73a-568f6f866500',
   revision: 2,
@@ -360,7 +361,9 @@ it('KPIS-B08 the trend starts at the first reading, not eight periods before it'
       createdAt: '2026-05-04T07:00:00.000Z',
     },
   ];
+  vi.useFakeTimers({ toFake: ['Date'], now: new Date(clock) });
   mount(<KpiTrend kpi={kpi({ readings })} />);
+  vi.useRealTimers();
   // A KPI first read in Q2 has no history before Q2: showing 2024 and 2025 as blank columns would
   // report a gap in a record that had not started.
   const table = screen.getByRole('table');

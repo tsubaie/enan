@@ -60,6 +60,9 @@ export default getRequestConfig(async () => {
     locale,
     messages: locale === Locale.options[1] ? ar : en,
     timeZone,
+    // The request's clock, handed to the client provider, so hydration reads the relative times
+    // and today's date the server wrote (src/ui/format.ts).
+    now: new Date(),
     formats: {
       dateTime: {
         day,
