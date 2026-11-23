@@ -11,6 +11,7 @@ export function CaptureFab() {
   return (
     <button
       type="button"
+      data-capture-opener
       aria-label={t('recordNote')}
       title={t('recordNote')}
       onClick={startCapture}

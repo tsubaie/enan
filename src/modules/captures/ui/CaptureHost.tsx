@@ -128,6 +128,30 @@ function useLauncher(launch: () => void) {
     return () => registerCapture(null);
   }, []);
 }
+// CAPTURES-B01: a recorder closed without sending (Cancel, Discard, a dismissed sheet) returns
+// focus to the control that opens it, after the next paint and only when focus was lost. A control
+// the layout hides takes no focus, so the next one is tried. The sheets' dismiss shares it: with no
+// recording running, the recorder's cancel does nothing.
+function useRefocus(close: () => void) {
+  const frame = useRef(0);
+  // sync: external system — a frame still pending at unmount is dropped.
+  useEffect(() => () => cancelAnimationFrame(frame.current), []);
+  return () => {
+    close();
+    cancelAnimationFrame(frame.current);
+    frame.current = requestAnimationFrame(() => {
+      if (document.activeElement && document.activeElement !== document.body) return;
+      const openers = [
+        ...document.querySelectorAll<HTMLElement>('[data-capture-opener]:not([hidden])'),
+        document.querySelector<HTMLElement>('#content h1'),
+      ];
+      for (const node of openers) {
+        node?.focus();
+        if (node && document.activeElement === node) return;
+      }
+    });
+  };
+}
 // CAPTURES-B01: the one recorder of the shell. A control starts it (`startCapture`); Stop or an
 // upload sends the audio; the panel then follows the capture until the recorder dismisses it.
 export function CaptureHost() {
@@ -154,10 +178,10 @@ export function CaptureHost() {
     setPhase('idle');
     upload.reset();
   };
-  const discard = () => {
+  const discard = useRefocus(() => {
     recorder.cancel();
     done();
-  };
+  });
   const recording = phase === 'recording' && recorder.state !== 'idle';
   // sync: external system — the header and the phone button show a recording in progress.
   useEffect(() => setCaptureActive(recording), [recording]);
@@ -169,7 +193,7 @@ export function CaptureHost() {
         <CaptureRecorder.Permission
           kind={refused ? 'refused' : 'ask'}
           proceed={begin}
-          dismiss={done}
+          dismiss={discard}
           pick={(file) => upload.send(file, 0, 'sheet')}
           refusal={refused ? upload.refusal : null}
         />

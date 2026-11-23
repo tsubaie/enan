@@ -17,6 +17,7 @@ function CaptureHeaderButton() {
   return (
     <Button
       variant="outline"
+      data-capture-opener
       className={cn('hidden lg:inline-flex', active && 'border-accent bg-accent-soft')}
       title={t('shortcutMac')}
       aria-keyshortcuts={t('shortcut')}
