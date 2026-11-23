@@ -2,6 +2,7 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { z } from 'zod';
+import { cn } from '@/ui/cn';
 import { Button, buttonVariants } from '@/ui/primitives/button';
 import {
   ToastAction,
@@ -66,42 +67,43 @@ const ToastData = z
 function ToastList() {
   const { toasts } = useToastManager();
   return toasts.map((toast) => {
-    const { view, secondary, tone, progress } = ToastData.parse(toast.data);
-    const action = Boolean(toast.actionProps?.children);
+    const data = ToastData.parse(toast.data);
+    // A toast with a second line or two answers gives its words the whole width and puts its
+    // controls on a row of their own at the end, so a phone never squeezes the sentence.
+    const wide = Boolean(toast.description || data.secondary);
     return (
-      <ToastRoot key={toast.id} toast={toast} data-tone={tone}>
-        <ToastContent>
-          <span className="grid min-w-0 flex-1 gap-1 py-1.5">
+      <ToastRoot key={toast.id} toast={toast} data-tone={data.tone}>
+        <ToastContent className={wide ? 'flex-wrap' : undefined}>
+          <span className={cn('grid min-w-0 flex-1 gap-1 py-1.5', wide && 'basis-full')}>
             <ToastTitle />
             {toast.description ? <ToastDescription className="whitespace-pre-line" /> : null}
-            {progress ? (
-              <span role="progressbar" aria-label={progress} data-slot="toast-progress" />
+            {data.progress ? (
+              <span role="progressbar" aria-label={data.progress} data-slot="toast-progress" />
             ) : null}
           </span>
-          {secondary ? (
-            <Button
-              variant="ghost"
-              className="pointer-coarse:min-h-11 pointer-coarse:min-w-11"
-              onClick={secondary.onClick}
-            >
-              {secondary.label}
-            </Button>
-          ) : null}
-          {action ? <ToastAction /> : null}
-          {view ? (
-            <Link
-              href={view.href}
-              className={buttonVariants({
-                variant: 'ghost',
-                className: 'pointer-coarse:min-h-11 pointer-coarse:min-w-11',
-              })}
-            >
-              {view.label}
-            </Link>
-          ) : null}
-          {action || secondary || progress ? null : <ToastClose />}
+          <ToastControls data={data} action={Boolean(toast.actionProps?.children)} />
         </ToastContent>
       </ToastRoot>
     );
   });
+}
+const touch = 'pointer-coarse:min-h-11 pointer-coarse:min-w-11';
+function ToastControls({ data, action }: { data: z.infer<typeof ToastData>; action: boolean }) {
+  const { view, secondary, progress } = data;
+  return (
+    <span className="ms-auto flex items-center gap-3">
+      {secondary ? (
+        <Button variant="ghost" className={touch} onClick={secondary.onClick}>
+          {secondary.label}
+        </Button>
+      ) : null}
+      {action ? <ToastAction /> : null}
+      {view ? (
+        <Link href={view.href} className={buttonVariants({ variant: 'ghost', className: touch })}>
+          {view.label}
+        </Link>
+      ) : null}
+      {action || secondary || progress ? null : <ToastClose />}
+    </span>
+  );
 }
