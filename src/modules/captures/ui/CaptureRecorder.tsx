@@ -13,7 +13,8 @@ import {
 } from '@/modules/notes/ui';
 import { CapturePermission } from './CapturePermission';
 import { CaptureChoice, type Choice } from './CaptureChoice';
-export type Placement = 'mobile-fullscreen' | 'desktop-floating';
+import { CaptureModal, type Placement } from './CaptureModal';
+export type { Placement };
 type Recorder = ReturnType<typeof useVoiceRecorder>;
 // CAPTURES-B01 S4–S10: past five seconds a cancel asks first, and a warning appears from about a
 // minute in; the hook itself stops and keeps the recording at 15:00.
@@ -35,9 +36,9 @@ function useRecorder() {
 const focusOnMount = (node: HTMLElement | null) => node?.focus();
 const frame: Record<Placement, string> = {
   'mobile-fullscreen':
-    'fixed inset-0 grid-rows-[1fr_auto] bg-bg px-5 pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+1.5rem)]',
+    'fixed inset-0 grid-rows-[1fr_auto] overscroll-contain bg-elevated px-[max(--spacing(5),env(safe-area-inset-left),env(safe-area-inset-right))] pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+1.5rem)]',
   'desktop-floating':
-    'fixed end-4 bottom-4 w-[380px] gap-3 rounded-2xl border bg-popover p-4 shadow-lg',
+    'fixed end-4 bottom-4 w-[380px] gap-3 rounded-2xl border bg-elevated p-4 shadow-lg',
 };
 // Escape pauses and asks on a desktop (S10) and cancels on a phone; Space and Enter as for a memo.
 function Root({
@@ -62,28 +63,27 @@ function Root({
     setChoice(null);
     if (resume.current && recorder.state === 'paused') recorder.toggle();
   };
+  const escape = placement === 'desktop-floating' ? () => ask('escape') : cancel;
   return (
     <RecorderContext value={{ recorder, placement, committee, clearCommittee, cancel }}>
-      <form
-        tabIndex={-1}
-        ref={focusOnMount}
-        aria-label={t('recorderLabel')}
-        data-placement={placement}
-        className={cn('z-40 grid outline-none', frame[placement])}
-        onSubmit={(event) => {
-          event.preventDefault();
-          recorder.stop();
-        }}
-        onKeyDown={(event) => {
-          if (!choice)
-            recorderKeys(
-              recorder,
-              placement === 'desktop-floating' ? () => ask('escape') : cancel,
-            )(event);
-        }}
-      >
-        {children}
-      </form>
+      <CaptureModal placement={placement} label={t('recorderLabel')}>
+        <form
+          tabIndex={-1}
+          ref={focusOnMount}
+          aria-label={t('recorderLabel')}
+          data-placement={placement}
+          className={cn('z-40 grid outline-none', frame[placement])}
+          onSubmit={(event) => {
+            event.preventDefault();
+            recorder.stop();
+          }}
+          onKeyDown={(event) => {
+            if (!choice) recorderKeys(recorder, escape)(event);
+          }}
+        >
+          {children}
+        </form>
+      </CaptureModal>
       <CaptureChoice
         choice={choice}
         keep={keep}

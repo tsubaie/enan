@@ -242,3 +242,73 @@ it('CAPTURES-B12 a file from the refused-microphone sheet that the server refuse
   );
   expect(spies.toast).not.toHaveBeenCalled();
 });
+it('CAPTURES-B01 the phone and desktop recorders stand on a solid surface, so the page and the bar never show through', async () => {
+  await startRecording();
+  expect(recorder()?.className).toMatch(/\bbg-elevated\b/u);
+  expect(recorder()?.className).not.toMatch(/\bbg-(bg|popover)\b/u);
+  fireEvent.click(screen.getByRole('button', { name: en.captures.cancel }));
+  media.desktop = true;
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: en.captures.recordNote }));
+  });
+  expect(recorder()?.getAttribute('data-placement')).toBe('desktop-floating');
+  expect(recorder()?.className).toMatch(/\bbg-elevated\b/u);
+});
+it('CAPTURES-B01 on a phone the recorder is a modal: the page and the bar behind it are inert until it closes, stops or unmounts', async () => {
+  const canvas = document.body.appendChild(document.createElement('div'));
+  canvas.className = 'app-canvas';
+  const nav = document.body.appendChild(document.createElement('nav'));
+  nav.className = 'mobile-navigation';
+  const skip = document.body.appendChild(document.createElement('a'));
+  skip.href = '#content';
+  const behind = () => [canvas, nav, skip].every((node) => node.hasAttribute('inert'));
+  const live = () => [canvas, nav, skip].every((node) => !node.hasAttribute('inert'));
+  localStorage.setItem('enan.captures.microphone-intro', '1');
+  const start = () =>
+    act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: en.captures.recordNote }));
+    });
+  const view = mount(
+    <>
+      <CaptureHost />
+      <CaptureFab />
+    </>,
+  );
+  await start();
+  const dialog = screen.getByRole('dialog', { name: en.captures.recorderLabel });
+  expect(dialog.getAttribute('aria-modal')).toBe('true');
+  expect(dialog.contains(recorder())).toBe(true);
+  expect(behind()).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: en.captures.cancel }));
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(live()).toBe(true);
+  await start();
+  expect(behind()).toBe(true);
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: en.captures.stop }));
+  });
+  expect(recorder()).toBeNull();
+  expect(live()).toBe(true);
+  view.unmount();
+  const again = mount(
+    <>
+      <CaptureHost />
+      <CaptureFab />
+    </>,
+  );
+  await start();
+  expect(behind()).toBe(true);
+  again.unmount();
+  expect(live()).toBe(true);
+  for (const node of [canvas, nav, skip]) node.remove();
+});
+it('CAPTURES-B01 on a desktop the floating recorder is not a dialog and leaves the page live', async () => {
+  const canvas = document.body.appendChild(document.createElement('div'));
+  canvas.className = 'app-canvas';
+  media.desktop = true;
+  await startRecording();
+  expect(recorder()?.getAttribute('data-placement')).toBe('desktop-floating');
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(canvas.hasAttribute('inert')).toBe(false);
+  canvas.remove();
+});

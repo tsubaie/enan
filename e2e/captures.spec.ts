@@ -243,3 +243,48 @@ for (const [locale, m, dir] of [
     await expect(page.getByText(m.captures.permissionBody)).toBeVisible();
     await page.getByRole('button', { name: m.captures.notNow }).click();
   });
+// CAPTURES-A07: a working microphone (a silent Web Audio stream), so the phone recorder runs. It is a
+// modal, and the page, the bar and the skip link behind it are inert, so Tab and Shift+Tab cycle
+// inside it. Past the last control focus leaves the document for the browser's own controls (the
+// body is active), as it does from a native modal dialog; it never lands on the page.
+test('CAPTURES-A07 on a phone Tab and Shift+Tab never leave the recorder while it records (ar) @mobile', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('enan.captures.microphone-intro', '1');
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getUserMedia: async () => new AudioContext().createMediaStreamDestination().stream,
+      },
+    });
+  });
+  await loginAs(page, 'ar');
+  await page.goto('/tasks?view=all');
+  await page
+    .getByRole('button', { name: ar.captures.recordNote })
+    .filter({ visible: true })
+    .click();
+  const dialog = page.getByRole('dialog', { name: ar.captures.recorderLabel });
+  await expect(dialog).toHaveAttribute('aria-modal', 'true');
+  await expect(page.getByTestId('capture-clock')).not.toHaveText('00:00');
+  await expect(page.locator('.app-canvas')).toHaveAttribute('inert', '');
+  await expect(page.locator('nav.mobile-navigation')).toHaveAttribute('inert', '');
+  const inside = () =>
+    dialog.evaluate((node) => {
+      const active = document.activeElement;
+      return active === document.body || (node !== active && node.contains(active));
+    });
+  for (const key of ['Tab', 'Shift+Tab'])
+    for (let press = 0; press < 20; press++) {
+      await page.keyboard.press(key);
+      expect(await inside(), `${key} #${press + 1}`).toBe(true);
+    }
+  // Past five seconds Cancel asks first (S6); discarding from there gives the page back too.
+  await expect(page.getByTestId('capture-clock')).toHaveText(/^00:(0[6-9]|[1-5]\d)$/u);
+  await page.getByRole('button', { name: ar.captures.cancel }).click();
+  await page.getByRole('button', { name: ar.captures.discardRecording }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.locator('.app-canvas')).not.toHaveAttribute('inert');
+  await expect(page.locator('nav.mobile-navigation')).not.toHaveAttribute('inert');
+});
