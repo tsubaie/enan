@@ -15,9 +15,16 @@ import { PersonCreate, personDraft } from '@/modules/people/schema/validation';
 import { fixtureModel } from '../../../../tests/fixtures/ai/jobs';
 import { captureJobs } from '../jobs';
 import { INTERPRET_PROMPT } from '../ai/prompt';
-import { captureSuggestions } from '../schema/db';
-import { CaptureCreate } from '../schema/validation';
-import { createCapture, getCapture, removeCapture, typeTranscript } from '../service';
+import { captureSuggestions, captures } from '../schema/db';
+import { CaptureCreate, CaptureListQuery } from '../schema/validation';
+import {
+  createCapture,
+  getCapture,
+  listCaptures,
+  pendingCaptureCount,
+  removeCapture,
+  typeTranscript,
+} from '../service';
 import { committee, user, webm } from './fixtures';
 // CAPTURES-B03 CAPTURES-B05 (§4.2, §4.3): the capture jobs against the real database. The network
 // is the only stand-in: admission, the handlers and the provider code run as they do in production.
@@ -256,4 +263,40 @@ it('CAPTURES-B01 publishing the same interpretation twice leaves one set of draf
   await withTransaction(db(), (database) => handler(job.kind).publish(database, job, result));
   const live = (await db().select().from(captureSuggestions)).filter((row) => !row.deletedAt);
   expect(live).toHaveLength(1);
+});
+const finish = (jobId: string | null) =>
+  db()
+    .update(jobs)
+    .set({ status: 'succeeded' })
+    .where(eq(jobs.id, jobId ?? ''));
+it('CAPTURES-B13 a capture deleted mid-transcription or mid-interpretation never surfaces a draft and stays deleted', async () => {
+  const listed = async () => (await listCaptures(ctx(), CaptureListQuery.parse({}))).data;
+  const transcribing = await createCapture(
+    ctx(),
+    CaptureCreate.parse({ file: new File([webm(11)], 'Debrief.webm'), durationSeconds: 5 }),
+  );
+  expect(transcribing.status).toBe('transcribing');
+  const interpreting = await transcribed('Send the quote.', 12);
+  expect(interpreting.status).toBe('interpreting');
+  for (const capture of [transcribing, interpreting]) await removeCapture(ctx(), capture.id);
+  const before = await db().select().from(captures);
+  sdk.post.mockResolvedValue({ text: 'Too late.' });
+  answer({ suggestions: [proposal({ title: 'Too late' })] });
+  await runAndPublish(transcribing.transcribeJobId);
+  await runAndPublish(interpreting.interpretJobId);
+  // As the runner does, both jobs are marked done; nothing reached the deleted captures.
+  await finish(transcribing.transcribeJobId);
+  await finish(interpreting.interpretJobId);
+  expect(await db().select().from(captures)).toEqual(before);
+  expect(
+    await db()
+      .select()
+      .from(captureSuggestions)
+      .where(eq(captureSuggestions.captureId, interpreting.id)),
+  ).toEqual([]);
+  expect(await db().select().from(captureSuggestions)).toEqual([]);
+  expect(await listed()).toEqual([]);
+  expect(await pendingCaptureCount(ctx())).toEqual({ pending: 0 });
+  expect(await db().select().from(tasks)).toEqual([]);
+  expect(await db().select().from(notes)).toEqual([]);
 });
