@@ -69,8 +69,9 @@ function ToastList() {
   return toasts.map((toast) => {
     const data = ToastData.parse(toast.data);
     // A toast with a second line or two answers gives its words the whole width and puts its
-    // controls on a row of their own at the end, so a phone never squeezes the sentence.
-    const wide = Boolean(toast.description || data.secondary);
+    // controls on a row of their own at the end, so a phone never squeezes the sentence. A
+    // warning is a long sentence that stays until closed, so it gets the same room.
+    const wide = Boolean(toast.description || data.secondary || data.tone);
     return (
       <ToastRoot key={toast.id} toast={toast} data-tone={data.tone}>
         <ToastContent className={wide ? 'flex-wrap' : undefined}>
