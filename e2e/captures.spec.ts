@@ -6,7 +6,7 @@ import { laneBaseURL } from './lanes';
 import { seedDrafts } from './fixtures/captures';
 import en from '../src/core/i18n/messages/en.json' with { type: 'json' };
 import ar from '../src/core/i18n/messages/ar.json' with { type: 'json' };
-// CAPTURES-A01–A04, A06 (A05 is NOTES-A15). AI is off in the browser suite, so a recording is
+// CAPTURES-A01–A04, A06–A08 (A05 is NOTES-A15). AI is off in the browser suite, so a recording is
 // stored without a transcript; `scripts/db/e2e-capture-drafts.ts` stands in for the interpreter
 // where a scenario needs drafts. The microphone is refused in the page, so the recorder offers
 // its upload fallback (S3) and the scenarios send a real WAV through it.
@@ -218,6 +218,44 @@ test('CAPTURES-A03 CAPTURES-A04 a member cannot open another person’s draft or
     expect((await page.request.get(`/api/v1/captures/${theirs}/audio`)).status()).toBe(200);
     await page.goto('/captures?scope=all');
     await expect(page.locator(`[aria-labelledby="capture-${theirs}"]`)).toBeVisible();
+  } finally {
+    await close();
+  }
+});
+test('CAPTURES-A08 from Review the recorder deletes a recording AI could not take, Undo brings it back, and another member gets 404 (en)', async ({
+  page,
+  browser,
+}) => {
+  await refuseMicrophone(page);
+  await loginAs(page, 'en');
+  const captureId = await recordByUpload(page, en);
+  const { other, close } = await member(page, browser);
+  try {
+    expect((await api(other, `/captures/${captureId}`, 'DELETE')).status).toBe(404);
+    await page.goto('/captures');
+    const group = page.locator(`[data-capture="${captureId}"]`);
+    await expect(group.getByText(en.captures.unavailable)).toBeVisible();
+    const deleted = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === `/api/v1/captures/${captureId}` &&
+        response.request().method() === 'DELETE',
+    );
+    await group.getByRole('button', { name: en.captures.deleteRecording }).click();
+    const response = await deleted;
+    expect(response.status()).toBe(204);
+    const opId = response.headers()['x-op-id'] ?? '';
+    await expect(group).toHaveCount(0);
+    await expect(page.getByText(en.captures.recordingDeleted, { exact: true })).toBeVisible();
+    // Another member can neither restore it nor learn it exists.
+    const denied = await api(other, `/captures/${captureId}/restore`, 'POST', { opId });
+    expect(denied.status).toBe(404);
+    expect(denied.body.error).toMatchObject({
+      code: 'not_found',
+      details: { entityType: 'capture' },
+    });
+    await page.getByRole('button', { name: en.common.undo }).click();
+    await expect(page.getByText(en.captures.recordingRestored)).toBeVisible();
+    await expect(group.getByText(en.captures.unavailable)).toBeVisible();
   } finally {
     await close();
   }
