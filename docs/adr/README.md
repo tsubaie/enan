@@ -75,5 +75,6 @@ One decision per file. Format: **Status**, **Context**, **Decision**, **Conseque
 | 0069 | oxfmt replaces Prettier, and formatting is checked | accepted |
 | 0070 | Voice memos are transcribed by OpenRouter speech-to-text and write themselves into the note | accepted; superseded for new recordings by 0071 |
 | 0071 | Voice captures are reviewed before anything goes live | accepted |
+| 0072 | Nothing above a streamed page changes before it hydrates | accepted |
 
 Open decisions awaiting an ADR: license (see roadmap); chart library confirmation (`recharts`).

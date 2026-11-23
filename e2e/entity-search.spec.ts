@@ -2,6 +2,7 @@ import { test, expect } from './fixtures/test';
 import { loginAs } from './fixtures/auth';
 import en from '../src/core/i18n/messages/en.json' with { type: 'json' };
 import ar from '../src/core/i18n/messages/ar.json' with { type: 'json' };
+import { gotoReady } from './fixtures/ready';
 for (const entityModule of ['notes', 'tasks'] as const) {
   for (const locale of ['en', 'ar'] as const) {
     // EP-B41: the field is named by its module, so the scenarios look it up by that name.
@@ -13,7 +14,7 @@ for (const entityModule of ['notes', 'tasks'] as const) {
       page,
     }) => {
       await loginAs(page, locale);
-      await page.goto(`/${entityModule}?view=all`);
+      await gotoReady(page, `/${entityModule}?view=all`);
       const input = page.getByRole('textbox', { name: label, exact: true });
       for (const width of [1076, 390]) {
         await page.setViewportSize({ width, height: 900 });
@@ -40,7 +41,7 @@ for (const entityModule of ['notes', 'tasks'] as const) {
       page,
     }) => {
       await loginAs(page, locale);
-      await page.goto(`/${entityModule}?view=all`);
+      await gotoReady(page, `/${entityModule}?view=all`);
       const input = page.getByRole('textbox', { name: label, exact: true });
       await expect(input).toBeVisible();
       for (const width of [1280, 390]) {
@@ -60,7 +61,7 @@ for (const entityModule of ['notes', 'tasks'] as const) {
       page,
     }) => {
       await loginAs(page, locale);
-      await page.goto(`/${entityModule}?view=all`);
+      await gotoReady(page, `/${entityModule}?view=all`);
       const input = page.getByRole('textbox', { name: label, exact: true });
       await expect(input).toHaveAttribute('placeholder', label);
       const phrase = `zzqx-${crypto.randomUUID()}`;

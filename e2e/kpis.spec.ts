@@ -3,9 +3,10 @@ import { test, expect } from './fixtures/test';
 import { loginAs } from './fixtures/auth';
 import en from '../src/core/i18n/messages/en.json' with { type: 'json' };
 import ar from '../src/core/i18n/messages/ar.json' with { type: 'json' };
+import { gotoReady, reloadReady } from './fixtures/ready';
 const quarterOfMonth = (month: number) => Math.floor(month / 3) + 1;
 async function createKpi(page: Page, m: typeof en, name: string) {
-  await page.goto(`/kpis?view=all&q=${encodeURIComponent(name)}`);
+  await gotoReady(page, `/kpis?view=all&q=${encodeURIComponent(name)}`);
   await page.getByRole('button', { name: m.common.create, exact: true }).click();
   await page.getByLabel(m.kpis.name, { exact: true }).fill(name);
   // The unit is a closed list, so it is chosen rather than typed (KPIS-B08).
@@ -78,10 +79,10 @@ for (const locale of ['en', 'ar']) {
     // A reading without a target is measured against nothing, and the page says which.
     await expect(detail.getByText(m.kpis.no_target, { exact: true }).first()).toBeVisible();
     await setTarget(page, id, 100);
-    await page.reload();
+    await reloadReady(page);
     const panel = page.locator('aside.entity-detail');
     await expect(panel.getByText(m.kpis.near_target, { exact: true }).first()).toBeVisible();
-    await page.goto(`/kpis?view=near_target&q=${encodeURIComponent(name)}`);
+    await gotoReady(page, `/kpis?view=near_target&q=${encodeURIComponent(name)}`);
     await expect(page.getByText(name, { exact: true })).toBeVisible();
   });
   test(`KPIS-A04 a future reading is flagged and leaves the current value alone ${locale}`, async ({
@@ -97,7 +98,7 @@ for (const locale of ['en', 'ar']) {
       new Date(Date.now() + 60 * 86400000).toISOString().slice(0, 10),
       999,
     );
-    await page.reload();
+    await reloadReady(page);
     const panel = page.locator('aside.entity-detail');
     // The record answers with the reading that has happened, not the one dated ahead of today. The
     // unit belongs to the reader's language, so the figure is asserted the way the catalog writes
@@ -121,10 +122,10 @@ test('KPIS-A06 changing the workspace thresholds changes statuses across the lis
   const { id } = await createKpi(page, en, name);
   await addReading(page, id, today(), 90);
   await setTarget(page, id, 100);
-  await page.goto(`/kpis?view=near_target&q=${encodeURIComponent(name)}`);
+  await gotoReady(page, `/kpis?view=near_target&q=${encodeURIComponent(name)}`);
   await expect(page.getByText(name, { exact: true })).toBeVisible();
   await setThresholds(page, '{"higher":{"on":0.9,"near":0.5},"lower":{"on":1.01,"near":1.18}}');
-  await page.goto(`/kpis?view=on_target&q=${encodeURIComponent(name)}`);
+  await gotoReady(page, `/kpis?view=on_target&q=${encodeURIComponent(name)}`);
   await expect(page.getByText(name, { exact: true })).toBeVisible();
   await setThresholds(page, '{"higher":{"on":0.99,"near":0.85},"lower":{"on":1.01,"near":1.18}}');
 });
@@ -172,7 +173,7 @@ test('KPIS-B26 EP-B28 the period toggle is a compact group centred over the list
   await loginAs(page, 'en');
   const name = `KPI ${crypto.randomUUID()}`;
   await createByApi(page, name, 'points');
-  await page.goto(`/kpis?view=all&q=${encodeURIComponent(name)}`);
+  await gotoReady(page, `/kpis?view=all&q=${encodeURIComponent(name)}`);
   const group = page.getByRole('group', { name: en.kpis.measuredAgainst, exact: true });
   await expect(group.getByRole('button')).toHaveText([
     en.kpis.comparePrevious,
@@ -214,11 +215,11 @@ test('KPIS-B28 a percent KPI writes % on its value', async ({ page }) => {
   const id = await createByApi(page, name, 'percent');
   await addReading(page, id, today(), 55);
   await setTarget(page, id, 80);
-  await page.goto(`/kpis?view=all&q=${encodeURIComponent(name)}`);
+  await gotoReady(page, `/kpis?view=all&q=${encodeURIComponent(name)}`);
   const tile = page.getByRole('listitem').filter({ hasText: name }).first();
   await expect(tile).toContainText('55%');
   await expect(tile).toContainText('80%');
-  await page.goto(`/kpis?view=all&id=${id}`);
+  await gotoReady(page, `/kpis?view=all&id=${id}`);
   await expect(page.locator('aside.entity-detail').getByText('55%').first()).toBeVisible();
 });
 test('KPIS-B27 the move buttons reorder a KPI and the order is kept', async ({ page }) => {
@@ -236,7 +237,7 @@ test('KPIS-B27 the move buttons reorder a KPI and the order is kept', async ({ p
       },
       [first, second],
     );
-  await page.goto(`/kpis?view=all&q=${encodeURIComponent(prefix)}`);
+  await gotoReady(page, `/kpis?view=all&q=${encodeURIComponent(prefix)}`);
   await expect(page.getByText(second, { exact: true }).first()).toBeVisible();
   expect(await order()).toBe('first-second');
   const earlier = page.getByRole('button', {
@@ -249,7 +250,7 @@ test('KPIS-B27 the move buttons reorder a KPI and the order is kept', async ({ p
     .click();
   await expect(page.getByText(en.common.orderSaved, { exact: true }).last()).toBeVisible();
   expect(await order()).toBe('second-first');
-  await page.reload();
+  await reloadReady(page);
   await expect(page.getByText(second, { exact: true }).first()).toBeVisible();
   expect(await order()).toBe('second-first');
 });

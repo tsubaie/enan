@@ -7,6 +7,7 @@ import { fill } from './fixtures/messages';
 import en from '../src/core/i18n/messages/en.json' with { type: 'json' };
 import ar from '../src/core/i18n/messages/ar.json' with { type: 'json' };
 import { personDraft } from '../src/modules/people/schema/validation';
+import { gotoReady } from './fixtures/ready';
 type Body = { data?: { id: string; revision: number } };
 const created = new WeakMap<Page, { resource: string; id: string }[]>();
 test.beforeEach(({ page }) => {
@@ -68,7 +69,7 @@ test('NOTES-B02 EP-B20 notes are separated full-width rows that still open detai
   const title = `Horizontal card ${Date.now()}`;
   const first = await note(page, `${title} one`, { tags: ['Budget', 'Risk'] });
   const second = await note(page, `${title} two`);
-  await page.goto(`/notes?view=all&q=${encodeURIComponent(title)}`);
+  await gotoReady(page, `/notes?view=all&q=${encodeURIComponent(title)}`);
   for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 900 });
     const one = page.locator(`[data-row-id="${first.id}"]`).locator('..');
@@ -97,7 +98,7 @@ for (const locale of ['en', 'ar']) {
   }) => {
     await loginAs(page, locale);
     const title = `Note ${crypto.randomUUID()}`;
-    await page.goto(`/notes?view=all&q=${encodeURIComponent(title)}`);
+    await gotoReady(page, `/notes?view=all&q=${encodeURIComponent(title)}`);
     await page.getByRole('button', { name: m.common.create, exact: true }).click();
     await page.getByLabel(m.notes.title, { exact: true }).fill(title);
     await page.getByRole('button', { name: m.common.create, exact: true }).last().click();
@@ -117,7 +118,7 @@ for (const locale of ['en', 'ar']) {
     await expect(
       detail(page).getByText(fill(m.notes.taskCountsShort, { open: 0, done: 1 })),
     ).toBeVisible();
-    await page.goto(`/notes?view=all&q=${encodeURIComponent(title)}`);
+    await gotoReady(page, `/notes?view=all&q=${encodeURIComponent(title)}`);
     await expect(rows(page)).toHaveCount(1);
     await expect(page.getByText(m.notes.today, { exact: true }).first()).toBeVisible();
     // Below 1024 px the card leaves the task count to the record (EP-B20), checked above.
@@ -135,7 +136,7 @@ test('NOTES-A02 NOTES-B08 a mention adds a participant, "Add name" creates anoth
   const known = (await api(page, 'people', '', 'POST', personDraft(`Known ${crypto.randomUUID()}`)))
     .body.data;
   const created = await note(page, title);
-  await page.goto(`/notes?view=all&q=${encodeURIComponent(title)}&id=${created.id}`);
+  await gotoReady(page, `/notes?view=all&q=${encodeURIComponent(title)}&id=${created.id}`);
   const content = detail(page).getByLabel(en.notes.content, { exact: true });
   await content.fill(`Met @${known.fullName.slice(0, 9)}`);
   await content.press('End');
@@ -157,14 +158,14 @@ test('NOTES-A02 NOTES-B08 a mention adds a participant, "Add name" creates anoth
   await expect(
     detail(page).getByRole('button', { name: en.notes.content, exact: true }),
   ).toBeVisible();
-  await page.goto(`/notes?view=all&q=${encodeURIComponent(title)}`);
+  await gotoReady(page, `/notes?view=all&q=${encodeURIComponent(title)}`);
   await expect(rows(page)).toHaveCount(1);
   await rows(page).first().click();
   await expect(detail(page).getByRole('link', { name: fresh })).toBeVisible();
   const person = (await api(page, 'people', `?view=all&q=${encodeURIComponent(fresh)}`)).body
     .data[0];
   expect(person.isAssignable).toBe(false);
-  await page.goto(`/people?view=all&id=${person.id}`);
+  await gotoReady(page, `/people?view=all&id=${person.id}`);
   await expect(
     page.locator('aside.entity-detail').getByRole('link', { name: title }),
   ).toBeVisible();
@@ -183,14 +184,14 @@ test('NOTES-A04 attach an existing unlinked task; a task linked elsewhere is not
       sourceNoteId: second.id,
     })
   ).body.data;
-  await page.goto(`/notes?view=all&id=${first.id}`);
+  await gotoReady(page, `/notes?view=all&id=${first.id}`);
   await detail(page).getByRole('button', { name: en.notes.attachTask, exact: true }).click();
   const picker = detail(page).getByRole('combobox', { name: en.notes.attachTask });
   await picker.click();
   await expect(page.getByRole('option', { name: taken.title })).toHaveCount(0);
   await page.getByRole('option', { name: loose.title }).click();
   await expect(detail(page).getByRole('link', { name: loose.title })).toBeVisible();
-  await page.goto(`/tasks?view=all&id=${loose.id}`);
+  await gotoReady(page, `/tasks?view=all&id=${loose.id}`);
   await expect(
     page.locator('aside.entity-detail').getByRole('link', { name: first.title }),
   ).toBeVisible();
@@ -204,7 +205,7 @@ test(
     const notes = [];
     for (const suffix of ['One', 'Two', 'Three'])
       notes.push(await note(page, `${prefix} ${suffix}`));
-    await page.goto(`/notes?view=all&q=${encodeURIComponent(prefix)}`);
+    await gotoReady(page, `/notes?view=all&q=${encodeURIComponent(prefix)}`);
     await expect(rows(page)).toHaveCount(3);
     await page.getByRole('button', { name: en.common.select, exact: true }).click();
     for (const item of notes)
@@ -213,7 +214,7 @@ test(
     await page.getByRole('button', { name: en.common.confirm, exact: true }).click();
     await expect(rows(page)).toHaveCount(3);
     await expect(rows(page).first().locator('..').getByText(en.notes.archivedChip)).toBeVisible();
-    await page.goto('/notes?view=all');
+    await gotoReady(page, '/notes?view=all');
     await expect(rows(page).filter({ hasText: prefix })).toHaveCount(0);
     await selectView(page, 'en', new RegExp(en.notes.archived));
     await expect(rows(page).filter({ hasText: prefix })).toHaveCount(3);
@@ -244,7 +245,7 @@ test('NOTES-A07 NOTES-A10 trash keeps linked tasks, restore brings them back, AI
       sourceNoteId: created.id,
     })
   ).body.data;
-  await page.goto(`/notes?view=all&id=${created.id}`);
+  await gotoReady(page, `/notes?view=all&id=${created.id}`);
   await expect(detail(page).getByRole('button', { name: /refine|suggest/iu })).toHaveCount(0);
   expect((await api(page, 'notes', `/${created.id}/refine`, 'POST', { revision: 1 })).status).toBe(
     503,
@@ -258,7 +259,7 @@ test('NOTES-A07 NOTES-A10 trash keeps linked tasks, restore brings them back, AI
   await rows(page).filter({ hasText: created.title }).click();
   await expect(detail(page).getByRole('link', { name: task.title })).toBeVisible();
   await detail(page).getByRole('button', { name: en.common.restore, exact: true }).click();
-  await page.goto(`/notes?view=all&id=${created.id}`);
+  await gotoReady(page, `/notes?view=all&id=${created.id}`);
   await expect(detail(page).getByRole('link', { name: task.title })).toBeVisible();
   expect((await api(page, 'tasks', `/${task.id}`)).body.data.sourceNote.id).toBe(created.id);
 });
@@ -274,10 +275,10 @@ test('NOTES-A08 NOTES-A09 Arabic search finds normalized content, a tag and a pa
     participantIds: [person.id],
   });
   for (const q of [`اعداد الميزانية ${marker}`, `متابعة${marker}`, `سامر ${marker}`]) {
-    await page.goto(`/notes?view=all&q=${encodeURIComponent(q)}`);
+    await gotoReady(page, `/notes?view=all&q=${encodeURIComponent(q)}`);
     await expect(rows(page)).toHaveCount(1);
   }
-  await page.goto(`/notes?view=all&id=${created.id}`);
+  await gotoReady(page, `/notes?view=all&id=${created.id}`);
   const heading = detail(page).getByRole('heading', { name: 'جدول الأعمال' });
   await expect(heading).toBeVisible();
   expect(await heading.evaluate((element) => getComputedStyle(element).direction)).toBe('rtl');
@@ -291,7 +292,7 @@ for (const locale of ['en', 'ar'] as const)
     await loginAs(page, locale);
     const messages = locale === 'ar' ? ar : en;
     const created = await note(page, `Direction ${crypto.randomUUID()}`);
-    await page.goto(`/notes?view=all&id=${created.id}`);
+    await gotoReady(page, `/notes?view=all&id=${created.id}`);
     const content = detail(page).getByLabel(messages.notes.content, { exact: true });
     const side = () =>
       content.evaluate((element) => (element.matches(':dir(rtl)') ? 'rtl' : 'ltr'));
@@ -318,10 +319,10 @@ test('NOTES-A11 HOME-B01 home lists recent notes and collapses the section when 
   await loginAs(page, 'en');
   const title = `Recent ${crypto.randomUUID()}`;
   const created = await note(page, title);
-  await page.goto('/home');
+  await gotoReady(page, '/home');
   await expect(page.getByRole('link', { name: title })).toBeVisible();
   await api(page, 'notes', `/${created.id}/archive`, 'POST', { revision: created.revision });
-  await page.goto('/home');
+  await gotoReady(page, '/home');
   await expect(page.getByRole('link', { name: title })).toHaveCount(0);
   // With no other recent note the section has no tile and is named in the quiet line instead
   // (HOME-B02); with others it keeps its tile. Either way it is accounted for on the page.
@@ -334,7 +335,7 @@ test('NOTES-A12 NOTES-B20 ADMIN-B08 an administrator adds a note type and makes 
 }) => {
   await loginAs(page, 'en');
   const id = `sync_${crypto.randomUUID().slice(0, 6)}`;
-  await page.goto('/admin/notes');
+  await gotoReady(page, '/admin/notes');
   await page.getByLabel(en.admin.typeId, { exact: true }).fill(id);
   await page.getByLabel(en.admin.labelEn, { exact: true }).fill('Sync meeting');
   await page.getByLabel(en.admin.labelAr, { exact: true }).fill('اجتماع تزامن');
@@ -343,7 +344,7 @@ test('NOTES-A12 NOTES-B20 ADMIN-B08 an administrator adds a note type and makes 
   await page.getByRole('button', { name: en.common.save, exact: true }).click();
   await expect(page.getByRole('status')).toContainText(en.common.saved);
   try {
-    await page.goto('/notes?view=all');
+    await gotoReady(page, '/notes?view=all');
     await selectView(page, 'en', /Sync meeting/);
     await expect(page).toHaveURL(new RegExp(`view=type%3A${id}`));
     // The new type's view is empty, and an empty list offers its own Create beside the toolbar's;
@@ -375,7 +376,7 @@ test('NOTES-A13 NOTES-B27 ADMIN-B30 a note created from the Meeting template ope
 }) => {
   await loginAs(page, 'en');
   const title = `Template ${crypto.randomUUID()}`;
-  await page.goto(`/notes?view=all&q=${encodeURIComponent(title)}`);
+  await gotoReady(page, `/notes?view=all&q=${encodeURIComponent(title)}`);
   await page.getByRole('button', { name: en.common.create, exact: true }).click();
   await page.getByLabel(en.notes.title, { exact: true }).fill(title);
   await page.getByLabel(en.notes.template, { exact: true }).click();
@@ -384,7 +385,7 @@ test('NOTES-A13 NOTES-B27 ADMIN-B30 a note created from the Meeting template ope
   await expect(page).toHaveURL(/id=/);
   await expect(detail(page).getByRole('heading', { name: 'Attendees', exact: true })).toBeVisible();
   await expect(detail(page).getByRole('heading', { name: 'Decisions', exact: true })).toBeVisible();
-  await page.goto('/admin/notes');
+  await gotoReady(page, '/admin/notes');
   await expect(page.getByLabel(`${en.admin.bodyEn} meeting`, { exact: true })).toHaveValue(
     /## Attendees/,
   );
@@ -402,7 +403,7 @@ test('NOTES-A14 NOTES-B28 EP-B44 Expand opens the content in the expanded view a
     revision: created.revision,
     content: '## Agenda\n- one\n- two',
   });
-  await page.goto(`/notes?view=all&id=${created.id}`);
+  await gotoReady(page, `/notes?view=all&id=${created.id}`);
   await detail(page).getByRole('button', { name: en.common.expandContent, exact: true }).click();
   const dialog = page.getByRole('dialog', { name: title });
   await expect(dialog).toBeVisible();
@@ -474,7 +475,7 @@ test('NOTES-A15 CAPTURES-A05 an existing voice memo plays, its typed transcript 
     revision: recorded.revision,
     content: 'Agenda',
   });
-  await page.goto(`/notes?view=all&id=${recorded.id}`);
+  await gotoReady(page, `/notes?view=all&id=${recorded.id}`);
   const memo = detail(page).locator('li').filter({ hasText: 'standup.wav' });
   await expect(memo.getByText(en.notes.voiceSkipped, { exact: true })).toBeVisible();
   await expect(detail(page).locator('input[type="file"]')).toHaveCount(0);
@@ -514,7 +515,7 @@ test('NOTES-A16 CAPTURES-B07 the notes list has no record strip and the retired 
   page,
 }) => {
   await loginAs(page, 'en');
-  await page.goto('/notes?view=all');
+  await gotoReady(page, '/notes?view=all');
   await expect(page.getByRole('heading', { name: en.common.notes }).first()).toBeVisible();
   await expect(page.locator('main input[type="file"]')).toHaveCount(0);
   const note = await api(page, 'notes', '', 'POST', { title: `Retired ${crypto.randomUUID()}` });

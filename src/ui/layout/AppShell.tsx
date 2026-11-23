@@ -5,6 +5,7 @@ import { ShellLinks } from './ShellLinks';
 import { MobileNav } from './MobileNav';
 import { Logo } from './Logo';
 import { ShellHeader } from './ShellHeader';
+import { HydrationMark } from './HydrationMark';
 import { routes } from '@/core/routes';
 import { CaptureFab, CaptureHost } from '@/modules/captures/ui';
 type ShellUser = { id: string; name: string; email: string; role: string };
@@ -43,6 +44,8 @@ export function AppShell({
           page's committee from the address, which needs a boundary of its own. */}
       <Suspense fallback={null}>
         <CaptureHost />
+        {/* ADR 0072: this boundary hydrates on its own, so it has its own readiness mark. */}
+        <HydrationMark part="shell" />
       </Suspense>
       <CaptureFab />
       <nav className="mobile-navigation fixed inset-x-3 bottom-[var(--mobile-nav-bottom)] z-30 flex gap-0.5 rounded-[28px] border p-1 lg:hidden">

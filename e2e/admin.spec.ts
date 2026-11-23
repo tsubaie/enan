@@ -1,6 +1,7 @@
 import type { Browser, Page } from '@playwright/test';
 import { z } from 'zod';
 import { test, expect } from './fixtures/test';
+import { gotoReady, reloadReady } from './fixtures/ready';
 import { laneBaseURL } from './lanes';
 import { loginAs } from './fixtures/auth';
 import en from '../src/core/i18n/messages/en.json' with { type: 'json' };
@@ -59,7 +60,7 @@ test('ADMIN-B40 @desktop the rail lists the overview, then settings, AI, members
   page,
 }) => {
   await loginAs(page, 'en');
-  await page.goto('/admin');
+  await gotoReady(page, '/admin');
   await expect(page.getByRole('heading', { level: 1, name: en.common.admin })).toBeVisible();
   const links = rail(page).getByRole('link');
   await expect(links).toHaveText([en.admin.overview, ...pages.map((name) => en.admin[name])]);
@@ -85,7 +86,7 @@ test('ADMIN-B39 ADMIN-B40 the overview links every administration page, in the r
   page,
 }) => {
   await loginAs(page, 'en');
-  await page.goto('/admin');
+  await gotoReady(page, '/admin');
   const index = page.locator('section[aria-labelledby^="admin-index-"]');
   await expect(index).toHaveCount(3);
   const hrefs = await index
@@ -93,7 +94,7 @@ test('ADMIN-B39 ADMIN-B40 the overview links every administration page, in the r
     .evaluateAll((anchors) => anchors.map((anchor) => anchor.getAttribute('href')));
   expect(hrefs).toEqual(pages.map((name) => `/admin/${name}`));
   for (const name of ['settings', 'audit'] as const) {
-    await page.goto('/admin');
+    await gotoReady(page, '/admin');
     // During the page transition the outgoing page can still hold its own overview; wait until
     // only the new one is there.
     await expect(index).toHaveCount(3);
@@ -107,7 +108,7 @@ test('ADMIN-B40 on a phone the overview is the index and every page links back t
   page,
 }) => {
   await loginAs(page, 'en');
-  await page.goto('/admin');
+  await gotoReady(page, '/admin');
   // No rail below lg: the overview's index is the navigation.
   await expect(rail(page)).toBeHidden();
   const link = page.locator('section[aria-labelledby^="admin-index-"] a[href="/admin/backups"]');
@@ -133,7 +134,7 @@ test('ADMIN-B07 @desktop renaming the workspace updates the name beside the logo
   const name = `Office ${crypto.randomUUID().slice(0, 8)}`;
   const brand = page.locator('aside.app-sidebar a[href="/home"]').first();
   try {
-    await page.goto('/admin/settings');
+    await gotoReady(page, '/admin/settings');
     await expect(brand).toHaveText(String(before.value));
     // A marker on the window survives a re-render and not a reload.
     await page.evaluate(() => ((window as Window & { kept?: boolean }).kept = true));
@@ -163,7 +164,7 @@ test('ADMIN-B07 ADMIN-B48 the numerals switch re-renders the page in the chosen 
   const field = page.getByLabel(en.admin.settingsTrashDays, { exact: true });
   try {
     await restore(page, 'workspace.arabic_numerals', false);
-    await page.goto('/admin/settings');
+    await gotoReady(page, '/admin/settings');
     const numerals = page.getByRole('group', { name: en.admin.settingsNumerals, exact: true });
     await expect(numerals.getByRole('button', { name: '123' })).toHaveAttribute(
       'aria-pressed',
@@ -214,7 +215,7 @@ test('ADMIN-B48 each retention row says 0 means never, accepts 0 and says so in 
   const before = await Promise.all(retention.map((row) => setting(page, row.key)));
   try {
     for (const row of retention) await restore(page, row.key, 5);
-    await page.goto('/admin/settings');
+    await gotoReady(page, '/admin/settings');
     for (const row of retention) {
       const field = page.getByLabel(row.label, { exact: true });
       const unit = field.locator('xpath=following-sibling::span[1]');
@@ -237,7 +238,7 @@ test('ADMIN-B48 each retention row says 0 means never, accepts 0 and says so in 
       await expect(field).toHaveValue('0');
       expect((await setting(page, row.key)).value).toBe(0);
     }
-    await page.reload();
+    await reloadReady(page);
     for (const row of retention) {
       await expect(page.getByLabel(row.label, { exact: true })).toHaveValue('0');
       await expect(page.getByText(row.never, { exact: true }).first()).toBeVisible();
@@ -256,7 +257,7 @@ test('ADMIN-B45 ADMIN-B10 ADMIN-B26 the monthly AI limit is typed in dollars, sa
   const controls = async () => (await api(page, '/admin/ai/controls')).body.data as Controls;
   const before = await controls();
   try {
-    await page.goto('/admin/ai');
+    await gotoReady(page, '/admin/ai');
     await expect(page.getByRole('heading', { name: en.admin.aiFeatures })).toBeVisible();
     const field = page.getByLabel(en.admin.aiLimit, { exact: true });
     await expect(field.locator('xpath=following-sibling::span[1]')).toHaveText(
@@ -269,7 +270,7 @@ test('ADMIN-B45 ADMIN-B10 ADMIN-B26 the monthly AI limit is typed in dollars, sa
     await field.press('Tab');
     await expect(savedToast(page)).toBeVisible();
     await expect.poll(async () => (await controls()).monthlyBudgetMicros).toBe(12_340_000);
-    await page.reload();
+    await reloadReady(page);
     await expect(page.getByLabel(en.admin.aiLimit, { exact: true })).toHaveValue('12.34');
     await page.getByLabel(en.admin.aiLimit, { exact: true }).fill('');
     // Blank is no limit: the save goes through like any other.
@@ -280,7 +281,7 @@ test('ADMIN-B45 ADMIN-B10 ADMIN-B26 the monthly AI limit is typed in dollars, sa
     await page.getByLabel(en.admin.aiLimit, { exact: true }).press('Tab');
     expect((await cleared).status()).toBe(200);
     await expect.poll(async () => (await controls()).monthlyBudgetMicros).toBeNull();
-    await page.reload();
+    await reloadReady(page);
     await expect(page.getByLabel(en.admin.aiLimit, { exact: true })).toHaveValue('');
   } finally {
     const now = await controls();
@@ -333,7 +334,7 @@ test('ADMIN-B12 ADMIN-B44 ADMIN-B46 ADMIN-B41 a backup is created with its progr
   await loginAs(page, 'en');
   const list = async () => Backups.parse((await api(page, '/admin/backups')).body);
   const before = await list();
-  await page.goto('/admin/backups');
+  await gotoReady(page, '/admin/backups');
   // ADMIN-B41: no server command, a calm notice.
   const restore = page.getByRole('region', { name: en.admin.restoreTitle });
   await expect(restore.getByText(en.admin.restoreSoon, { exact: true })).toBeVisible();
@@ -403,7 +404,7 @@ test('ADMIN-B43 a settings change reads in the audit log as words, not as raw ke
   const days = before.value === 41 ? 42 : 41;
   try {
     await restore(page, 'retention.trash_days', days);
-    await page.goto('/admin/audit');
+    await gotoReady(page, '/admin/audit');
     const today = page.getByRole('region', { name: en.admin.auditToday, exact: true });
     const entry = today.getByRole('listitem').filter({
       hasText: en.admin.auditEvent
@@ -425,7 +426,7 @@ test('ADMIN-B60 ADMIN-B61 a mail server saved on the Email page keeps its passwo
   page,
 }) => {
   await loginAs(page, 'en');
-  await page.goto('/admin/mail');
+  await gotoReady(page, '/admin/mail');
   await expect(page.getByRole('heading', { level: 1, name: en.admin.mail })).toBeVisible();
   // A port nothing listens on: the real client is refused, so the page must name the cause.
   await page.getByLabel(en.admin.mailHost).fill('127.0.0.1');
@@ -452,7 +453,7 @@ test('ADMIN-B64 ADMIN-B63 the workspace offers an emailed code once mail is set 
   browser,
 }) => {
   await loginAs(page, 'en');
-  await page.goto('/admin/signin');
+  await gotoReady(page, '/admin/signin');
   const box = (name: string) => page.getByRole('checkbox', { name });
   await expect(page.getByRole('link', { name: en.admin.signInNeedsMail })).toBeVisible();
   await expect(box(en.admin.signInMethod_code)).toBeDisabled();
@@ -465,7 +466,7 @@ test('ADMIN-B64 ADMIN-B63 the workspace offers an emailed code once mail is set 
     fromAddress: 'office@example.test',
   });
   expect(saved.status).toBe(200);
-  await page.reload();
+  await reloadReady(page);
   await expect(box(en.admin.signInMethod_code)).toBeChecked();
   const visitor = await browser.newContext({ baseURL: laneBaseURL() });
   await visitor.addCookies([{ name: 'eos_locale', value: 'en', url: laneBaseURL() }]);
@@ -502,7 +503,7 @@ test('ADMIN-B65 ADMIN-B66 a Google client saved on the Sign-in page puts Continu
   browser,
 }) => {
   await loginAs(page, 'en');
-  await page.goto('/admin/signin');
+  await gotoReady(page, '/admin/signin');
   await expect(page.getByText('/api/auth/callback/google')).toBeVisible();
   await page.getByLabel(en.admin.googleClientId).fill('1234-e2e.apps.googleusercontent.com');
   await page.getByLabel(en.admin.googleClientSecret).fill('e2e-google-secret');

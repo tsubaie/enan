@@ -2,6 +2,7 @@ import { test, expect } from './fixtures/test';
 import { loginAs } from './fixtures/auth';
 import en from '../src/core/i18n/messages/en.json' with { type: 'json' };
 import ar from '../src/core/i18n/messages/ar.json' with { type: 'json' };
+import { gotoReady, reloadReady } from './fixtures/ready';
 
 // ADMIN-B19: the phone bar carries four destinations and a door to the rest. It used to draw
 // every entry — seven 44 px slots at zero gap with labels running to 84 px — so the names
@@ -16,7 +17,7 @@ for (const locale of ['en', 'ar'] as const) {
       const m = locale === 'ar' ? ar : en;
       await loginAs(page, locale);
       await page.setViewportSize({ width, height: 844 });
-      await page.goto('/home');
+      await gotoReady(page, '/home');
       const bar = page.locator('.mobile-navigation');
       await expect(bar).toBeVisible();
 
@@ -73,7 +74,7 @@ test('ACCT-B04 the header language toggle reloads the page in the other language
   };
   await loginAs(page, 'en');
   try {
-    await page.goto('/home');
+    await gotoReady(page, '/home');
     await reveal(en);
     await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
@@ -131,7 +132,7 @@ test('ADMIN-B19 the floating bottom bar never covers the last item of a list @mo
   page,
 }) => {
   await loginAs(page, 'en');
-  await page.goto('/admin');
+  await gotoReady(page, '/admin');
   const last = page.locator('section[aria-labelledby^="admin-index-"] a').last();
   await expect(last).toHaveAttribute('href', '/admin/audit');
   // Scroll every scrolling ancestor, and the window, to its end, and measure. The page can still
@@ -152,4 +153,79 @@ test('ADMIN-B19 the floating bottom bar never covers the last item of a list @mo
   await last.click({ trial: true });
   await last.click();
   await expect(page).toHaveURL(/\/admin\/audit$/u);
+});
+
+// ADR 0072: a page streams in behind a Suspense boundary and is parked in a hidden
+// `body > div[id^="S:"]` until React reveals it. If anything above it changes before it hydrates,
+// React renders the page again on the client and the parked copy is never revealed, so every
+// lookup on the page finds two of everything (#164). It went wrong only under a light system
+// scheme, so both are checked, on Review and two other streamed pages.
+for (const scheme of ['light', 'dark'] as const) {
+  test(`ACCT-B04 no streamed page is left parked after it hydrates, on Review, Tasks and Notes (${scheme} system)`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await loginAs(page, 'en');
+    for (const path of ['/captures', '/tasks', '/notes']) {
+      await gotoReady(page, path);
+      await page.waitForLoadState('networkidle');
+      await expect(page.locator('main#content')).toHaveCount(1);
+      // A parked copy carries the page's heading too, so the page has exactly one.
+      await expect(page.locator('h1')).toHaveCount(1);
+      await expect(page.locator('body > div[hidden][id^="S:"]')).toHaveCount(0);
+    }
+  });
+}
+
+// ACCT-B04: the theme is the reader's choice, read on the server for every page. Chosen on the
+// account page it takes effect at once (the page reloads). The system's colour scheme does not
+// change it, neither while the page is open nor on the next load.
+test('ACCT-B04 the theme chosen on the account page takes effect at once, and a change of the system scheme leaves it', async ({
+  page,
+}) => {
+  const html = page.locator('html');
+  const scheme = () => page.evaluate(() => getComputedStyle(document.documentElement).colorScheme);
+  const control = page.getByRole('combobox', { name: en.account.theme, exact: true });
+  const choose = async (name: string) => {
+    await control.click();
+    await Promise.all([
+      page.waitForEvent('load'),
+      page.getByRole('option', { name, exact: true }).click(),
+    ]);
+  };
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await loginAs(page, 'en');
+  try {
+    await gotoReady(page, '/account');
+    await expect(html).toHaveClass(/\bdark\b/u);
+    await choose(en.account.light);
+    await expect(html).toHaveClass(/\blight\b/u);
+    await expect(html).not.toHaveClass(/\bdark\b/u);
+    expect(await scheme()).toBe('light');
+    // The system switches under the open page, both ways: the reader's theme stays.
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await expect(html).toHaveClass(/\blight\b/u);
+    await reloadReady(page);
+    await expect(html).toHaveClass(/\blight\b/u);
+    expect(await scheme()).toBe('light');
+    await expect(page.locator('body > div[hidden][id^="S:"]')).toHaveCount(0);
+    await choose(en.account.dark);
+    await expect(html).toHaveClass(/\bdark\b/u);
+    await expect(html).not.toHaveClass(/\blight\b/u);
+    expect(await scheme()).toBe('dark');
+  } finally {
+    await page.evaluate(async () => {
+      const headers = {
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'Enan',
+      };
+      const account = await (await fetch('/api/v1/account', { headers })).json();
+      await fetch('/api/v1/account', {
+        method: 'PATCH',
+        headers: { ...headers, 'Idempotency-Key': crypto.randomUUID() },
+        body: JSON.stringify({ revision: account.data.user.revision, theme: '' }),
+      });
+    });
+  }
 });

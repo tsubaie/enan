@@ -2,6 +2,7 @@ import { test, expect } from './fixtures/test';
 import { loginAs } from './fixtures/auth';
 import en from '../src/core/i18n/messages/en.json' with { type: 'json' };
 import ar from '../src/core/i18n/messages/ar.json' with { type: 'json' };
+import { gotoReady } from './fixtures/ready';
 
 for (const locale of ['en', 'ar']) {
   const m = locale === 'ar' ? ar : en;
@@ -10,7 +11,7 @@ for (const locale of ['en', 'ar']) {
   }) => {
     await loginAs(page, locale);
     const name = `Committee ${crypto.randomUUID()}`;
-    await page.goto(`/committees?view=all&q=${encodeURIComponent(name)}`);
+    await gotoReady(page, `/committees?view=all&q=${encodeURIComponent(name)}`);
     await page.getByRole('button', { name: m.common.create, exact: true }).click();
     await page.getByLabel(m.committees.name, { exact: true }).fill(name);
     await page.getByRole('button', { name: m.common.create, exact: true }).last().click();
@@ -26,7 +27,7 @@ for (const locale of ['en', 'ar']) {
     await expect(dialog.getByLabel(m.committees.committee, { exact: true })).toContainText(name);
     await dialog.getByRole('button', { name: m.common.create, exact: true }).click();
     await expect(dialog.getByRole('heading', { name: title, exact: true })).toBeVisible();
-    await page.goto(`/tasks?view=all&committeeId=${committeeId}`);
+    await gotoReady(page, `/tasks?view=all&committeeId=${committeeId}`);
     await expect(page.getByText(title, { exact: true })).toBeVisible();
     // The task's card names its committee as one of its facts (outside the committee's own list);
     // below 1024 px the card leaves it to the record.
@@ -34,7 +35,7 @@ for (const locale of ['en', 'ar']) {
       await expect(
         page.getByRole('listitem').filter({ hasText: title }).getByText(name, { exact: true }),
       ).toBeVisible();
-    await page.goto(`/committees?view=all&q=${encodeURIComponent(name)}`);
+    await gotoReady(page, `/committees?view=all&q=${encodeURIComponent(name)}`);
     await page.getByRole('button', { name: m.common.create, exact: true }).click();
     await page.getByLabel(m.committees.name, { exact: true }).fill(name);
     await page.getByRole('button', { name: m.common.create, exact: true }).last().click();

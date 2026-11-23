@@ -3,6 +3,7 @@ import { test, expect } from './fixtures/test';
 import { loginAs } from './fixtures/auth';
 import en from '../src/core/i18n/messages/en.json' with { type: 'json' };
 import ar from '../src/core/i18n/messages/ar.json' with { type: 'json' };
+import { gotoReady } from './fixtures/ready';
 // The catalogs hold ICU messages; the scenarios need the rendered string.
 const fill = (message: string, values: Record<string, string>) =>
   message.replace(/\{(\w+)\}/gu, (_, key: string) => values[key] ?? '');
@@ -76,7 +77,7 @@ for (const locale of ['en', 'ar'] as const) {
     page,
   }) => {
     await loginAs(page, locale);
-    await page.goto('/home');
+    await gotoReady(page, '/home');
     const launcher = page.getByRole('button', { name: m.common.searchWorkspace, exact: true });
     const palette = page.getByRole('dialog');
     await page.setViewportSize({ width: 1280, height: 900 });
@@ -103,10 +104,10 @@ for (const locale of ['en', 'ar'] as const) {
   }) => {
     await loginAs(page, locale);
     const title = `Hand-off ${crypto.randomUUID()}`;
-    await page.goto('/tasks?view=all');
+    await gotoReady(page, '/tasks?view=all');
     const task = await createTask(page, title);
     try {
-      await page.goto('/home');
+      await gotoReady(page, '/home');
       await page.keyboard.press('Control+k');
       const palette = page.getByRole('dialog');
       await palette.getByRole('searchbox', { name: m.common.search }).fill(title);
@@ -117,7 +118,7 @@ for (const locale of ['en', 'ar'] as const) {
         }),
       ).toHaveCount(0);
       await page.keyboard.press('Escape');
-      await page.goto('/tasks?view=all');
+      await gotoReady(page, '/tasks?view=all');
       await page.keyboard.press('Control+k');
       await palette.getByRole('searchbox', { name: m.common.search }).fill(title);
       await palette
@@ -148,7 +149,7 @@ for (const locale of ['en', 'ar'] as const) {
     const task = await createTask(page, `Task ${token}`);
     const note = await createNote(page, `Note ${crypto.randomUUID()}`, `Body mentions ${token}.`);
     try {
-      await page.goto('/home');
+      await gotoReady(page, '/home');
       await page.keyboard.press('Control+k');
       const palette = page.getByRole('dialog');
       await palette.getByRole('searchbox', { name: m.common.search }).fill(token);
@@ -179,7 +180,7 @@ for (const locale of ['en', 'ar'] as const) {
     await loginAs(page, locale);
     const token = phrase();
     const task = await createTask(page, `Trashed ${token}`);
-    await page.goto('/home');
+    await gotoReady(page, '/home');
     const launcher = page.getByRole('button', { name: m.common.searchWorkspace, exact: true });
     const palette = page.getByRole('dialog');
     const field = palette.getByRole('searchbox', { name: m.common.search });
@@ -191,7 +192,7 @@ for (const locale of ['en', 'ar'] as const) {
     await trashTask(page, task);
     // A fresh document: the palette keeps an answer for thirty seconds, and the question here is
     // what the server says about a trashed record, not what the cache remembers.
-    await page.goto('/home');
+    await gotoReady(page, '/home');
     await launcher.click();
     await field.fill(token);
     await expect(palette.getByText(m.common.searchEmpty, { exact: true })).toBeVisible();
@@ -207,7 +208,7 @@ test('SEARCH-A02 SEARCH-B01 an Arabic query without diacritics finds the record 
   const token = phrase();
   const task = await createTask(page, `مُراجَعَة الميزانيّة ${token}`);
   try {
-    await page.goto('/home');
+    await gotoReady(page, '/home');
     await page.getByRole('button', { name: ar.common.searchWorkspace, exact: true }).click();
     const palette = page.getByRole('dialog');
     await palette
@@ -231,7 +232,7 @@ test('SEARCH-B08 the chord and the header control open the palette without touch
   const token = phrase();
   const task = await createTask(page, `Opened ${token}`);
   try {
-    await page.goto('/tasks?view=all');
+    await gotoReady(page, '/tasks?view=all');
     const before = page.url();
     const palette = page.getByRole('dialog');
     await page.keyboard.press('Control+k');

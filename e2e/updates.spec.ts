@@ -3,6 +3,7 @@ import { loginAs } from './fixtures/auth';
 import { commandsLeft, commandsSent, updaterWrote } from './fixtures/updater';
 import en from '../src/core/i18n/messages/en.json' with { type: 'json' };
 import ar from '../src/core/i18n/messages/ar.json' with { type: 'json' };
+import { gotoReady } from './fixtures/ready';
 
 // ADMIN-B57, ADMIN-B58, ADMIN-B67, ADMIN-B68: Administration → Updates against the production
 // build, with the files the updater service would have written (its own behaviour is tested in
@@ -41,7 +42,7 @@ for (const locale of ['en', 'ar'] as const) {
   }) => {
     await updaterWrote(null);
     await loginAs(page, locale);
-    await page.goto('/admin/updates');
+    await gotoReady(page, '/admin/updates');
     await expect(page.getByRole('heading', { name: m.admin.updaterNotRunning })).toBeVisible();
     await expect(page.getByText('docker compose up -d updater')).toBeVisible();
     await expect(page.getByRole('button', { name: m.admin.updateCheckNow })).toHaveCount(0);
@@ -52,7 +53,7 @@ for (const locale of ['en', 'ar'] as const) {
   }) => {
     await updaterWrote(rolledBack, [rolledBack]);
     await loginAs(page, locale);
-    await page.goto('/admin/updates');
+    await gotoReady(page, '/admin/updates');
     await expect(
       page.getByRole('heading', { name: m.admin.updateOutcomeRolledBack }),
     ).toBeVisible();
@@ -74,7 +75,7 @@ for (const locale of ['en', 'ar'] as const) {
       status({ state: 'available', confirm: true, candidate: { version: '2027.1.0', digest } }),
     );
     await loginAs(page, locale);
-    await page.goto('/admin/updates');
+    await gotoReady(page, '/admin/updates');
     await expect(page.getByRole('heading', { name: m.admin.updateAvailableTitle })).toBeVisible();
     await page.getByRole('button', { name: m.admin.updateInstallNow }).click();
     const dialog = page.getByRole('dialog');
@@ -90,7 +91,7 @@ for (const locale of ['en', 'ar'] as const) {
   }) => {
     await updaterWrote(status({}));
     await loginAs(page, locale);
-    await page.goto('/admin/updates');
+    await gotoReady(page, '/admin/updates');
     const toggle = page.getByRole('checkbox', { name: m.admin.updateAutomatic });
     await expect(toggle).not.toBeChecked();
     await toggle.click();

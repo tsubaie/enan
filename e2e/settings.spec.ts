@@ -4,6 +4,7 @@ import { loginAs } from './fixtures/auth';
 import { errorAlert } from './fixtures/views';
 import en from '../src/core/i18n/messages/en.json' with { type: 'json' };
 import ar from '../src/core/i18n/messages/ar.json' with { type: 'json' };
+import { gotoReady, reloadReady } from './fixtures/ready';
 // Workspace settings are shared by every spec that runs after this one, so each scenario reads the
 // value it is about to change and puts it back before it ends.
 type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
@@ -43,7 +44,7 @@ for (const locale of ['en', 'ar']) {
     const before = await setting(page, 'workspace.name');
     const name = `Office ${crypto.randomUUID().slice(0, 8)}`;
     try {
-      await page.goto('/admin/settings');
+      await gotoReady(page, '/admin/settings');
       await expect(page.getByText(m.admin.settingsDescription, { exact: true })).toBeVisible();
       // The row is named in words; the registry key is nowhere on the page.
       await expect(page.getByText('workspace.name')).toHaveCount(0);
@@ -53,7 +54,7 @@ for (const locale of ['en', 'ar']) {
       await field.press('Tab');
       await expect(saved(page, m)).toBeVisible();
       await expect.poll(async () => (await setting(page, 'workspace.name')).value).toBe(name);
-      await page.reload();
+      await reloadReady(page);
       await expect(page.getByLabel(m.admin.settingsName, { exact: true })).toHaveValue(name);
       // A row away from its default offers the way back to it, which the control then shows.
       await page
@@ -78,7 +79,7 @@ test('ADMIN-B07 ADMIN-B48 a value out of range is put back in the row and refuse
 }) => {
   await loginAs(page, 'en');
   const before = await setting(page, 'retention.trash_days');
-  await page.goto('/admin/settings');
+  await gotoReady(page, '/admin/settings');
   const field = page.getByLabel(en.admin.settingsTrashDays, { exact: true });
   await expect(field).toHaveValue(String(before.value));
   // Out of range: the row puts its value back rather than sending it.
@@ -90,7 +91,7 @@ test('ADMIN-B07 ADMIN-B48 a value out of range is put back in the row and refuse
   expect(refused.status).toBeGreaterThanOrEqual(400);
   expect(refused.status).toBeLessThan(500);
   expect((await setting(page, 'retention.trash_days')).value).toBe(before.value);
-  await page.reload();
+  await reloadReady(page);
   await expect(page.getByLabel(en.admin.settingsTrashDays, { exact: true })).toHaveValue(
     String(before.value),
   );
@@ -104,7 +105,7 @@ test('ADMIN-B07 ADMIN-B09 the thresholds are edited on Objectives as percentages
   const before = await setting(page, 'kpis.status_thresholds');
   try {
     await restore(page, 'kpis.status_thresholds', before.default);
-    await page.goto('/admin/objectives');
+    await gotoReady(page, '/admin/objectives');
     await expect(page.getByText(en.admin.settingsKpis, { exact: true })).toBeVisible();
     const on = page.getByLabel(thresholdField('thresholdHigher', en.admin.thresholdOnStart), {
       exact: true,
@@ -125,7 +126,7 @@ test('ADMIN-B07 ADMIN-B09 the thresholds are edited on Objectives as percentages
           ((await setting(page, 'kpis.status_thresholds')).value as typeof defaults).higher.on,
       )
       .toBe(0.975);
-    await page.reload();
+    await reloadReady(page);
     await expect(
       page.getByLabel(thresholdField('thresholdHigher', en.admin.thresholdOnStart), {
         exact: true,

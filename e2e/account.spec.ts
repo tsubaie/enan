@@ -1,5 +1,6 @@
 import type { Browser, Locator, Page } from '@playwright/test';
 import { test, expect } from './fixtures/test';
+import { gotoReady, reloadReady } from './fixtures/ready';
 import { laneBaseURL } from './lanes';
 import { credentials, loginAs } from './fixtures/auth';
 import { errorAlert } from './fixtures/views';
@@ -125,7 +126,7 @@ for (const locale of ['en', 'ar']) {
       // The page re-reads the account and the heading is the new name.
       await expect(page.getByRole('heading', { level: 1 })).toHaveText(name);
       // The shell identity: the avatar menu.
-      await page.goto('/home');
+      await gotoReady(page, '/home');
       await page.getByRole('button', { name: m.common.account, exact: true }).click();
       await expect(
         page.locator('[data-slot="popover-content"]').getByText(name, { exact: true }),
@@ -147,7 +148,7 @@ for (const locale of ['en', 'ar']) {
     page,
   }) => {
     await loginAs(page, locale);
-    await page.goto('/account');
+    await gotoReady(page, '/account');
     const control = (messages: typeof en) =>
       page.getByRole('combobox', { name: messages.account.locale, exact: true });
     await expect(control(m)).toContainText(m.account.workspaceDefault);
@@ -176,7 +177,7 @@ for (const locale of ['en', 'ar']) {
     expect(workspace.explicit).not.toContain('locale');
     const shown = (await page.locator('html').getAttribute('lang')) === 'ar' ? ar : en;
     await expect(control(shown)).toContainText(shown.account.workspaceDefault);
-    await page.reload();
+    await reloadReady(page);
     await expect(control(shown)).toContainText(shown.account.workspaceDefault);
   });
   test(`ACCT-A05 ACCT-B05 an account with no directory record is told so, and one with a record links to it ${locale}`, async ({
@@ -185,7 +186,7 @@ for (const locale of ['en', 'ar']) {
   }) => {
     await loginAs(page, locale);
     // The administrator was given a directory record at setup; a fresh member has none.
-    await page.goto('/account');
+    await gotoReady(page, '/account');
     await expect(page.getByText(m.account.linkedPerson, { exact: true })).toBeVisible();
     const record = page.locator('a[href^="/people?id="]');
     await expect(record).toBeVisible();
@@ -194,7 +195,7 @@ for (const locale of ['en', 'ar']) {
     const other = await secondBrowser(browser);
     try {
       expect(await tryLogin(other.page, locale, created.email, created.password)).toBe(true);
-      await other.page.goto('/account');
+      await gotoReady(other.page, '/account');
       await expect(other.page.getByText(m.account.noLinkedPerson, { exact: true })).toBeVisible();
       expect(await other.page.locator('a[href^="/people?id="]').count()).toBe(0);
     } finally {
@@ -213,7 +214,7 @@ test('ACCT-A02 ACCT-B02 the right current password keeps this session and signs 
   await loginAs(other.page, 'en');
   let changed = false;
   try {
-    await page.goto('/account');
+    await gotoReady(page, '/account');
     const current = page.getByLabel(en.account.currentPassword, { exact: true });
     const next = page.getByLabel(en.account.newPassword, { exact: true });
     const submit = page.getByRole('button', { name: en.account.changePassword, exact: true });
@@ -223,7 +224,7 @@ test('ACCT-A02 ACCT-B02 the right current password keeps this session and signs 
     await expect(errorAlert(page)).toBeVisible();
     expect(await page.getByRole('status').count()).toBe(0);
     // The other browser is still signed in: nothing changed.
-    await other.page.goto('/home');
+    await gotoReady(other.page, '/home');
     await expect(other.page).toHaveURL(/home/);
     await current.fill(admin.password);
     await next.fill(rotated(admin.password));
@@ -231,7 +232,7 @@ test('ACCT-A02 ACCT-B02 the right current password keeps this session and signs 
     await expect(page.getByRole('status')).toContainText(/Password changed/u);
     changed = true;
     // This tab survives; the other browser is sent back to the login page.
-    await page.goto('/account');
+    await gotoReady(page, '/account');
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     await other.page.goto('/home');
     await expect(other.page).toHaveURL(/login/);
@@ -324,7 +325,7 @@ for (const locale of ['en', 'ar']) {
         { width: 375, height: 667 },
       ]) {
         await page.setViewportSize(viewport);
-        await page.goto('/account');
+        await gotoReady(page, '/account');
         const rows = page.locator('span[translate="no"]', { hasText: longAgent }).locator('..');
         await expect(rows.first()).toBeVisible();
         expect(await rows.count()).toBeGreaterThanOrEqual(2);
@@ -366,7 +367,7 @@ test('ACCT-B10 ADMIN-B76 a member adds a passkey with their password, signs in w
       methods: [...chosen.filter((method) => method !== 'passkey'), 'passkey'],
     });
     expect(on.status).toBe(200);
-    await page.goto('/admin/signin');
+    await gotoReady(page, '/admin/signin');
     await expect(
       page.getByRole('link', { name: en.admin.signInPasskeyAccountLink }),
     ).toHaveAttribute('href', '/account#passkeys');
@@ -383,7 +384,7 @@ test('ACCT-B10 ADMIN-B76 a member adds a passkey with their password, signs in w
       },
     });
     expect(await tryLogin(other.page, 'en', reader.email, reader.password)).toBe(true);
-    await other.page.goto('/account');
+    await gotoReady(other.page, '/account');
     await other.page.getByRole('button', { name: en.account.passkeyAdd, exact: true }).click();
     const dialog = other.page.getByRole('dialog');
     await dialog.getByLabel(en.account.passkeyName).fill('Browser test key');
@@ -396,7 +397,7 @@ test('ACCT-B10 ADMIN-B76 a member adds a passkey with their password, signs in w
     await other.page.goto('/login');
     await other.page.getByRole('button', { name: en.auth.passkeyLink, exact: true }).click();
     await other.page.waitForURL(/home/, { timeout: 15_000 });
-    await other.page.goto('/account');
+    await gotoReady(other.page, '/account');
     await other.page.getByRole('button', { name: en.account.passkeyRemove, exact: true }).click();
     await other.page
       .getByRole('dialog')

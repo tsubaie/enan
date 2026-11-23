@@ -4,13 +4,14 @@ import { findRow, selectView } from './fixtures/views';
 import { z } from 'zod';
 import en from '../src/core/i18n/messages/en.json' with { type: 'json' };
 import ar from '../src/core/i18n/messages/ar.json' with { type: 'json' };
+import { gotoReady, reloadReady } from './fixtures/ready';
 for (const locale of ['en', 'ar'])
   test(`PEOPLE-B01 PEOPLE-B02 PEOPLE-B03 PEOPLE-B06 PEOPLE-A05 EP-B01 EP-B05 EP-B08 EP-B09 create edit duplicate trash restore (${locale})`, async ({
     page,
   }) => {
     const m = locale === 'ar' ? ar : en;
     await loginAs(page, locale);
-    await page.goto('/people');
+    await gotoReady(page, '/people');
     await expect(page.getByRole('heading', { name: m.common.people, exact: true })).toBeVisible();
     const name = `Preview ${crypto.randomUUID()}`;
     await page.getByRole('button', { name: m.common.create, exact: true }).click();
@@ -23,7 +24,7 @@ for (const locale of ['en', 'ar'])
     await page.getByLabel(m.people.organization, { exact: true }).fill('Preview Foundation');
     await page.getByLabel(m.people.roleTitle, { exact: true }).click();
     await expect(page.getByRole('status')).toContainText(m.common.saved);
-    await page.reload();
+    await reloadReady(page);
     await expect(page.getByLabel(m.people.organization, { exact: true })).toHaveValue(
       'Preview Foundation',
     );
@@ -125,7 +126,7 @@ test('ADMIN-A01 setup cannot run a second time; origin guard and private session
 test('ADMIN-B04 last active administrator cannot be deactivated', async ({ page }) => {
   await loginAs(page, 'en');
   const admin = await credentials();
-  await page.goto('/admin/users');
+  await gotoReady(page, '/admin/users');
   await page
     .locator('li', { hasText: admin.email })
     .getByRole('button', { name: 'Edit', exact: true })
@@ -215,7 +216,7 @@ test('idempotency replay returns one entity; changed payload with the same key c
 });
 test('ADMIN-B12 backup created from the admin page completes as a fenced job', async ({ page }) => {
   await loginAs(page, 'en');
-  await page.goto('/admin/backups');
+  await gotoReady(page, '/admin/backups');
   const response = page.waitForResponse(
     (r) => r.url().endsWith('/api/v1/admin/backups') && r.request().method() === 'POST',
   );

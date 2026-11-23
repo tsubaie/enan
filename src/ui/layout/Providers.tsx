@@ -1,7 +1,7 @@
 'use client';
 import { useState, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ThemeProvider } from 'next-themes';
+import { ThemeProvider } from '@/ui/theme/ThemeProvider';
 import { ToastHost } from './toast/ToastHost';
 export function Providers({
   children,
@@ -27,13 +27,8 @@ export function Providers({
       }),
   );
   return (
-    <ThemeProvider
-      attribute="class"
-      defaultTheme="dark"
-      forcedTheme={theme}
-      enableSystem={false}
-      {...(nonce ? { nonce } : {})}
-    >
+    // Dark until the reader chooses (ACCT-B04).
+    <ThemeProvider theme={theme ?? 'dark'} nonce={nonce}>
       <QueryClientProvider client={client}>
         <ToastHost>{children}</ToastHost>
       </QueryClientProvider>

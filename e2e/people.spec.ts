@@ -5,6 +5,7 @@ import { findRow, selectView } from './fixtures/views';
 import { fill } from './fixtures/messages';
 import en from '../src/core/i18n/messages/en.json' with { type: 'json' };
 import ar from '../src/core/i18n/messages/ar.json' with { type: 'json' };
+import { gotoReady } from './fixtures/ready';
 type Reply = {
   status: number;
   body: { data?: { id: string; revision: number; title?: string; ownerName?: string | null } };
@@ -42,7 +43,7 @@ for (const locale of ['en', 'ar']) {
     page,
   }) => {
     await loginAs(page, locale);
-    await page.goto('/people');
+    await gotoReady(page, '/people');
     await expect(page.getByRole('heading', { name: m.common.people, exact: true })).toBeVisible();
     const name = `${locale === 'ar' ? 'مسند' : 'Assignee'} ${crypto.randomUUID()}`;
     await page.getByRole('button', { name: m.common.create, exact: true }).click();
@@ -86,7 +87,7 @@ for (const locale of ['en', 'ar']) {
       expect(created.status).toBe(201);
       expect(created.body.data?.ownerName).toBe(name);
       const taskId = created.body.data?.id ?? '';
-      await page.goto(`/people?view=all&id=${personId}`);
+      await gotoReady(page, `/people?view=all&id=${personId}`);
       await expect(
         page.getByRole('heading', { name: m.tasks.assignedTasks, exact: true }),
       ).toBeVisible();
@@ -115,7 +116,7 @@ for (const locale of ['en', 'ar']) {
         name,
       );
       expect(after).toEqual([]);
-      await page.goto(`/people?view=all&id=${personId}`);
+      await gotoReady(page, `/people?view=all&id=${personId}`);
       await expect(page.getByRole('link', { name: title, exact: true })).toBeVisible();
     } finally {
       // Leave nothing behind: accumulated people would push other scenarios' records past the
