@@ -719,11 +719,8 @@ it('CAPTURES-B13 a ready group offers Delete recording only behind More actions,
   const remove = await screen.findByRole('button', { name: en.captures.deleteRecording });
   expect(ready.contains(remove)).toBe(false);
   const menu = screen.getByTestId('capture-menu');
-  // Opaque in every theme: the important elevated fill and no glass image outrank the night
-  // popover glass, whatever popover fill the primitive also names.
-  expect(menu.className).toMatch(/(^|\s)bg-elevated!(\s|$)/u);
-  expect(menu.className).toMatch(/(^|\s)bg-none!(\s|$)/u);
-  expect(menu.className).not.toMatch(/(^|\s)bg-popover!/u);
+  // The opaque surface variant; its computed ground is checked in the browser (CAPTURES-A09).
+  expect(menu.getAttribute('data-surface')).toBe('elevated');
   expect(menu.className).toMatch(/\bring-1\b/u);
   await act(async () => {
     remove.focus();

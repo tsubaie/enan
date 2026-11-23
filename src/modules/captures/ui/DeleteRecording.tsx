@@ -74,10 +74,11 @@ export function ReadyGroupMenu({ group }: { group: Group }) {
       >
         <Ellipsis aria-hidden />
       </PopoverTrigger>
-      {/* Opaque like the other capture surfaces; `!` beats the night glass rule on popover-content. */}
+      {/* Opaque like the other capture surfaces: the glass let the page's text read through. */}
       <PopoverContent
         align="end"
-        className="w-auto bg-elevated! bg-none! p-1.5"
+        surface="elevated"
+        className="w-auto p-1.5"
         data-testid="capture-menu"
       >
         <DeleteRecordingButton
