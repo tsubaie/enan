@@ -69,7 +69,7 @@ export function ShellHeader({ user, capture, record, menu }: Props) {
             {t(apple ? 'searchShortcutMac' : 'searchShortcut')}
           </kbd>
         </Button>
-        <CaptureHeaderControls capture={capture} record={record} />
+        <CaptureHeaderControls capture={capture} role={user.role} record={record} />
         {/* On a phone the language is chosen in the bar's More sheet (MobileNav), not up here. */}
         <div className="hidden lg:block">
           <LanguageToggle />

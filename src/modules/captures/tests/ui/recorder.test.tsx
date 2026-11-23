@@ -96,7 +96,11 @@ const on: CaptureSetup = {
 function Header({ capture }: { capture: CaptureSetup }) {
   return (
     <>
-      <CaptureHeaderControls capture={capture} record={captureEntries(capture).header} />
+      <CaptureHeaderControls
+        capture={capture}
+        role="member"
+        record={captureEntries(capture).header}
+      />
     </>
   );
 }

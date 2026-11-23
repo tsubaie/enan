@@ -7,7 +7,7 @@ import { id } from '@/core/db/ids';
 import { writeAudit } from '@/core/db/audit-repo';
 import { upsertAudioFile } from '@/core/db/files-repo';
 import { getSetting } from '@/core/db/settings-repo';
-import { admitAi, contentHash } from '@/core/ai/admission';
+import { admitAi, contentHash, transcriptionSwitchedOff } from '@/core/ai/admission';
 import { readStoredFile } from '@/core/files/storage';
 import { storeVoiceAudio } from '@/core/files/voice-audio';
 import { AppError } from '@/core/http/errors';
@@ -79,12 +79,18 @@ export async function listCaptures(ctx: Context, query: z.output<typeof CaptureL
     if (!parsed.success) throw new AppError('validation_failed', { field: 'cursor' });
     after = { createdAt: new Date(parsed.data.at), id: parsed.data.id };
   }
-  const rows = await repo.selectCaptures(ctx.db, ctx.user, query.limit + 1, after, query.scope);
+  const [rows, off] = await Promise.all([
+    repo.selectCaptures(ctx.db, ctx.user, query.limit + 1, after, query.scope),
+    transcriptionSwitchedOff(ctx),
+  ]);
   const page = rows.slice(0, query.limit);
   const last = page.at(-1);
+  // CAPTURES-B22: read once per request, never stored on a row, where it would go stale.
+  const transcription: 'off' | 'available' = off ? 'off' : 'available';
   return {
     data: await group(ctx, page),
     meta: {
+      transcription,
       nextCursor:
         rows.length > query.limit && last
           ? Buffer.from(JSON.stringify({ at: last.createdAt.getTime(), id: last.id })).toString(

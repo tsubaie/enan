@@ -12,7 +12,7 @@ import { fixtureModel } from '../../../../tests/fixtures/ai/jobs';
 import * as api from '../api';
 import { captures } from '../schema/db';
 import { call, record, user, webm } from './fixtures';
-// CAPTURES-B23: the capture routes against the real database, with the provider's
+// CAPTURES-B22 CAPTURES-B23: the capture routes against the real database, with the provider's
 // state, the workspace switches and the month's usage as the seams a scenario turns.
 const session = vi.hoisted(() => ({ user: null as User | null }));
 vi.mock('@/core/auth/session', async (importOriginal) => ({
@@ -149,4 +149,24 @@ it('CAPTURES-B23 when AI can take it, a typed transcript goes straight to interp
   const response = await typeIt(captureId);
   expect(response.status).toBe(200);
   expect(response.body.data).toMatchObject({ status: 'interpreting', transcript: typed });
+});
+const listed = async () => (await call(api.list, 'GET', '/captures')).body.meta.transcription;
+it('CAPTURES-B22 the list says transcription is off with jobs off, no provider key, or transcription not enabled', async () => {
+  expect(await listed()).toBe('available');
+  ai.jobs = false;
+  expect(await listed()).toBe('off');
+  ai.jobs = true;
+  ai.key = undefined;
+  expect(await listed()).toBe('off');
+  ai.key = 'test-key';
+  await writeSetting(db(), 'ai.enabled_capabilities', ['captures.interpret'], recorder.id);
+  expect(await listed()).toBe('off');
+});
+it('CAPTURES-B22 the list says transcription is available while the provider fails, the budget is spent or the rate limit is reached', async () => {
+  ai.state = 'error';
+  expect(await listed()).toBe('available');
+  ai.state = 'enabled';
+  await writeSetting(db(), 'ai.monthly_budget_micros', 1, recorder.id);
+  ai.rateLimited = true;
+  expect(await listed()).toBe('available');
 });

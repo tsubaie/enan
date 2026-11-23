@@ -32,6 +32,7 @@ export function useCaptureCount() {
   });
 }
 export type CaptureScope = 'mine' | 'all';
+export type CapturePage = z.infer<typeof CaptureList>;
 // The inbox; the page hands in what the server already read, so the first paint needs no request.
 export function useCaptures(
   scope: CaptureScope = 'mine',

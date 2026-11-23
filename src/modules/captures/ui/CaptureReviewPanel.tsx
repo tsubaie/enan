@@ -8,8 +8,9 @@ import { Dialog, DialogContent, DialogTitle } from '@/ui/primitives/dialog';
 import { CaptureInbox } from './CaptureInbox';
 import { setReviewPanel, useReviewPanel } from './inbox-state';
 import type { CaptureSetup } from '../schema/validation';
+import type { Reader } from './inbox-state';
 // S14 on a desktop: Review opens beside the page, drafts edited inline; expand opens the page.
-export function CaptureReviewPanel({ capture }: { capture: CaptureSetup }) {
+export function CaptureReviewPanel({ capture, reader }: { capture: CaptureSetup; reader: Reader }) {
   const t = useTranslations('captures');
   const open = useReviewPanel();
   const close = () => setReviewPanel(false);
@@ -24,6 +25,7 @@ export function CaptureReviewPanel({ capture }: { capture: CaptureSetup }) {
           <CaptureInbox.Root
             layout="panel"
             capture={capture}
+            reader={reader}
             actions={
               <>
                 <Link
