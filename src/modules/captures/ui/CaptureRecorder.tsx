@@ -70,7 +70,7 @@ function Root({
         <form
           tabIndex={-1}
           ref={focusOnMount}
-          aria-label={t('recorderLabel')}
+          aria-label={placement === 'desktop-floating' ? t('recorderLabel') : undefined}
           data-placement={placement}
           className={cn('z-40 grid outline-none', frame[placement])}
           onSubmit={(event) => {

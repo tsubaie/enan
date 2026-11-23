@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
+import { StrictMode } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { act, fireEvent, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import en from '@/core/i18n/messages/en.json';
 import ar from '@/core/i18n/messages/ar.json';
 import { CaptureHost } from '../../ui/CaptureHost';
 import { CaptureFab } from '../../ui/CaptureFab';
+import { CaptureHeaderControls } from '../../ui/CaptureHeaderButton';
 import { ApiError } from '@/core/http/client';
 import { mount } from '../../../../../tests/fixtures/mount';
 // CAPTURES-B01: the shell's recorder with the browser's microphone, recorder, clock and screen
@@ -21,7 +23,11 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/home',
   useSearchParams: () => new URLSearchParams(),
 }));
-const media = vi.hoisted(() => ({ desktop: false, recorder: null as null | { state: string } }));
+const media = vi.hoisted(() => ({
+  desktop: false,
+  recorder: null as null | { state: string },
+  listeners: new Set<() => void>(),
+}));
 class FakeRecorder {
   static isTypeSupported = (type: string) => type === 'audio/webm;codecs=opus';
   state = 'inactive';
@@ -51,12 +57,13 @@ beforeEach(() => {
   spies.send.mockReset();
   spies.toast.mockReset();
   media.desktop = false;
+  media.listeners.clear();
   localStorage.clear();
   vi.stubGlobal('MediaRecorder', FakeRecorder);
   vi.stubGlobal('matchMedia', (query: string) => ({
     matches: query.includes('min-width') && media.desktop,
-    addEventListener: () => {},
-    removeEventListener: () => {},
+    addEventListener: (_type: string, listener: () => void) => media.listeners.add(listener),
+    removeEventListener: (_type: string, listener: () => void) => media.listeners.delete(listener),
   }));
   vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) =>
     setTimeout(() => callback(Date.now()), 16),
@@ -69,10 +76,13 @@ beforeEach(() => {
   Object.defineProperty(navigator, 'wakeLock', { configurable: true, value: undefined });
 });
 afterEach(() => {
+  // Unmounted while the stand-ins are still in place, so a pending frame is cleared by its own kind.
+  cleanup();
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
-const recorder = () => screen.queryByRole('form', { name: en.captures.recorderLabel });
+// Only the desktop form is a named region; on a phone the dialog around it carries the name.
+const recorder = () => document.querySelector<HTMLFormElement>('form[data-placement]');
 async function startRecording(locale: 'en' | 'ar' = 'en') {
   localStorage.setItem('enan.captures.microphone-intro', '1');
   mount(
@@ -311,4 +321,94 @@ it('CAPTURES-B01 on a desktop the floating recorder is not a dialog and leaves t
   expect(screen.queryByRole('dialog')).toBeNull();
   expect(canvas.hasAttribute('inert')).toBe(false);
   canvas.remove();
+});
+// The shell's page and bar, for the scenarios that check what the phone dialog makes inert.
+function shell() {
+  const canvas = document.body.appendChild(document.createElement('div'));
+  canvas.className = 'app-canvas';
+  const nav = document.body.appendChild(document.createElement('nav'));
+  nav.className = 'mobile-navigation';
+  return {
+    inert: () => [canvas, nav].every((node) => node.hasAttribute('inert')),
+    live: () => [canvas, nav].every((node) => !node.hasAttribute('inert')),
+    remove: () => [canvas, nav].forEach((node) => node.remove()),
+  };
+}
+const fab = () => screen.getByRole('button', { name: en.captures.recordNote });
+it('CAPTURES-B01 on a phone a cancel within five seconds returns focus to the record button', async () => {
+  await startRecording();
+  await elapse(3);
+  fireEvent.click(screen.getByRole('button', { name: en.captures.cancel }));
+  await act(() => vi.advanceTimersByTimeAsync(100));
+  expect(document.activeElement).toBe(fab());
+});
+it('CAPTURES-B01 on a phone a cancel after five seconds, then Discard, returns focus to the record button', async () => {
+  await startRecording();
+  await elapse(7);
+  fireEvent.click(screen.getByRole('button', { name: en.captures.cancel }));
+  fireEvent.click(screen.getByRole('button', { name: en.captures.discardRecording }));
+  await act(() => vi.advanceTimersByTimeAsync(100));
+  expect(recorder()).toBeNull();
+  expect(document.activeElement).toBe(fab());
+});
+it('CAPTURES-B01 on a desktop a cancel returns focus to the header Record a note button', async () => {
+  media.desktop = true;
+  localStorage.setItem('enan.captures.microphone-intro', '1');
+  mount(
+    <>
+      <CaptureHeaderControls />
+      <CaptureHost />
+    </>,
+  );
+  const header = screen.getByRole('button', { name: new RegExp(en.captures.recordNote, 'u') });
+  await act(async () => {
+    fireEvent.click(header);
+  });
+  expect(recorder()?.getAttribute('data-placement')).toBe('desktop-floating');
+  fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${en.captures.cancel}`, 'u') }));
+  await act(() => vi.advanceTimersByTimeAsync(100));
+  expect(document.activeElement).toBe(header);
+});
+it('CAPTURES-B01 a switch from phone to desktop mid-recording frees the page and the bar; back to phone makes them inert again', async () => {
+  const page = shell();
+  await startRecording();
+  expect(page.inert()).toBe(true);
+  const resize = (desktop: boolean) =>
+    act(() => {
+      media.desktop = desktop;
+      for (const listener of media.listeners) listener();
+    });
+  resize(true);
+  expect(recorder()?.getAttribute('data-placement')).toBe('desktop-floating');
+  expect(page.live()).toBe(true);
+  resize(false);
+  expect(recorder()?.getAttribute('data-placement')).toBe('mobile-fullscreen');
+  expect(page.inert()).toBe(true);
+  page.remove();
+});
+it('CAPTURES-B01 under StrictMode the phone dialog makes the page inert while open, frees it on close and unmount, and still returns focus', async () => {
+  const page = shell();
+  localStorage.setItem('enan.captures.microphone-intro', '1');
+  const start = () =>
+    act(async () => {
+      fireEvent.click(fab());
+    });
+  const view = mount(
+    <StrictMode>
+      <CaptureHost />
+      <CaptureFab />
+    </StrictMode>,
+  );
+  await start();
+  expect(screen.getByRole('dialog', { name: en.captures.recorderLabel })).toBeTruthy();
+  expect(page.inert()).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: en.captures.cancel }));
+  await act(() => vi.advanceTimersByTimeAsync(100));
+  expect(page.live()).toBe(true);
+  expect(document.activeElement).toBe(fab());
+  await start();
+  expect(page.inert()).toBe(true);
+  view.unmount();
+  expect(page.live()).toBe(true);
+  page.remove();
 });
