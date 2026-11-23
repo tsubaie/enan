@@ -64,7 +64,8 @@ export const captureJobs: Record<string, JobHandler> = {
       const { captureId } = TranscribeInput.parse(AiPayload.parse(job.payload).input);
       const { transcript } = Transcribed.parse(AiOutput.parse(raw).output);
       const capture = await waitingOn(database, job, captureId, 'transcribe');
-      if (!capture) return;
+      // CAPTURES-B24: a transcript already stored (typed, say) is never replaced by transcription.
+      if (!capture || capture.transcript) return;
       await repo.updateCapture(database, captureId, { transcript, status: 'interpreting' });
       // Interpretation is admitted as the member who recorded it; whatever refuses it (AI off,
       // over budget, a full queue) leaves the capture failed with that reason and the transcript.

@@ -1545,6 +1545,7 @@
     "transcriptionOffAdmin": "Transcription is turned off in workspace AI settings.",
     "openAiSettings": "Open settings",
     "saveTranscript": "Save and prepare drafts",
+    "savingTranscript": "Saving the transcript…",
     "showEveryone": "Show everyone’s drafts",
     "showMine": "Show my drafts",
     "openPage": "Open as a page",

@@ -12,7 +12,7 @@ import { fixtureModel } from '../../../../tests/fixtures/ai/jobs';
 import * as api from '../api';
 import { captures } from '../schema/db';
 import { call, record, user, webm } from './fixtures';
-// CAPTURES-B22 CAPTURES-B23: the capture routes against the real database, with the provider's
+// CAPTURES-B22 CAPTURES-B23 CAPTURES-B24: the capture routes against the real database, with the provider's
 // state, the workspace switches and the month's usage as the seams a scenario turns.
 const session = vi.hoisted(() => ({ user: null as User | null }));
 vi.mock('@/core/auth/session', async (importOriginal) => ({
@@ -143,6 +143,39 @@ it('CAPTURES-B23 with the queue full the request still answers 429, the typed tr
   const queued = await db().select().from(jobs);
   expect(queued.map((job) => job.kind)).toEqual(['ai.captures.interpret']);
   expect(AiPayload.parse(queued[0]?.payload).input).toMatchObject({ transcript: typed });
+});
+const transcribeAgain = (captureId: string) =>
+  call(api.transcribe, 'POST', `/captures/${captureId}/transcribe`, { id: captureId }, {});
+it('CAPTURES-B24 transcription is refused with 409 transcript_exists once a transcript is stored', async () => {
+  const captureId = await waiting(7);
+  ai.jobs = false;
+  await expectHeld(captureId);
+  ai.jobs = true;
+  const refused = await transcribeAgain(captureId);
+  expect(refused.status).toBe(409);
+  expect(refused.body.error).toMatchObject({
+    code: 'conflict',
+    details: { reason: 'transcript_exists' },
+  });
+  expect(await stored(captureId)).toMatchObject({ transcript: typed, status: 'failed' });
+  expect(await db().select().from(jobs)).toEqual([]);
+});
+it('CAPTURES-B24 a transcript typed into a full queue survives a later transcription request', async () => {
+  const captureId = await waiting(8);
+  await withTransaction(db(), async (database) => {
+    for (let index = 0; index < queueCapacity; index++)
+      await enqueue(database, 'ai.captures.interpret', {}, `filler:${index}`, recorder.id);
+  });
+  expect((await typeIt(captureId)).status).toBe(429);
+  await db().delete(jobs);
+  const refused = await transcribeAgain(captureId);
+  expect(refused.status).toBe(409);
+  expect(refused.body.error).toMatchObject({ details: { reason: 'transcript_exists' } });
+  expect(await stored(captureId)).toMatchObject({
+    transcript: typed,
+    status: 'failed',
+    interpretJobId: null,
+  });
 });
 it('CAPTURES-B23 when AI can take it, a typed transcript goes straight to interpretation', async () => {
   const captureId = await waiting(6);

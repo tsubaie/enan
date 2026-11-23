@@ -7,7 +7,7 @@ import { laneBaseURL } from './lanes';
 import { seedDrafts } from './fixtures/captures';
 import en from '../src/core/i18n/messages/en.json' with { type: 'json' };
 import ar from '../src/core/i18n/messages/ar.json' with { type: 'json' };
-// CAPTURES-A01–A04, A06–A18 (A05 is NOTES-A15). AI is off in the browser suite, so a recording is
+// CAPTURES-A01–A04, A06–A19 (A05 is NOTES-A15). AI is off in the browser suite, so a recording is
 // stored without a transcript; `scripts/db/e2e-capture-drafts.ts` stands in for the interpreter
 // where a scenario needs drafts. The microphone is refused in the page, so the recorder offers
 // its upload fallback (S3) and the scenarios send a real WAV through it.
@@ -976,3 +976,45 @@ test('CAPTURES-A18 CAPTURES-B23 a transcript typed while drafts cannot be prepar
   await group.getByText(en.captures.fullTranscript).click();
   await expect(group.getByText(typed)).toBeVisible();
 });
+// CAPTURES-A19: the typed transcript saved with the keyboard alone. AI is off in the browser suite,
+// so the capture ends failed and focus lands on its Retry, never on the page (the heading outcome,
+// drafts being prepared, needs AI and is covered by the inbox unit test).
+for (const [locale, m] of [
+  ['en', en],
+  ['ar', ar],
+] as const) {
+  test(`CAPTURES-A19 CAPTURES-B25 saving a typed transcript with the keyboard puts focus on Retry when the capture fails (${locale})`, async ({
+    page,
+  }) => {
+    await refuseMicrophone(page);
+    await loginAs(page, locale);
+    const captureId = await recordByUpload(page, m);
+    seedDrafts(captureId, 'processing');
+    await gotoReady(page, '/captures');
+    const group = page.locator(`[data-capture="${captureId}"]`);
+    await group.getByRole('button', { name: m.captures.moreActions }).click();
+    await page
+      .locator("[data-slot='popover-content']")
+      .getByRole('button', { name: m.captures.deleteRecording })
+      .click();
+    await expect(group).toHaveCount(0);
+    seedDrafts(captureId, 'finished');
+    await page.getByRole('button', { name: m.common.undo }).click();
+    await expect(group.getByText(m.captures.failedInterrupted)).toBeVisible();
+    await group.getByRole('button', { name: m.captures.typeTranscript }).focus();
+    await page.keyboard.press('Enter');
+    const field = group.getByRole('textbox', { name: m.captures.transcriptLabel });
+    await expect(field).toBeFocused();
+    await page.keyboard.type('Send the risk report before Sunday.');
+    await page.keyboard.press('Tab');
+    await expect(group.getByRole('button', { name: m.captures.saveTranscript })).toBeFocused();
+    const saved = page.waitForResponse((response) =>
+      response.url().endsWith(`/api/v1/captures/${captureId}/transcript`),
+    );
+    await page.keyboard.press('Enter');
+    expect((await saved).status()).toBe(200);
+    await expect(group.getByText(m.captures.failedOther)).toBeVisible();
+    await expect(group.getByRole('button', { name: m.captures.retry })).toBeFocused();
+    await expect(group.getByRole('textbox')).toHaveCount(0);
+  });
+}
