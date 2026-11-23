@@ -1,7 +1,7 @@
 'use client';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
-import { CircleAlert, CircleCheck, LoaderCircle, PenLine, RefreshCw, Trash2 } from 'lucide-react';
+import { CircleAlert, CircleCheck, LoaderCircle, PenLine, RefreshCw } from 'lucide-react';
 import { Button } from '@/ui/primitives/button';
 import { Textarea } from '@/ui/primitives/textarea';
 import { ErrorPanel } from '@/ui/layout/ErrorPanel';
@@ -12,7 +12,8 @@ import { failure } from './CaptureProcessing';
 import { CaptureListen } from './CaptureListen';
 import { MergeSheet } from './MergeSheet';
 import { SuggestionCardView, type Layout } from './SuggestionCard';
-import { useRemoveCapture, useRetryCapture, useReviewMutations } from './capture-queries';
+import { useRetryCapture, useReviewMutations } from './capture-queries';
+import { ReadyGroupMenu, RecoverDeleteButton } from './DeleteRecording';
 const working = ['queued', 'transcribing', 'interpreting'];
 // S15, S17: one recording: when it was made, how long it is, the whole clip, its processing state
 // and its drafts still waiting. Header parts are split by a 1px rule, never a dot.
@@ -24,8 +25,11 @@ export function CaptureGroup({ group, layout }: { group: Group; layout: Layout }
         aria-labelledby={`capture-${group.id}`}
         className="grid gap-3"
         data-testid="capture-group"
+        data-capture={group.id}
       >
-        <Header group={group} drafts={pending.length} />
+        <Header group={group} drafts={pending.length}>
+          {group.status === 'ready' && <ReadyGroupMenu group={group} />}
+        </Header>
         {pending.length > 1 && (
           <div className="flex items-center justify-end gap-2">
             <MergeSheet group={group} drafts={pending} />
@@ -43,7 +47,16 @@ export function CaptureGroup({ group, layout }: { group: Group; layout: Layout }
 function Divider() {
   return <span aria-hidden className="h-3.5 w-px bg-border" />;
 }
-function Header({ group, drafts }: { group: Group; drafts: number }) {
+// `children` are the header's trailing actions (a ready group's More actions).
+function Header({
+  group,
+  drafts,
+  children,
+}: {
+  group: Group;
+  drafts: number;
+  children?: ReactNode;
+}) {
   const t = useTranslations('captures');
   const format = useFormatter();
   const relative = useRelativeTime();
@@ -52,7 +65,11 @@ function Header({ group, drafts }: { group: Group; drafts: number }) {
     <header className="flex items-center gap-3">
       <CaptureListen.PlayButton />
       <div className="grid min-w-0 gap-0.5">
-        <h3 id={`capture-${group.id}`} className="flex flex-wrap items-center gap-2 font-medium">
+        <h3
+          id={`capture-${group.id}`}
+          tabIndex={-1}
+          className="flex flex-wrap items-center gap-2 font-medium"
+        >
           {drafts ? (
             <>
               <span>{t('groupTitle', { time })}</span>
@@ -72,11 +89,12 @@ function Header({ group, drafts }: { group: Group; drafts: number }) {
           </span>
         </p>
       </div>
+      {children}
     </header>
   );
 }
-// S15 processing lines, S17 failure with Retry / Type the transcript / Delete recording, S29 AI
-// unavailable with Type the transcript / Retry.
+// S15 processing lines, S17 failure and S29 AI unavailable, each with Retry / Type the transcript /
+// Delete recording.
 function State({ group }: { group: Group }) {
   const t = useTranslations('captures');
   if (working.includes(group.status))
@@ -93,7 +111,7 @@ function State({ group }: { group: Group }) {
           <CircleAlert aria-hidden className="size-4" />
           {t(failure(group.errorCode))}
         </p>
-        <Recover group={group} />
+        <RecoverActions group={group} />
       </div>
     );
   if (group.status === 'needs_transcript')
@@ -103,17 +121,16 @@ function State({ group }: { group: Group }) {
           <CircleCheck aria-hidden className="mt-0.5 size-4 shrink-0" />
           {t('unavailable')}
         </p>
-        <Recover group={group} />
+        <RecoverActions group={group} />
       </div>
     );
   return null;
 }
-function Recover({ group }: { group: Group }) {
+// S17, S29: Retry, Type the transcript, then Delete recording last, wrapping in reading order.
+function RecoverActions({ group }: { group: Group }) {
   const t = useTranslations('captures');
   const retry = useRetryCapture();
-  const remove = useRemoveCapture();
   const [typing, setTyping] = useState(false);
-  const error = retry.error ?? remove.error;
   return (
     <>
       <div className="flex flex-wrap items-center gap-2">
@@ -135,21 +152,10 @@ function Recover({ group }: { group: Group }) {
           <PenLine aria-hidden />
           {t('typeTranscript')}
         </Button>
-        {group.status === 'failed' && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="ms-auto text-danger"
-            disabled={remove.isPending}
-            onClick={() => remove.mutate(group.id)}
-          >
-            <Trash2 aria-hidden />
-            {t('deleteRecording')}
-          </Button>
-        )}
+        <RecoverDeleteButton group={group} />
       </div>
       {typing && <TypeTranscript group={group} done={() => setTyping(false)} />}
-      {error && <ErrorPanel error={error} />}
+      {retry.error && <ErrorPanel error={retry.error} />}
     </>
   );
 }

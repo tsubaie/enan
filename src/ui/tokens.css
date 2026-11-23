@@ -1662,6 +1662,13 @@ main:has(.home-page)::-webkit-scrollbar {
   max-width: 32rem;
   margin-inline: auto;
 }
+/* On a phone the capture microphone floats at the inline end just above the bar (S1), so while it
+   is shown a toast stands above it instead of covering it: 0.75rem lift, its 3.5rem, then a gap. */
+@media (max-width: 1023.98px) {
+  body:has([data-capture-fab]) [data-slot='toast-viewport'] {
+    inset-block-end: calc(var(--mobile-nav-clear) + 0.75rem + 3.5rem + 0.5rem);
+  }
+}
 @media (min-width: 1024px) {
   [data-slot='toast-viewport'] {
     /* Centred in the working column, clear of the rail, and lifted off the edge: a bar flush to

@@ -64,3 +64,16 @@ export function focusAfterLeaving(card: HTMLElement | null, draftId: string) {
 }
 export const listedDraft = (draftId: string) =>
   document.querySelector<HTMLElement>(`[data-inbox] [data-draft="${draftId}"]`);
+// WCAG 2.4.3: a deleted recording leaves the list, so focus goes to the next group's heading, else
+// the inbox heading, never the page. Read before the delete, applied after the list has re-read.
+export function focusAfterDeleting(captureId: string) {
+  const group = listedGroup(captureId);
+  const inbox = group?.closest('[data-inbox]');
+  if (!group || !inbox) return () => {};
+  const groups = [...inbox.querySelectorAll<HTMLElement>('[data-capture]')];
+  const next = groups[groups.indexOf(group) + 1]?.querySelector<HTMLElement>('h3');
+  const targets = [next, inbox.querySelector<HTMLElement>('h1')];
+  return () => targets.find((target) => target?.isConnected)?.focus();
+}
+export const listedGroup = (captureId: string) =>
+  document.querySelector<HTMLElement>(`[data-inbox] [data-capture="${captureId}"]`);

@@ -18,6 +18,10 @@ const spies = vi.hoisted(() => ({
   undo: vi.fn(),
   merge: vi.fn(),
   toast: vi.fn(),
+  update: vi.fn(),
+  close: vi.fn(),
+  removeCapture: vi.fn(),
+  restoreCapture: vi.fn(),
   list: { data: [] as object[], meta: { nextCursor: null } },
   // The inbox re-reads after a review action, as the real query does once it is invalidated.
   listeners: new Set<() => void>(),
@@ -43,12 +47,13 @@ vi.mock('../../ui/capture-queries', async () => {
       undo: spies.undo,
       merge: spies.merge,
       typeTranscript: vi.fn(),
+      removeCapture: spies.removeCapture,
+      restoreCapture: spies.restoreCapture,
     }),
     useAssignablePeople: () => [
       { id: '01a08a9f-1991-760a-b73a-568f6f8665a1', fullName: 'Finance Lead', displayName: null },
     ],
     useRetryCapture: () => ({ mutate: vi.fn(), isPending: false, error: null }),
-    useRemoveCapture: () => ({ mutate: vi.fn(), isPending: false, error: null }),
   };
 });
 vi.mock('@/modules/committees/ui', () => ({
@@ -63,7 +68,7 @@ vi.mock('@/modules/notes/ui', async () => ({
   useTypeLabel: () => (id: string) => id,
 }));
 vi.mock('@/ui/primitives/toast', () => ({
-  useToastManager: () => ({ add: spies.toast, update: vi.fn() }),
+  useToastManager: () => ({ add: spies.toast, update: spies.update, close: spies.close }),
 }));
 const captureId = '01a08a9f-1991-760a-b73a-568f6f866600';
 const transcript =
@@ -133,6 +138,10 @@ beforeEach(() => {
     spies.discard,
     spies.merge,
     spies.toast,
+    spies.update,
+    spies.close,
+    spies.removeCapture,
+    spies.restoreCapture,
   ])
     spy.mockReset().mockResolvedValue({ data: {} });
   spies.list = { data: [group], meta: { nextCursor: null } };
@@ -653,4 +662,195 @@ it('CAPTURES-B01 drafts and the failed and unavailable boxes stand on a solid su
   const unavailable = screen.getByText(en.captures.unavailable).closest('div');
   expect(unavailable?.className).toMatch(/\bbg-elevated\b/u);
   expect(unavailable?.className).toMatch(/\bborder\b/u);
+});
+
+// S17 S29: deleting a recording from Review, with Undo.
+const unavailableId = '01a08a9f-1991-760a-b73a-568f6f866610';
+const failedId = '01a08a9f-1991-760a-b73a-568f6f866611';
+const recording = (id: string, status: string, createdAt: string) =>
+  CaptureGroup.parse({ ...group, id, status, createdAt, transcript: null, suggestions: [] });
+const unavailable = recording(unavailableId, 'needs_transcript', '2026-09-10T05:40:00.000Z');
+const failed = recording(failedId, 'failed', '2026-09-10T04:40:00.000Z');
+const listOf = (...groups: object[]) => {
+  spies.list = { data: groups, meta: { nextCursor: null } };
+  for (const listener of spies.listeners) listener();
+};
+const groupOf = (id: string) => document.querySelector<HTMLElement>(`[data-capture="${id}"]`);
+const opId = '01a08a9f-1991-760a-b73a-568f6f866699';
+// The delete removes the group from the list as the server's re-read would.
+function deletesFrom(...groups: { id: string }[]) {
+  spies.removeCapture.mockImplementation(async (gone: string) => {
+    listOf(...groups.filter((item) => item.id !== gone));
+    return { opId };
+  });
+}
+it('CAPTURES-B13 Delete recording is last on the needs_transcript and failed cards, after Retry and Type the transcript', () => {
+  listOf(unavailable, failed);
+  page();
+  for (const id of [unavailableId, failedId]) {
+    const names = within(groupOf(id) as HTMLElement)
+      .getAllByRole('button')
+      .map((button) => button.textContent);
+    expect(names.slice(-3)).toEqual([
+      en.captures.retry,
+      en.captures.typeTranscript,
+      en.captures.deleteRecording,
+    ]);
+    const remove = within(groupOf(id) as HTMLElement).getByRole('button', {
+      name: en.captures.deleteRecording,
+    });
+    expect(remove.className).toContain('text-danger');
+    expect(remove.className).toContain('pointer-coarse:min-h-11');
+    expect(remove.className).not.toContain('ms-auto');
+    expect(remove.querySelector('svg')).toBeTruthy();
+  }
+});
+it('CAPTURES-B13 a ready group offers Delete recording only behind More actions, never beside Approve; Escape returns focus to the trigger', async () => {
+  page();
+  const ready = groupOf(captureId) as HTMLElement;
+  expect(within(ready).queryByRole('button', { name: en.captures.deleteRecording })).toBeNull();
+  const more = within(ready).getByRole('button', { name: en.captures.moreActions });
+  expect(more.className).toContain('pointer-coarse:size-11');
+  expect(more.closest('header')).toBeTruthy();
+  await act(async () => {
+    more.focus();
+    fireEvent.click(more);
+  });
+  const remove = await screen.findByRole('button', { name: en.captures.deleteRecording });
+  expect(ready.contains(remove)).toBe(false);
+  await act(async () => {
+    remove.focus();
+    fireEvent.keyDown(remove, { key: 'Escape' });
+  });
+  await vi.waitFor(() =>
+    expect(screen.queryByRole('button', { name: en.captures.deleteRecording })).toBeNull(),
+  );
+  await vi.waitFor(() => expect(document.activeElement).toBe(more));
+});
+it('CAPTURES-B13 Delete acts at once with no confirm dialog and offers Undo for ten seconds', async () => {
+  listOf(unavailable, failed);
+  deletesFrom(unavailable, failed);
+  page();
+  await act(async () => {
+    fireEvent.click(
+      within(groupOf(failedId) as HTMLElement).getByRole('button', {
+        name: en.captures.deleteRecording,
+      }),
+    );
+  });
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(spies.removeCapture).toHaveBeenCalledWith(failedId);
+  expect(lastToast()).toMatchObject({
+    title: en.captures.recordingDeleted,
+    priority: 'low',
+    timeout: 10000,
+    actionProps: { children: en.common.undo },
+  });
+  expect(groupOf(failedId)).toBeNull();
+});
+it('CAPTURES-B13 with approved records the receipt says they stay, and a new delete takes the previous receipt away', async () => {
+  const approvedDraft = draft({ ...secondTask, status: 'approved' });
+  const kept = CaptureGroup.parse({ ...group, suggestions: [task, approvedDraft] });
+  listOf(kept, unavailable);
+  deletesFrom(kept, unavailable);
+  spies.toast.mockReturnValueOnce('first').mockReturnValueOnce('second');
+  page();
+  await act(async () => {
+    fireEvent.click(
+      within(groupOf(unavailableId) as HTMLElement).getByRole('button', {
+        name: en.captures.deleteRecording,
+      }),
+    );
+  });
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: en.captures.moreActions }));
+  });
+  await act(async () => {
+    fireEvent.click(await screen.findByRole('button', { name: en.captures.deleteRecording }));
+  });
+  expect(lastToast()).toMatchObject({ title: en.captures.recordingDeletedApproved });
+  expect(spies.close).toHaveBeenCalledWith('first');
+  // The earlier delete stays done: nothing was restored.
+  expect(spies.restoreCapture).not.toHaveBeenCalled();
+});
+it('CAPTURES-B13 after a delete focus goes to the next group heading, else the inbox heading', async () => {
+  listOf(unavailable, failed);
+  deletesFrom(unavailable, failed);
+  page();
+  await act(async () => {
+    fireEvent.click(
+      within(groupOf(unavailableId) as HTMLElement).getByRole('button', {
+        name: en.captures.deleteRecording,
+      }),
+    );
+  });
+  expect(document.activeElement).toBe(document.getElementById(`capture-${failedId}`));
+  deletesFrom(failed);
+  await act(async () => {
+    fireEvent.click(
+      within(groupOf(failedId) as HTMLElement).getByRole('button', {
+        name: en.captures.deleteRecording,
+      }),
+    );
+  });
+  expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1 }));
+  expect(document.activeElement).not.toBe(document.body);
+});
+it('CAPTURES-B13 Undo restores with the delete op id, says so for four seconds and focuses the group first action', async () => {
+  listOf(unavailable, failed);
+  deletesFrom(unavailable, failed);
+  spies.toast.mockReturnValue('deleted');
+  spies.restoreCapture.mockImplementation(async () => {
+    listOf(unavailable, failed);
+    return { data: unavailable };
+  });
+  page();
+  await act(async () => {
+    fireEvent.click(
+      within(groupOf(unavailableId) as HTMLElement).getByRole('button', {
+        name: en.captures.deleteRecording,
+      }),
+    );
+  });
+  await act(async () => {
+    lastToast().actionProps.onClick();
+  });
+  expect(spies.restoreCapture).toHaveBeenCalledWith(unavailableId, opId);
+  expect(spies.update).toHaveBeenLastCalledWith('deleted', {
+    title: en.captures.recordingRestored,
+    timeout: 4000,
+    actionProps: { children: undefined },
+  });
+  const restored = groupOf(unavailableId) as HTMLElement;
+  // Back in its own place, before the older recording.
+  expect(document.querySelectorAll('[data-capture]')[0]).toBe(restored);
+  expect(document.activeElement).toBe(restored.querySelector('button'));
+});
+it('CAPTURES-B13 a failed delete keeps the group and says so as an alert', async () => {
+  listOf(unavailable);
+  spies.removeCapture.mockRejectedValue(new Error('offline'));
+  page();
+  const remove = within(groupOf(unavailableId) as HTMLElement).getByRole('button', {
+    name: en.captures.deleteRecording,
+  });
+  await act(async () => {
+    fireEvent.click(remove);
+  });
+  expect(lastToast()).toEqual({ title: en.captures.deleteFailed, priority: 'high' });
+  expect(groupOf(unavailableId)).toBeTruthy();
+  expect(remove.hasAttribute('disabled')).toBe(false);
+});
+it('CAPTURES-B13 in Arabic the recover card and the ready group menu use the approved copy', async () => {
+  listOf(group, unavailable);
+  page('ar');
+  expect(
+    within(groupOf(unavailableId) as HTMLElement).getByRole('button', {
+      name: ar.captures.deleteRecording,
+    }),
+  ).toBeTruthy();
+  expect(screen.getByRole('button', { name: ar.captures.moreActions })).toBeTruthy();
+  expect(ar.captures.moreActions).toBe('إجراءات أخرى');
+  expect(ar.captures.recordingDeleted).toBe('حُذف التسجيل');
+  expect(ar.captures.recordingRestored).toBe('استُعيد التسجيل');
+  expect(ar.common.undo).toBe('تراجع');
 });
