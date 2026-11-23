@@ -787,7 +787,16 @@
     "jobKind_ai_kpis_narrative": "AI executive brief",
     "aiFeature_kpis_narrative": "Write scorecard briefs",
     "aiFeature_captures_interpret": "Turn voice captures into drafts",
-    "aiTranscriptionDisclosure": "When transcription is on, recorded audio leaves this server and is sent to the AI provider to be turned into text."
+    "aiTranscriptionDisclosure": "When transcription is on, recorded audio leaves this server and is sent to the AI provider to be turned into text.",
+    "voiceCapture": "Voice capture",
+    "voiceCaptureIntro": "Applies to every member of this workspace.",
+    "voiceCaptureAllow": "Allow voice capture",
+    "voiceCaptureNew": "New",
+    "voiceCaptureHelper": "Controls the floating record button, the header button, the shortcut and the inbox Record button together. Turning it off deletes nothing; members can still review, approve or discard the drafts they already have.",
+    "voiceCaptureAi": "An AI capability, set on the AI page. When it's off, recordings are kept but no drafts are prepared.",
+    "voiceCaptureAiOn": "On",
+    "voiceCaptureAiOff": "Off",
+    "voiceCaptureOpenAi": "Open AI settings"
   },
   "errors": {
     "validation_failed": "Check the entered values.",
@@ -1323,7 +1332,16 @@
     "arabic": "Arabic",
     "western": "Western (0-9)",
     "arabicNumerals": "Arabic-Indic (٠-٩)",
-    "unknownDevice": "Unrecognised device"
+    "unknownDevice": "Unrecognised device",
+    "voice": "Voice capture",
+    "voiceDescription": "Record a note and review the drafts it becomes before you approve them.",
+    "voiceHelper": "When it's off, the record button and shortcut go away. Your drafts stay in the review inbox.",
+    "voiceOffByAdmin": "Turned off by your workspace admin",
+    "voiceOffByAdminHint": "Your drafts stay in the review inbox. Ask your workspace admin to turn it back on.",
+    "voiceShortcut": "Keyboard shortcut",
+    "voiceShortcutMac": "<key>⌥V</key> on macOS",
+    "voiceShortcutHint": "Won't start while you're typing in a field or editor, or composing text.",
+    "voiceSaved": "Saved to your account. Phone and computer settings are kept separately."
   },
   "notifications": {
     "title": "Notifications",
@@ -1524,6 +1542,9 @@
     "unsupportedType": "This file isn’t a supported audio format. Upload M4A, MP3, WAV, WebM or OGG.",
     "skippedUnsaved": "{count, plural, one {# draft was left out because its last change didn’t save. It’s still in Review.} other {# drafts were left out because their last change didn’t save. They’re still in Review.}}",
     "skippedNotReady": "{count, plural, one {# draft still needs a choice and stayed in Review.} other {# drafts still need a choice and stayed in Review.}}",
-    "noneApproved": "No drafts were approved. Check the drafts marked in Review, then try again."
+    "noneApproved": "No drafts were approved. Check the drafts marked in Review, then try again.",
+    "recordingOff": "Recording is turned off by your workspace admin.",
+    "recordingOffTitle": "Recording is turned off by your workspace admin",
+    "recordingOffBody": "You can still review, approve or discard the drafts you already have."
   }
 }

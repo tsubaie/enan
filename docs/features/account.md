@@ -90,11 +90,12 @@ No new tables. The account is a view over two that exist:
   is a destination a reader visits rarely and not a module.
 - ACCT-B09 **The login cookie slides with the session.** An API request made more than a day after the session was last refreshed extends it to 30 days from then and re-issues the cookie (Better Auth, ADR 0055). Page renders read the session without extending it, because a server-rendered page cannot set cookies; the API requests every page makes do the extending.
 - ACCT-B10 **Passkeys.** While the workspace offers passkeys (ADMIN-B76), or while the reader still has one, the page has a Passkeys section listing each with its name (or, unnamed, its authenticator's, else "Passkey"), when it was added, and "Synced" when it is backed up to the reader's other devices. **Add a passkey** (only while the method is on) opens a dialog with an optional name and, while password sign-in is on, the current password; the browser then creates the passkey. **Remove** asks for confirmation first. `GET /account` carries the workspace's enabled `signInMethods` and the reader's `passkeys` (id, name, device type, backed up, added, AAGUID), never the key itself.
+- ACCT-B11 **Voice capture.** A section «التسجيل الصوتي» / "Voice capture" («سجّل ملاحظة بصوتك لتتحوّل إلى مسودات تراجعها قبل اعتمادها.» / "Record a note and review the drafts it becomes before you approve them.") holds the reader's own switch (`user.captures.enabled`, CAPTURES-B15) with «عند الإيقاف يختفي زر التسجيل والاختصار. تبقى مسوداتك في صندوق المراجعة.» / "When it's off, the record button and shortcut go away. Your drafts stay in the review inbox.", and, on a computer only (from 1024 px, by CSS) and while the switch is on, «اختصار لوحة المفاتيح» / "Keyboard shortcut" (`user.captures.shortcut`) with the Alt+V and ⌥V keycaps and «لا يعمل أثناء الكتابة في حقل أو محرّر، أو أثناء تركيب النص.» / "Won't start while you're typing in a field or editor, or composing text." Each switch saves at once through `PATCH /account` `{ revision, captures: { enabled?, shortcut? } }` (a strict object: no user id, no other key) for `ctx.user.id` only, and the shell is drawn again from the server. Under them: «يُحفظ في حسابك. لإعدادات الهاتف والحاسوب قيم منفصلة.» / "Saved to your account. Phone and computer settings are kept separately." `GET /account` carries `captures: { allowed, enabled, shortcut }`, `allowed` being the workspace switch (CAPTURES-B14). While it is off the section is greyed with «أوقفها مسؤول مساحة العمل» / "Turned off by your workspace admin" above a greyed row whose help reads «تبقى مسوداتك في صندوق المراجعة. اطلب من مسؤول مساحة العمل إعادة تشغيلها.» / "Your drafts stay in the review inbox. Ask your workspace admin to turn it back on.", and offers no control; a patch is still accepted and applies once it is back on.
 
 ## API
 
 - `GET /api/v1/account` → `{ data: { user, person, preferences, sessions } }`
-- `PATCH /api/v1/account` → name and preferences; `revision` for concurrency (`04`).
+- `PATCH /api/v1/account` → name, preferences and `captures` (ACCT-B11); `revision` for concurrency (`04`).
 - `POST /api/v1/account/email` → `{ email }`, field errors on conflict.
 - `POST /api/v1/account/password` → `{ current, next }`; revokes other sessions.
 - `DELETE /api/v1/account/sessions/:id` and `POST /api/v1/account/sessions/revoke-others`.
@@ -109,7 +110,7 @@ password and session routes.
   Sign out. Administration stays in the sidebar where it is: it is a place, not a personal action.
 - **`/account`** is a plain settings page, not an entity page — it has one record and no list. It
   uses `AdminLayout`'s section shape so that Account and Administration read the same way, with
-  sections: Identity, Sign-in, Sessions, Preferences.
+  sections: Identity, Sign-in, Sessions, Preferences, Voice capture.
 - Destructive-ish actions (revoke a session, sign out everywhere) confirm, naming what is affected.
 - Mobile: the avatar menu is a sheet; `/account` is a full page reachable from it.
 
@@ -131,17 +132,21 @@ password and session routes.
 - ACCT-A04 A member cannot reach another account's data or change their own role through the API.
   (en)
 - ACCT-A05 An account with no linked person says so and links to People. (en, ar)
+- ACCT-A06 A member turns their own voice capture off and the shortcut off; both hold on reload. (en)
 
 ## Required scenarios
 
 - `src/modules/account/tests/service.test.ts`: B01 email uniqueness and lowercasing; B02 the
   current-password check, the other-sessions revocation and the current session surviving;
-  ACCT-I02 role and active state rejected if supplied.
+  ACCT-I02 role and active state rejected if supplied; ACCT-B11 only the reader's own
+  `user.captures.*` rows written, a strict `captures` patch.
+- `src/modules/account/tests/ui/account-page.test.tsx`: ACCT-B11 the switches, the refresh, the
+  greyed state.
 - `tests/preferences.test.ts`: B04 and ACCT-I03 — clearing a preference removes the row and
   precedence falls back to the workspace.
 - `tests/sessions.test.ts`: B03 revoking one, revoking others, the current one marked.
 - `tests/api.test.ts`: ACCT-I01 no endpoint takes a user id; A04 isolation.
-- e2e `account.spec.ts`: A01, A02, A03 in both locales.
+- e2e `account.spec.ts`: A01, A02, A03 in both locales; A06.
 - Mutation targets: `changePassword`, `setPreference`, `updateAccount`.
 
 ## Audit items

@@ -185,3 +185,50 @@ it('ACCT-I02 has no way to name a role or an active flag in a patch', () => {
   expect(() => AccountPatch.parse({ revision: 1, role: 'admin' })).toThrow();
   expect(() => AccountPatch.parse({ revision: 1, isActive: false })).toThrow();
 });
+
+// ACCT-B11: voice capture is the reader's own: two user rows written for `ctx.user.id` only, read
+// back with the workspace switch beside them, and the patch names nothing else.
+it('ACCT-B11 the voice capture switch and shortcut write only the reader’s own rows', async () => {
+  const other = User.parse(
+    await insertUser(db(), {
+      id: id(),
+      name: 'Other Member',
+      email: 'other@example.test',
+      passwordHash: 'unused-test-hash',
+      role: 'member',
+    }),
+  );
+  const account = await run((ctx) =>
+    service.patchAccount(
+      ctx,
+      AccountPatch.parse({ revision: 1, captures: { enabled: false, shortcut: false } }),
+    ),
+  );
+  expect(account.captures).toEqual({ allowed: true, enabled: false, shortcut: false });
+  const rows = await db().select().from(settings);
+  expect(rows.map((row) => [row.key, row.userId, row.scope, row.updatedBy]).sort()).toEqual([
+    ['user.captures.enabled', actor.id, 'user', actor.id],
+    ['user.captures.shortcut', actor.id, 'user', actor.id],
+  ]);
+  expect(await getSetting(db(), 'user.captures.enabled', other.id)).toBe(true);
+  expect(await getSetting(db(), 'captures.enabled')).toBe(true);
+});
+it('ACCT-B11 the switch is kept while the workspace has recording off, and the account says it is off there', async () => {
+  await writeSetting(db(), 'captures.enabled', false, actor.id);
+  const account = await run((ctx) =>
+    service.patchAccount(ctx, AccountPatch.parse({ revision: 1, captures: { shortcut: false } })),
+  );
+  expect(account.captures).toEqual({ allowed: false, enabled: true, shortcut: false });
+  expect(await getSetting(db(), 'user.captures.shortcut', actor.id)).toBe(false);
+});
+it('ACCT-B11 the captures patch is strict: no user id, no workspace switch, no unknown key', () => {
+  for (const captures of [
+    { userId: id() },
+    { allowed: true },
+    { inbox: false },
+    { enabled: 'yes' },
+  ])
+    expect(AccountPatch.safeParse({ revision: 1, captures }).success).toBe(false);
+  expect(AccountPatch.safeParse({ revision: 1, userId: id(), captures: {} }).success).toBe(false);
+  expect(AccountPatch.parse({ revision: 1, captures: {} }).captures).toEqual({});
+});

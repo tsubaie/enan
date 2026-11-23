@@ -14,7 +14,7 @@ import {
 } from '@/modules/notes/ui';
 import { CaptureRecorder, type Placement } from './CaptureRecorder';
 import { CaptureProcessing, stageOf } from './CaptureProcessing';
-import { CaptureShortcut } from './CaptureShortcut';
+import { CaptureShortcut, type ShortcutKeys } from './CaptureShortcut';
 import { registerCapture, setCaptureActive } from './capture-store';
 import { focusWasLost } from './focus';
 import { refusalOf, type Refusal } from './upload-refusal';
@@ -155,7 +155,8 @@ function useRefocus(close: () => void) {
 }
 // CAPTURES-B01: the one recorder of the shell. A control starts it (`startCapture`); Stop or an
 // upload sends the audio; the panel then follows the capture until the recorder dismisses it.
-export function CaptureHost() {
+// The shell mounts it only while recording is on (CAPTURES-B14), and the chord only with `keys`.
+export function CaptureHost({ keys }: { keys: ShortcutKeys }) {
   const placement = usePlacement();
   const pageCommittee = usePageCommittee();
   const [phase, setPhase] = useState<Phase>('idle');
@@ -189,7 +190,7 @@ export function CaptureHost() {
   const refused = phase === 'recording' && recorder.state === 'idle' && recorder.error !== null;
   return (
     <>
-      <CaptureShortcut />
+      {keys ? <CaptureShortcut /> : null}
       {(phase === 'intro' || refused) && (
         <CaptureRecorder.Permission
           kind={refused ? 'refused' : 'ask'}

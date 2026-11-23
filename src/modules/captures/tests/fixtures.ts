@@ -103,10 +103,27 @@ export function call(
   return respond(handler, request, params);
 }
 // The create route with a real multipart body; the declared type is deliberately wrong.
+// A body that runs `onRead` when the handler first reads it (`highWaterMark: 0`: never earlier),
+// so after every check made before the body.
+// Node needs `duplex` for a stream body; the DOM `RequestInit` type does not name it yet.
+export function streamed(raw: Uint8Array, onRead: () => Promise<void>) {
+  const body = new ReadableStream<Uint8Array>(
+    {
+      async pull(controller) {
+        await onRead();
+        controller.enqueue(raw);
+        controller.close();
+      },
+    },
+    { highWaterMark: 0 },
+  );
+  return { body, duplex: 'half' as const };
+}
 export async function record(
   handler: Handler,
   bytes: Uint8Array,
   fields: Record<string, string> = {},
+  onRead?: () => Promise<void>,
 ) {
   const form = new FormData();
   form.set('file', new File([new Uint8Array(bytes)], 'Board debrief.webm', { type: 'text/html' }));
@@ -119,7 +136,7 @@ export async function record(
       'Content-Type': encoded.headers.get('content-type') ?? '',
       'Content-Length': String(raw.byteLength),
     }),
-    body: raw,
+    ...(onRead ? streamed(raw, onRead) : { body: raw }),
   });
   return respond(handler, request, {});
 }

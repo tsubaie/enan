@@ -470,3 +470,65 @@ test('CAPTURES-A07 on a phone Tab and Shift+Tab never leave the recorder while i
   await expect(page.locator('.app-canvas')).not.toHaveAttribute('inert');
   await expect(page.locator('nav.mobile-navigation')).not.toHaveAttribute('inert');
 });
+// CAPTURES-A12: the workspace switch off hides every way to record, says so in Review, keeps the
+// drafts reviewable and refuses new audio on the server. The setting is put back whatever happens.
+async function recording(page: Page, value: boolean) {
+  const answer = await api(page, '/admin/settings', 'PATCH', { key: 'captures.enabled', value });
+  expect(answer.status).toBe(200);
+}
+for (const [locale, m] of [
+  ['en', en],
+  ['ar', ar],
+] as const)
+  test(`CAPTURES-A12 CAPTURES-B14 an administrator turns voice capture off: no circle, header button, shortcut or inbox Record; the note shows; a draft can still be approved; POST /captures answers 403 (${locale})`, async ({
+    page,
+  }) => {
+    await refuseMicrophone(page);
+    await loginAs(page, locale);
+    const captureId = await recordByUpload(page, m);
+    seedDrafts(captureId);
+    try {
+      await recording(page, false);
+      await gotoReady(page, '/home');
+      await expect(page.locator('[data-capture-fab]')).toHaveCount(0);
+      await expect(page.getByRole('button', { name: m.captures.recordNote })).toHaveCount(0);
+      await expect(page.locator('[aria-keyshortcuts]')).toHaveCount(0);
+      await page.keyboard.press('Alt+KeyV');
+      await expect(page.getByText(m.captures.permissionTitle)).toHaveCount(0);
+      await gotoReady(page, '/captures');
+      await expect(
+        page.getByRole('note').filter({ hasText: m.captures.recordingOffTitle }),
+      ).toContainText(m.captures.recordingOffBody);
+      await expect(page.getByRole('button', { name: m.captures.recordNote })).toHaveCount(0);
+      const group = page.locator(`[aria-labelledby="capture-${captureId}"]`);
+      const task = group.locator('[data-testid="suggestion-card"][data-kind="task"]').first();
+      await task.getByRole('button', { name: m.captures.approve, exact: true }).click();
+      await expect(
+        page.getByText(fill(m.captures.approvedTask, { title: 'Send the updated supplier quote' })),
+      ).toBeVisible();
+      const refused = await page.evaluate(async () => {
+        const form = new FormData();
+        form.set('file', new Blob(['not audio']), 'note.wav');
+        const response = await fetch('/api/v1/captures', {
+          method: 'POST',
+          headers: { 'X-Requested-With': 'Enan', 'Idempotency-Key': crypto.randomUUID() },
+          body: form,
+        });
+        return { status: response.status, body: await response.json() };
+      });
+      expect(refused.status).toBe(403);
+      expect(refused.body.error.details).toMatchObject({
+        reason: 'recording_off',
+        scope: 'workspace',
+      });
+      const approved = (await api(page, `/captures/${captureId}`)).body.data.suggestions.find(
+        (item: { status: string }) => item.status === 'approved',
+      );
+      const live = await api(page, `/tasks/${approved.liveEntityId}`);
+      await api(page, `/tasks/${approved.liveEntityId}`, 'DELETE', {
+        revision: live.body.data.revision,
+      });
+    } finally {
+      await recording(page, true);
+    }
+  });

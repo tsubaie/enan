@@ -29,6 +29,7 @@ import {
 } from './schema/validation';
 import * as service from './service';
 import * as voice from './voice/service';
+import { requireRecording } from '@/modules/captures';
 import { listManagedTags, manageTags } from './service';
 import { ManageTags, ManageTagsResult } from './schema/validation';
 export const managedTags = defineHandler({
@@ -197,8 +198,10 @@ export const voiceCreate = defineHandler({
   transaction: false,
   enqueues: true,
   // The setting is read before the body, so with the inbox on nothing is parsed or buffered.
+  // CAPTURES-B14: the rollback records too, so it is refused while recording is off.
   before: async (ctx) => {
     if (await getSetting(ctx.db, 'captures.inbox')) throw retired();
+    await requireRecording(ctx);
   },
   handler: async (input, ctx) => ({
     data: await voice.createNoteFromVoice(authenticated(ctx), input),

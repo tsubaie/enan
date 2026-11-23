@@ -10,8 +10,11 @@ import { startCapture, useCaptureActive } from './capture-store';
 import { useCaptureCount } from './capture-queries';
 import { CaptureReviewPanel } from './CaptureReviewPanel';
 import { isWideScreen, setReviewPanel } from './inbox-state';
-// S9: the desktop control, with its chord on the keycap and the Mac spelling in the tooltip.
-function CaptureHeaderButton() {
+import type { CaptureSetup } from '../schema/validation';
+import type { ShortcutKeys } from './CaptureShortcut';
+// S9: the desktop control, with its chord on the keycap and the Mac spelling in the tooltip; with
+// the shortcut off (CAPTURES-B19) it names no chord at all.
+function CaptureHeaderButton({ keys }: { keys: ShortcutKeys }) {
   const t = useTranslations('captures');
   const active = useCaptureActive();
   return (
@@ -19,8 +22,8 @@ function CaptureHeaderButton() {
       variant="outline"
       data-capture-opener
       className={cn('hidden lg:inline-flex', active && 'border-accent bg-accent-soft')}
-      title={t('shortcutMac')}
-      aria-keyshortcuts={t('shortcut')}
+      title={keys ? t('shortcutMac') : undefined}
+      aria-keyshortcuts={keys ?? undefined}
       onClick={startCapture}
     >
       {active ? (
@@ -29,19 +32,22 @@ function CaptureHeaderButton() {
         <Mic aria-hidden />
       )}
       {t('recordNote')}
-      <kbd translate="no" aria-hidden className="rounded border px-1.5 py-0.5 text-[11px]">
-        {t('shortcut')}
-      </kbd>
+      {keys ? (
+        <kbd translate="no" aria-hidden className="rounded border px-1.5 py-0.5 text-[11px]">
+          {t('shortcut')}
+        </kbd>
+      ) : null}
     </Button>
   );
 }
-// The header's two controls, recording and Review (S9, S13).
-export function CaptureHeaderControls() {
+// The header's two controls, recording and Review (S9, S13). With recording off (CAPTURES-B14)
+// only Review stays: the drafts already made are still the reader's to review.
+export function CaptureHeaderControls({ capture }: { capture: CaptureSetup }) {
   return (
     <>
-      <CaptureHeaderButton />
+      {capture.enabled ? <CaptureHeaderButton keys={capture.shortcut ? 'Alt+V' : null} /> : null}
       <CaptureReviewLink />
-      <CaptureReviewPanel />
+      <CaptureReviewPanel capture={capture} />
     </>
   );
 }

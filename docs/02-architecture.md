@@ -102,6 +102,7 @@ Every module under `src/modules/<name>/` has this shape. The structure audit rea
 | `reminders/` | optional | A module's scheduled reminders (`repo.ts` for the candidates' SQL, `service.ts` for who is told and when), split out of the module's own repo and service when those are at their limit, as `voice/` is. Only KPIs has one (KPIS-B30). |
 | `review/` | optional | A module's review of drafts before they go live (`service.ts`: edit, approve, discard, undo and merge), split out of the module's own service when that is at its limit, as `voice/` is. Only Captures has one (CAPTURES-B10, CAPTURES-B11). |
 | `access.ts` | optional | Row-level visibility for records only some readers may see: the row check that answers `not_found` to everyone else, beside the repo predicate lists and counts filter by. Only Captures has one (CAPTURES-B02). |
+| `setup.ts` | optional | How a module's feature is set up for one reader, resolved on the server from workspace and user settings and handed to the shell as props (ADR 0072), and the check a route runs before reading a body. Server-only. Only Captures has one (CAPTURES-B14, CAPTURES-B15). |
 | `ai/` | if the module owns capabilities | `capabilities.ts` and `prompts/<name>.v<N>.ts`; where the module's repo and service are at their limit, the capability's own `repo.ts` and `service.ts` (KPIS-B32). |
 | `ui/` | yes | Components, `queries.ts` (TanStack hooks), `index.ts` (components other modules may reuse). |
 | `tests/` | yes | Scenario tests named by requirement ID (see `08-testing-strategy.md`). |

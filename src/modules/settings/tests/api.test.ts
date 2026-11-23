@@ -267,3 +267,18 @@ it('ADMIN-B07 a retried write replays its answer and a different body under the 
   );
   expect(missing.status).toBe(400);
 });
+it('ADMIN-B77 a member PATCH of captures.enabled is 403 and stores nothing; an administrator’s is stored and audited', async () => {
+  session.user = member;
+  const refused = await call(api.update, 'PATCH', { key: 'captures.enabled', value: false });
+  expect(refused.status).toBe(403);
+  expect(await workspaceRow('captures.enabled')).toBeUndefined();
+  session.user = admin;
+  const written = await call(api.update, 'PATCH', { key: 'captures.enabled', value: false });
+  expect(written.status).toBe(200);
+  expect(await workspaceRow('captures.enabled')).toMatchObject({
+    value: false,
+    updatedBy: admin.id,
+  });
+  const audits = await db().select().from(auditLog).where(eq(auditLog.entityType, 'setting'));
+  expect(audits.map((row) => row.diff)).toEqual([{ key: 'captures.enabled', value: false }]);
+});

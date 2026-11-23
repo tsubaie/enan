@@ -5,7 +5,9 @@ import { clearDatabase } from '@/core/db/reset';
 import { insertUser } from '@/core/db/auth-repo';
 import { User } from '@/core/http/user-schema';
 import { id } from '@/core/db/ids';
-import { schedules } from '@/core/db/system-schema';
+import { auditLog, schedules } from '@/core/db/system-schema';
+import { getSetting } from '@/core/db/settings-repo';
+import { eq } from 'drizzle-orm';
 import { listSettings, updateSetting } from '../service';
 import { midnightBoundaries } from '../../../../tests/fixtures/timezones';
 let admin: User;
@@ -103,4 +105,33 @@ it('NOTIF-B05 ADMIN-B07 a new workspace time zone moves the reminder schedules w
     expect(at).toBeLessThanOrEqual(Date.now());
   }
   expect(rows['system.backup']?.lastOccurrence).toEqual(yesterday);
+});
+// ADMIN-B77: recording for the whole workspace is an administrator's switch, audited like every
+// setting; a member cannot turn it, and the reader's own keys are not reachable here.
+it('ADMIN-B77 only an administrator turns voice capture off for the workspace, and the change is audited', async () => {
+  await expect(
+    run(member, (ctx) => updateSetting(ctx, 'captures.enabled', false)),
+  ).rejects.toMatchObject({ code: 'forbidden' });
+  await expect(
+    run(admin, (ctx) => updateSetting(ctx, 'user.captures.enabled', false)),
+  ).rejects.toMatchObject({ code: 'forbidden' });
+  expect(await getSetting(db(), 'captures.enabled')).toBe(true);
+  await run(admin, (ctx) => updateSetting(ctx, 'captures.enabled', false));
+  expect(await getSetting(db(), 'captures.enabled')).toBe(false);
+  const audits = await db().select().from(auditLog).where(eq(auditLog.entityType, 'setting'));
+  expect(audits).toHaveLength(1);
+  expect(audits[0]).toMatchObject({
+    actorId: admin.id,
+    action: 'update',
+    diff: { key: 'captures.enabled', value: false },
+  });
+  const listed = await run(admin, (ctx) => listSettings(ctx));
+  expect(listed.find((row) => row.key === 'captures.enabled')).toMatchObject({
+    value: false,
+    default: true,
+    type: 'boolean',
+  });
+  await expect(run(member, (ctx) => listSettings(ctx))).rejects.toMatchObject({
+    code: 'forbidden',
+  });
 });

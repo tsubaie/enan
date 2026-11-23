@@ -1,6 +1,6 @@
 'use client';
 import { createContext, use, useLayoutEffect, useState, useSyncExternalStore } from 'react';
-import type { CaptureGroup } from '../schema/validation';
+import type { CaptureGroup, CaptureSetup } from '../schema/validation';
 import type { CaptureScope } from './capture-queries';
 import type { Layout } from './suggestion-card-context';
 // One mounted inbox (the /captures page, the desktop Review panel), told apart from the others.
@@ -15,6 +15,8 @@ export type Inbox = {
   scope: CaptureScope;
   saves: Map<string, Promise<boolean>>;
   reread: () => Promise<CaptureGroup[]>;
+  // CAPTURES-B14: whether recording is on here, as the server resolved it for the shell.
+  capture: CaptureSetup;
 };
 export const InboxContext = createContext<Inbox | null>(null);
 export function useInbox() {

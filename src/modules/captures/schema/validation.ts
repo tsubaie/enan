@@ -216,3 +216,12 @@ export const MergeSuggestions = z.strictObject({
 export const LiveRecord = z.object({ type: LiveEntityType, id: z.uuid() });
 export const Approval = z.object({ suggestion: Suggestion, live: LiveRecord });
 export type Approval = z.infer<typeof Approval>;
+// CAPTURES-B14 CAPTURES-B15: how recording is set up for one reader, resolved on the server and
+// handed to the shell and the inbox as props. `allowed` is the workspace switch; `enabled` is it
+// and the reader's own; `shortcut` is Alt+V, only while recording is enabled.
+export const CaptureSetup = z.object({
+  enabled: z.boolean(),
+  allowed: z.boolean(),
+  shortcut: z.boolean(),
+});
+export type CaptureSetup = z.infer<typeof CaptureSetup>;

@@ -42,8 +42,15 @@ it('ADMIN-B07 every workspace key has a default its own schema accepts and is wr
     expect(item.readRoles, key).toEqual(['admin']);
   }
 });
-it('ADMIN-B07 ACCT-B04 the user keys are the four preferences, and every member may set their own', () => {
-  expect(userKeys.sort()).toEqual(['user.locale', 'user.numerals', 'user.theme', 'user.timezone']);
+it('ADMIN-B07 ACCT-B04 ACCT-B11 the user keys are the four preferences and voice capture, and every member may set their own', () => {
+  expect(userKeys.sort()).toEqual([
+    'user.captures.enabled',
+    'user.captures.shortcut',
+    'user.locale',
+    'user.numerals',
+    'user.theme',
+    'user.timezone',
+  ]);
   for (const key of userKeys) {
     expect([...settingsRegistry[key].writeRoles].sort(), key).toEqual(['admin', 'member']);
     expect(settingsRegistry[key].schema.safeParse(settingsRegistry[key].default).success, key).toBe(

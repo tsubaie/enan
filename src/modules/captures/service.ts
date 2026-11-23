@@ -16,6 +16,7 @@ import { committeeChoices, requireCommittee } from '@/modules/committees';
 import { noteTypes } from '@/modules/notes';
 import { assignablePeople } from '@/modules/people';
 import { assertCaptureAccess, ownsCapture } from './access';
+import { requireRecording } from './setup';
 import * as repo from './repo';
 import { InterpretInput } from './ai/interpret';
 import {
@@ -174,6 +175,9 @@ export async function createCapture(ctx: Context, input: z.output<typeof Capture
   const durationSeconds = Math.max(input.durationSeconds, audio.durationSeconds);
   return withTransaction(ctx.db, async (database) => {
     const scoped = { ...ctx, db: database };
+    // CAPTURES-B14: the switch may have gone off while the body arrived. A refusal here rolls the
+    // rows back; the blob already written is left to the content-addressed sweep.
+    await requireRecording(scoped);
     const fileId = await upsertAudioFile(database, {
       storageKey: audio.storageKey,
       originalName: audio.originalName,
