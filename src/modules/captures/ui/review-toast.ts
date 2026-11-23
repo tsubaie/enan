@@ -5,6 +5,7 @@ import { routes } from '@/core/routes';
 import { useToastManager } from '@/ui/primitives/toast';
 import type { Approval, CaptureGroup } from '../schema/validation';
 import { useReviewMutations } from './capture-queries';
+import { focusWasLost } from './focus';
 import { focusWhenListed } from './inbox-state';
 import { focusInboxHeading } from './review-action';
 // S26–S28: five seconds, Undo, and View for a record just made. Undo is the server's call
@@ -98,7 +99,7 @@ export function useDeletedToast() {
           timeout: 0,
           actionProps: { children: undefined },
         });
-        focusInboxHeading();
+        if (focusWasLost()) focusInboxHeading();
       },
     );
   }

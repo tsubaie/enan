@@ -60,7 +60,8 @@ const failures: Record<string, 'failedNoSpeech' | 'failedTimeout' | 'failedInter
   // CAPTURES-B13: restored after the job it waited on ended while it was deleted.
   interrupted: 'failedInterrupted',
 };
-export const failure = (code: string | null) => (code && failures[code]) || 'failedOther';
+export const failure = (code: string | null) =>
+  (code && Object.hasOwn(failures, code) && failures[code]) || 'failedOther';
 type Props = {
   placement: Placement;
   stage: Stage;

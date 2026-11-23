@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { createTranslator } from 'next-intl';
 import en from '@/core/i18n/messages/en.json';
 import ar from '@/core/i18n/messages/ar.json';
@@ -817,6 +817,8 @@ it('CAPTURES-B13 Undo restores with the delete op id, says so for four seconds a
       }),
     );
   });
+  // The reader presses Undo in the toast, which is not rendered here: focus has left the list.
+  (document.activeElement as HTMLElement | null)?.blur();
   await act(async () => {
     lastToast().actionProps.onClick();
   });
@@ -947,4 +949,79 @@ it('CAPTURES-B13 a recording restored after its job ended says processing stoppe
   expect(ar.captures.failedInterrupted).toBe(
     'توقفت المعالجة عند حذف هذا التسجيل. أعد المحاولة لإعداد مسوداته.',
   );
+});
+// The restore answers, and the list is re-read only when the scenario says so.
+function restoresLater(...groups: object[]) {
+  let relist = () => {};
+  spies.restoreCapture.mockImplementation(async () => {
+    relist = () => listOf(...groups);
+    return { data: unavailable };
+  });
+  return () => act(async () => relist());
+}
+const deleteThenUndo = async () => {
+  await act(async () => {
+    fireEvent.click(
+      within(groupOf(unavailableId) as HTMLElement).getByRole('button', {
+        name: en.captures.deleteRecording,
+      }),
+    );
+  });
+  await act(async () => {
+    lastToast().actionProps.onClick();
+  });
+};
+const retryOf = (id: string) =>
+  within(groupOf(id) as HTMLElement).getByRole('button', { name: en.captures.retry });
+it('CAPTURES-B13 after Undo, focus the reader moved before the list re-rendered stays where they put it', async () => {
+  listOf(unavailable, failed);
+  deletesFrom(unavailable, failed);
+  spies.toast.mockReturnValue('deleted');
+  const relist = restoresLater(unavailable, failed);
+  page();
+  await deleteThenUndo();
+  const retry = retryOf(failedId);
+  retry.focus();
+  await relist();
+  expect(groupOf(unavailableId)).toBeTruthy();
+  expect(document.activeElement).toBe(retry);
+  // The waiting focus was used up: a later render of the group does not take it either.
+  await act(async () => listOf(unavailable, failed));
+  expect(document.activeElement).toBe(retry);
+});
+it('CAPTURES-B13 the heading fallback leaves focus the reader moved, for a failed Undo and a list without the recording', async () => {
+  listOf(unavailable, failed);
+  deletesFrom(unavailable, failed);
+  spies.toast.mockReturnValue('deleted');
+  spies.restoreCapture.mockRejectedValueOnce(new Error('offline'));
+  page();
+  await deleteThenUndo();
+  // The rejection lands after the reader has moved on.
+  expect(document.activeElement).toBe(document.getElementById(`capture-${failedId}`));
+  const retry = retryOf(failedId);
+  retry.focus();
+  await act(async () => {
+    lastToast().actionProps.onClick();
+  });
+  expect(document.activeElement).toBe(retry);
+  const relist = restoresLater(failed);
+  await act(async () => {
+    lastToast().actionProps.onClick();
+  });
+  await relist();
+  expect(document.activeElement).toBe(retry);
+});
+it('CAPTURES-B13 a waiting focus goes with the inbox: a later inbox that lists the recording does not jump to it', async () => {
+  listOf(unavailable, failed);
+  deletesFrom(unavailable, failed);
+  spies.toast.mockReturnValue('deleted');
+  const relist = restoresLater(unavailable, failed);
+  page();
+  await deleteThenUndo();
+  cleanup();
+  await relist();
+  page();
+  const restored = groupOf(unavailableId) as HTMLElement;
+  expect(restored).toBeTruthy();
+  expect(document.activeElement).not.toBe(restored.querySelector('button'));
 });

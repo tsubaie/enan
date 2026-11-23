@@ -14,6 +14,7 @@ import { MergeSheet } from './MergeSheet';
 import { SuggestionCardView, type Layout } from './SuggestionCard';
 import { useRetryCapture, useReviewMutations } from './capture-queries';
 import { ProcessingGroupMenu, ReadyGroupMenu, RecoverDeleteButton } from './DeleteRecording';
+import { focusWasLost } from './focus';
 import { takePendingFocus, useFocusPending } from './inbox-state';
 const working = ['queued', 'transcribing', 'interpreting'];
 // S15, S17: one recording: when it was made, how long it is, the whole clip, its processing state
@@ -23,9 +24,10 @@ export function CaptureGroup({ group, layout }: { group: Group; layout: Layout }
   const section = useRef<HTMLElement>(null);
   const focusPending = useFocusPending(group.id);
   // S17 Undo: the restored group, once it renders, takes the focus Undo left for it: its first
-  // action. A layout effect, so it lands in the same commit that lists the group.
+  // action. A layout effect, so it lands in the same commit that lists the group. The id is cleared
+  // either way; focus moves only if it was lost meanwhile, not if the reader moved it elsewhere.
   useLayoutEffect(() => {
-    if (focusPending && takePendingFocus(group.id))
+    if (focusPending && takePendingFocus(group.id) && focusWasLost())
       section.current?.querySelector<HTMLElement>('button')?.focus();
   }, [focusPending, group.id]);
   return (

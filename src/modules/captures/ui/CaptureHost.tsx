@@ -16,6 +16,7 @@ import { CaptureRecorder, type Placement } from './CaptureRecorder';
 import { CaptureProcessing, stageOf } from './CaptureProcessing';
 import { CaptureShortcut } from './CaptureShortcut';
 import { registerCapture, setCaptureActive } from './capture-store';
+import { focusWasLost } from './focus';
 import { refusalOf, type Refusal } from './upload-refusal';
 import { useCapture, useCreateCapture } from './capture-queries';
 // S2 is shown once per browser; the browser's own prompt follows it.
@@ -140,7 +141,7 @@ function useRefocus(close: () => void) {
     close();
     cancelAnimationFrame(frame.current);
     frame.current = requestAnimationFrame(() => {
-      if (document.activeElement && document.activeElement !== document.body) return;
+      if (!focusWasLost()) return;
       const openers = [
         ...document.querySelectorAll<HTMLElement>('[data-capture-opener]:not([hidden])'),
         document.querySelector<HTMLElement>('#content h1'),

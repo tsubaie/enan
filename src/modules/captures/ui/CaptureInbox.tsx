@@ -23,6 +23,7 @@ import {
   useInbox,
   usePendingFocus,
 } from './inbox-state';
+import { focusWasLost } from './focus';
 import { focusInboxHeading } from './review-action';
 const pendingOf = (groups: Group[]) =>
   groups.flatMap((group) => group.suggestions.filter((draft) => draft.status === 'pending'));
@@ -94,9 +95,18 @@ function useUndoFocusFallback(listed: Group[] | undefined) {
     if (shown.current?.id !== id) shown.current = { id, groups: listed };
     else if (shown.current.groups !== listed && takePendingFocus(id)) {
       shown.current = null;
-      focusInboxHeading();
+      if (focusWasLost()) focusInboxHeading();
     }
   }, [pending, listed]);
+  // An inbox that goes (the panel closed, another page) takes a waiting focus with it, so a later
+  // inbox listing that recording does not jump to it.
+  useLayoutEffect(
+    () => () => {
+      const id = pendingFocusId();
+      if (id) takePendingFocus(id);
+    },
+    [],
+  );
 }
 // The drafts whose latest save failed, once every save in flight has answered.
 async function failedSaves(saves: Map<string, Promise<boolean>>) {
