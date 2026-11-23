@@ -689,6 +689,7 @@ main:has(.home-page)::-webkit-scrollbar {
     ) {
     background: var(--elevated);
     background-image: none;
+    backdrop-filter: none;
   }
   .dark .entity-toolbar {
     background: var(--canvas);

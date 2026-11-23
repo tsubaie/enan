@@ -377,7 +377,7 @@ Twelve top-level props is the ceiling (`07-coding-guidelines.md`); related optio
 - `url-state.test.ts`: B44 the focus key travels with the record and ends with it.
 - `pointer-away.test.ts`: B43 a press on the ground behind the record closes it; the panel, a row, a control, a portal, a toast and a phone do not.
 - e2e `notes.spec.ts`: B45 in both locales — the empty content field is on the interface's side, typed Arabic and English set the direction, and an Arabic note keeps the line after Enter and a list marker on the right.
-- e2e `entity-framework.spec.ts`: A02, A03, A06 in both locales; B23 the dim holds through the click that opened the record, the panel is the only raised plane, and the selected row keeps only its edge bar; B26 the list keeps its width when a record opens, the panel overlaps it rather than sitting beside it, and the list stays scrollable and tabbable behind it; B43 a click outside the record closes it.
+- e2e `entity-framework.spec.ts`: A02, A03, A06 in both locales; B23 the dim holds through the click that opened the record, the panel is the only raised plane, and the selected row keeps only its edge bar; B23 the record and the sheets share one dense glass, and under reduced transparency the sheet loses its blur, popovers are solid and the status red is the lighter mark; B26 the list keeps its width when a record opens, the panel overlaps it rather than sitting beside it, and the list stays scrollable and tabbable behind it; B43 a click outside the record closes it.
 - Mutation targets: `resolveUrlState`, `saveQueue`, `keyboardHandler`.
 
 ## Audit items
