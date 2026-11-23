@@ -5,6 +5,8 @@ import { routes } from '@/core/routes';
 import { useToastManager } from '@/ui/primitives/toast';
 import type { Approval, CaptureGroup } from '../schema/validation';
 import { useReviewMutations } from './capture-queries';
+import { focusWhenListed } from './inbox-state';
+import { focusInboxHeading } from './review-action';
 // S26–S28: five seconds, Undo, and View for a record just made. Undo is the server's call
 // (CAPTURES-B11): a record edited since, or a minute gone, answers with the S27 sentence instead.
 const shown = 5000;
@@ -70,14 +72,15 @@ export function useReviewToast() {
     discarded: (draftId: string) => show(t('discarded'), [draftId], t('restored')),
   };
 }
-// S17: the receipt for a deleted recording. Undo sends the delete's own op id back; `restored`
-// runs once the recording is listed again.
+// S17: the receipt for a deleted recording. Undo sends the delete's own op id back; once it is
+// restored the group takes focus as it is listed again (`focusWhenListed`), and a restore that fails
+// leaves focus on the inbox heading, never on the page.
 export function useDeletedToast() {
   const t = useTranslations('captures');
   const c = useTranslations('common');
   const manager = useToastManager();
   const mutations = useReviewMutations();
-  function restore(toastId: string, group: CaptureGroup, opId: string, restored: () => void) {
+  function restore(toastId: string, group: CaptureGroup, opId: string) {
     manager.update(toastId, { timeout: 0, actionProps: { children: c('undo'), disabled: true } });
     mutations.restoreCapture(group.id, opId).then(
       () => {
@@ -86,19 +89,21 @@ export function useDeletedToast() {
           timeout: restoredShown,
           actionProps: { children: undefined },
         });
-        restored();
+        focusWhenListed(group.id);
       },
-      () =>
+      () => {
         manager.update(toastId, {
           title: t('restoreFailed'),
           priority: 'high',
           timeout: 0,
           actionProps: { children: undefined },
-        }),
+        });
+        focusInboxHeading();
+      },
     );
   }
   return {
-    deleted: (group: CaptureGroup, opId: string, restored: () => void) => {
+    deleted: (group: CaptureGroup, opId: string) => {
       if (lastDeleted) manager.close(lastDeleted);
       const approved = group.suggestions.some((draft) => draft.status === 'approved');
       const toastId: string = manager.add({
@@ -108,11 +113,12 @@ export function useDeletedToast() {
         data: {},
         actionProps: {
           children: c('undo'),
-          onClick: () => restore(toastId, group, opId, restored),
+          onClick: () => restore(toastId, group, opId),
         },
       });
       lastDeleted = toastId;
     },
-    failed: () => manager.add({ title: t('deleteFailed'), priority: 'high' }),
+    // An alert that stays until it is dismissed: the recording is still there to act on again.
+    failed: () => manager.add({ title: t('deleteFailed'), priority: 'high', timeout: 0 }),
   };
 }

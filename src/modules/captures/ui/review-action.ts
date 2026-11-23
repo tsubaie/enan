@@ -77,3 +77,6 @@ export function focusAfterDeleting(captureId: string) {
 }
 export const listedGroup = (captureId: string) =>
   document.querySelector<HTMLElement>(`[data-inbox] [data-capture="${captureId}"]`);
+// The inbox heading: where focus goes when the thing it was on has gone and nothing replaces it.
+export const focusInboxHeading = () =>
+  document.querySelector<HTMLElement>('[data-inbox] h1')?.focus();

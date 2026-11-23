@@ -7,7 +7,7 @@ import { Button } from '@/ui/primitives/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/ui/primitives/popover';
 import type { CaptureGroup as Group } from '../schema/validation';
 import { useReviewMutations } from './capture-queries';
-import { focusAfterDeleting, listedGroup } from './review-action';
+import { focusAfterDeleting } from './review-action';
 import { useDeletedToast } from './review-toast';
 // S17: delete at once, then Undo on the receipt; no confirm dialog. Focus moves to the next group,
 // else the inbox heading; after Undo, to the restored group's first action. A failed delete leaves
@@ -24,7 +24,7 @@ function useDeleteRecording(group: Group) {
     const focusNext = focusAfterDeleting(group.id);
     try {
       const { opId } = await mutations.removeCapture(group.id);
-      toast.deleted(group, opId, () => listedGroup(group.id)?.querySelector('button')?.focus());
+      toast.deleted(group, opId);
       focusNext();
     } catch {
       running.current = false;

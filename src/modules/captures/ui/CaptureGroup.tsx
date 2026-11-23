@@ -1,5 +1,5 @@
 'use client';
-import { useState, type ReactNode } from 'react';
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { CircleAlert, CircleCheck, LoaderCircle, PenLine, RefreshCw } from 'lucide-react';
 import { Button } from '@/ui/primitives/button';
@@ -14,14 +14,24 @@ import { MergeSheet } from './MergeSheet';
 import { SuggestionCardView, type Layout } from './SuggestionCard';
 import { useRetryCapture, useReviewMutations } from './capture-queries';
 import { ProcessingGroupMenu, ReadyGroupMenu, RecoverDeleteButton } from './DeleteRecording';
+import { takePendingFocus, useFocusPending } from './inbox-state';
 const working = ['queued', 'transcribing', 'interpreting'];
 // S15, S17: one recording: when it was made, how long it is, the whole clip, its processing state
 // and its drafts still waiting. Header parts are split by a 1px rule, never a dot.
 export function CaptureGroup({ group, layout }: { group: Group; layout: Layout }) {
   const pending = group.suggestions.filter((draft) => draft.status === 'pending');
+  const section = useRef<HTMLElement>(null);
+  const focusPending = useFocusPending(group.id);
+  // S17 Undo: the restored group, once it renders, takes the focus Undo left for it: its first
+  // action. A layout effect, so it lands in the same commit that lists the group.
+  useLayoutEffect(() => {
+    if (focusPending && takePendingFocus(group.id))
+      section.current?.querySelector<HTMLElement>('button')?.focus();
+  }, [focusPending, group.id]);
   return (
     <CaptureListen.Provider group={group}>
       <section
+        ref={section}
         aria-labelledby={`capture-${group.id}`}
         className="grid gap-3"
         data-testid="capture-group"

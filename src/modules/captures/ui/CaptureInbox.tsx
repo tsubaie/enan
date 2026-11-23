@@ -1,5 +1,5 @@
 'use client';
-import { useState, type ReactNode } from 'react';
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { CheckCheck, Inbox, LoaderCircle, Mic } from 'lucide-react';
@@ -16,7 +16,14 @@ import type { Layout } from './SuggestionCard';
 import { useApprovedMessage } from './suggestion-text';
 import { useReviewToast } from './review-toast';
 import { listedDraft, useReviewAction } from './review-action';
-import { InboxContext, useInbox } from './inbox-state';
+import {
+  InboxContext,
+  pendingFocusId,
+  takePendingFocus,
+  useInbox,
+  usePendingFocus,
+} from './inbox-state';
+import { focusInboxHeading } from './review-action';
 const pendingOf = (groups: Group[]) =>
   groups.flatMap((group) => group.suggestions.filter((draft) => draft.status === 'pending'));
 const readyOf = (groups: Group[]) => pendingOf(groups).filter((draft) => !blockers(draft).length);
@@ -42,6 +49,7 @@ function Root({
   const approval = useReviewAction<'ready'>();
   const [saves] = useState(() => new Map<string, Promise<boolean>>());
   const reread = async () => (await query.refetch()).data?.data ?? [];
+  useUndoFocusFallback(query.data?.data);
   return (
     <InboxContext value={{ groups, layout, scope, saves, reread }}>
       <div className="grid gap-4" data-inbox>
@@ -68,6 +76,27 @@ function Root({
       </div>
     </InboxContext>
   );
+}
+// S17 Undo: a restored recording takes focus when it is listed (CaptureGroup). The list it was
+// restored into is the first one read after Undo, so when the list moves on from the one shown at
+// that moment and still lacks the recording, it is not coming: focus goes to the inbox heading.
+// Runs after the groups' own layout effects, so a group that took the focus has already cleared it.
+// `listed` is the query's own array, so its identity changes only when the list does.
+function useUndoFocusFallback(listed: Group[] | undefined) {
+  const pending = usePendingFocus();
+  const shown = useRef<{ id: string; groups: Group[] | undefined } | null>(null);
+  useLayoutEffect(() => {
+    const id = pendingFocusId();
+    if (!id || listed?.some((group) => group.id === id)) {
+      shown.current = null;
+      return;
+    }
+    if (shown.current?.id !== id) shown.current = { id, groups: listed };
+    else if (shown.current.groups !== listed && takePendingFocus(id)) {
+      shown.current = null;
+      focusInboxHeading();
+    }
+  }, [pending, listed]);
 }
 // The drafts whose latest save failed, once every save in flight has answered.
 async function failedSaves(saves: Map<string, Promise<boolean>>) {

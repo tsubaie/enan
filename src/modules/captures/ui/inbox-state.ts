@@ -53,6 +53,32 @@ export function dismissEducation() {
   }
   notify();
 }
+// S17 Undo: the recording to focus once it is listed again. The restore answers before the list
+// renders it, so Undo leaves its id here; the group takes it when it renders (CaptureGroup), and
+// the inbox falls back to its heading when the list moves on without it (CaptureInbox.Root).
+let pendingFocus: string | null = null;
+export function focusWhenListed(captureId: string) {
+  pendingFocus = captureId;
+  notify();
+}
+export const pendingFocusId = () => pendingFocus;
+// Clears the id if it is this one, and says whether it was.
+export function takePendingFocus(captureId: string) {
+  if (pendingFocus !== captureId) return false;
+  pendingFocus = null;
+  return true;
+}
+// Whether this recording is the one waiting for focus; only that group re-renders when it changes.
+export function useFocusPending(captureId: string) {
+  return useSyncExternalStore(
+    subscribe,
+    () => pendingFocus === captureId,
+    () => false,
+  );
+}
+export function usePendingFocus() {
+  return useSyncExternalStore(subscribe, pendingFocusId, () => null);
+}
 export function setReviewPanel(open: boolean) {
   panelOpen = open;
   notify();
