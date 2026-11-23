@@ -3,6 +3,13 @@ import { Password } from '@/core/http/user-schema';
 import { Locale } from '@/core/config/defaults';
 import { Theme, Timezone } from '@/core/config/settings';
 import { SignInMethod } from '@/core/config/sign-in-schema';
+import {
+  DesktopChoice,
+  DesktopPlacement,
+  FloatingSide,
+  MobileChoice,
+  MobilePlacement,
+} from '@/core/config/capture-placement';
 // ACCT-I02: role and active state are Administration's. They are absent from every schema here,
 // which is what the module audit checks — a field that cannot be named cannot be smuggled through
 // a patch.
@@ -17,9 +24,16 @@ export const AccountPatch = z.strictObject({
   timezone: inherited(Timezone).optional(),
   theme: inherited(Theme).optional(),
   numerals: inherited(Numerals).optional(),
-  // ACCT-B11: the reader's own voice capture switch and Alt+V (CAPTURES-B15).
+  // ACCT-B11: the reader's own voice capture switch and Alt+V (CAPTURES-B15) and where the record
+  // control lives (CAPTURES-B16); `workspace` clears the row rather than storing it (ACCT-I03).
   captures: z
-    .strictObject({ enabled: z.boolean().optional(), shortcut: z.boolean().optional() })
+    .strictObject({
+      enabled: z.boolean().optional(),
+      shortcut: z.boolean().optional(),
+      mobile: MobileChoice.optional(),
+      side: FloatingSide.optional(),
+      desktop: DesktopChoice.optional(),
+    })
     .optional(),
 });
 export const EmailChange = z.strictObject({
@@ -82,8 +96,19 @@ export const Account = z.object({
   // The workspace's enabled sign-in methods, so the page offers only what works (ADMIN-B64).
   signInMethods: z.array(SignInMethod),
   passkeys: z.array(AccountPasskey),
-  // ACCT-B11: `allowed` is the workspace switch (CAPTURES-B14); the other two are the reader's own.
-  captures: z.object({ allowed: z.boolean(), enabled: z.boolean(), shortcut: z.boolean() }),
+  // ACCT-B11: `allowed` is the workspace switch (CAPTURES-B14); `enabled`, `shortcut` and the
+  // placement choices are the reader's own. `workspace*` are the workspace's default placements,
+  // the one thing a member learns of the workspace's capture settings (CAPTURES-B16).
+  captures: z.object({
+    allowed: z.boolean(),
+    enabled: z.boolean(),
+    shortcut: z.boolean(),
+    mobile: MobileChoice,
+    side: FloatingSide,
+    desktop: DesktopChoice,
+    workspaceMobile: MobilePlacement,
+    workspaceDesktop: DesktopPlacement,
+  }),
 });
 export type Account = z.infer<typeof Account>;
 export type AccountSession = z.infer<typeof AccountSession>;

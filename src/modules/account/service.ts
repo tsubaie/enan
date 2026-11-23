@@ -20,6 +20,7 @@ import {
 } from '@/core/db/auth-repo';
 import { getSetting, hasSetting, writeSetting, clearSetting } from '@/core/db/settings-repo';
 import { toJson, writeAudit } from '@/core/db/audit-repo';
+import type { SettingKey, SettingValue } from '@/core/config/settings';
 import { personForUser } from '@/modules/people';
 import type { Account, AccountPatch } from './schema/validation';
 // ACCT-I01: every function here reads its subject from `ctx.user.id`. None takes a user id, which
@@ -62,6 +63,13 @@ export async function getAccount(ctx: Context): Promise<Account> {
       allowed: await getSetting(ctx.db, 'captures.enabled'),
       enabled: await getSetting(ctx.db, 'user.captures.enabled', ctx.user.id),
       shortcut: await getSetting(ctx.db, 'user.captures.shortcut', ctx.user.id),
+      mobile: await getSetting(ctx.db, 'user.captures.mobile_placement', ctx.user.id),
+      side: await getSetting(ctx.db, 'user.captures.floating_side', ctx.user.id),
+      desktop: await getSetting(ctx.db, 'user.captures.desktop_placement', ctx.user.id),
+      // Read here without a role check, so a member can label "Workspace default (…)" while
+      // `GET /admin/settings` stays an administrator's (CAPTURES-B16).
+      workspaceMobile: await getSetting(ctx.db, 'captures.default_mobile_placement'),
+      workspaceDesktop: await getSetting(ctx.db, 'captures.default_desktop_placement'),
     },
   };
 }
@@ -91,6 +99,20 @@ async function sessions(ctx: Context) {
     userAgent: row.userAgent,
   }));
 }
+// ACCT-B11: the reader's own voice capture rows, accepted while the workspace has recording off;
+// they apply once it is back on. CAPTURES-B16: `workspace` is never stored; the row is cleared so
+// the workspace default, and any later change to it, reaches the reader (ACCT-I03).
+async function writeCaptures(ctx: Context, captures: NonNullable<AccountPatch['captures']>) {
+  const own = <K extends SettingKey>(key: K, value: SettingValue<K> | undefined) =>
+    value === undefined ? undefined : writeSetting(ctx.db, key, value, ctx.user.id, ctx.user.id);
+  const placement = <K extends SettingKey>(key: K, value: SettingValue<K> | undefined) =>
+    value === 'workspace' ? clearSetting(ctx.db, key, ctx.user.id) : own(key, value);
+  await own('user.captures.enabled', captures.enabled);
+  await own('user.captures.shortcut', captures.shortcut);
+  await placement('user.captures.mobile_placement', captures.mobile);
+  await own('user.captures.floating_side', captures.side);
+  await placement('user.captures.desktop_placement', captures.desktop);
+}
 // ACCT-B01/B04/B11: the name, the four preferences and voice capture. A preference set to the empty string clears the
 // reader's row so the workspace default reaches them again (ACCT-I03); it is never copied.
 export const patchAccount = transactional(async function patchAccount(
@@ -106,18 +128,7 @@ export const patchAccount = transactional(async function patchAccount(
     if (value === '') await clearSetting(ctx.db, settingKey(name), ctx.user.id);
     else await writeSetting(ctx.db, settingKey(name), value, ctx.user.id, ctx.user.id);
   }
-  // ACCT-B11: accepted while the workspace has recording off; they apply once it is back on.
-  const captures = patch.captures ?? {};
-  if (captures.enabled !== undefined)
-    await writeSetting(ctx.db, 'user.captures.enabled', captures.enabled, ctx.user.id, ctx.user.id);
-  if (captures.shortcut !== undefined)
-    await writeSetting(
-      ctx.db,
-      'user.captures.shortcut',
-      captures.shortcut,
-      ctx.user.id,
-      ctx.user.id,
-    );
+  await writeCaptures(ctx, patch.captures ?? {});
   if (patch.name !== undefined && patch.name !== user.name) {
     const updated = await updateUserAccount(ctx.db, ctx.user.id, {
       name: patch.name,

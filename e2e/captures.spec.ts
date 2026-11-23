@@ -1,7 +1,7 @@
-import type { Browser, Page } from '@playwright/test';
+import type { Browser, BrowserContextOptions, Page } from '@playwright/test';
 import { test, expect } from './fixtures/test';
 import { loginAs } from './fixtures/auth';
-import { gotoReady, waitReady } from './fixtures/ready';
+import { gotoReady, reloadReady, waitReady } from './fixtures/ready';
 import { fill } from './fixtures/messages';
 import { laneBaseURL } from './lanes';
 import { seedDrafts } from './fixtures/captures';
@@ -90,8 +90,24 @@ async function openReview(page: Page, m: typeof en) {
     .first()
     .click();
 }
+// CAPTURES-B16: the signed-in reader's own placement, through the account they already have.
+async function placement(page: Page, captures: object) {
+  const me = await api(page, '/account');
+  const answer = await api(page, '/account', 'PATCH', {
+    revision: me.body.data.user.revision,
+    captures,
+  });
+  expect(answer.status).toBe(200);
+}
+async function workspacePlacement(page: Page, phone: string, computer: string) {
+  for (const [key, value] of [
+    ['captures.default_mobile_placement', phone],
+    ['captures.default_desktop_placement', computer],
+  ])
+    expect((await api(page, '/admin/settings', 'PATCH', { key, value })).status).toBe(200);
+}
 // A member with a login, made by the signed-in administrator, signed in from a second context.
-async function member(page: Page, browser: Browser) {
+async function member(page: Page, browser: Browser, options: BrowserContextOptions = {}) {
   const suffix = crypto.randomUUID();
   const created = await api(page, '/admin/users', 'POST', {
     name: `Member ${suffix.slice(0, 8)}`,
@@ -99,7 +115,7 @@ async function member(page: Page, browser: Browser) {
     role: 'member',
   });
   expect(created.status).toBe(201);
-  const context = await browser.newContext({ baseURL: laneBaseURL() });
+  const context = await browser.newContext({ ...options, baseURL: laneBaseURL() });
   const other = await context.newPage();
   await other.goto('/login');
   await other.getByLabel(en.auth.email).fill(created.body.data.email);
@@ -364,37 +380,44 @@ const toastBottoms = (page: Page) =>
     .evaluateAll((elements) =>
       elements.map((element) => parseFloat(getComputedStyle(element).bottom)),
     );
-test('CAPTURES-A10 on a phone the toast clears the floating microphone only while it is shown (en) @mobile', async ({
-  page,
-}) => {
-  // A working (silent) microphone, so the recorder runs and the phone button gives way to it.
-  await page.addInitScript(() => {
-    localStorage.setItem('enan.captures.microphone-intro', '1');
-    Object.defineProperty(navigator, 'mediaDevices', {
-      configurable: true,
-      value: {
-        getUserMedia: async () => new AudioContext().createMediaStreamDestination().stream,
-      },
+for (const side of ['end', 'start'] as const)
+  test(`CAPTURES-A10 on a phone the toast clears the floating microphone (${side}) only while it is shown (en) @mobile`, async ({
+    page,
+  }) => {
+    // A working (silent) microphone, so the recorder runs and the phone button gives way to it.
+    await page.addInitScript(() => {
+      localStorage.setItem('enan.captures.microphone-intro', '1');
+      Object.defineProperty(navigator, 'mediaDevices', {
+        configurable: true,
+        value: {
+          getUserMedia: async () => new AudioContext().createMediaStreamDestination().stream,
+        },
+      });
     });
+    await loginAs(page, 'en');
+    await placement(page, { mobile: 'floating', side });
+    try {
+      await reloadReady(page);
+      const fab = page.locator('[data-capture-fab]');
+      await expect(fab).toBeVisible();
+      const top = await fab.evaluate((element) => element.getBoundingClientRect().top);
+      const height = await page.evaluate(() => window.innerHeight);
+      const lifted = await toastBottoms(page);
+      expect(lifted.length).toBeGreaterThan(0);
+      for (const bottom of lifted) expect(height - bottom).toBeLessThanOrEqual(top);
+      await fab.click();
+      await expect(page.getByTestId('capture-clock')).not.toHaveText('00:00');
+      await expect(page.locator('[data-capture-fab]')).toHaveCount(0);
+      await expect
+        .poll(async () => (await toastBottoms(page)).every((bottom) => height - bottom > top))
+        .toBe(true);
+      await page.getByRole('button', { name: en.captures.cancel }).click();
+      await expect(fab).toBeVisible();
+      await expect.poll(async () => toastBottoms(page)).toEqual(lifted);
+    } finally {
+      await placement(page, { mobile: 'workspace', side: 'end' });
+    }
   });
-  await loginAs(page, 'en');
-  const fab = page.locator('[data-capture-fab]');
-  await expect(fab).toBeVisible();
-  const top = await fab.evaluate((element) => element.getBoundingClientRect().top);
-  const height = await page.evaluate(() => window.innerHeight);
-  const lifted = await toastBottoms(page);
-  expect(lifted.length).toBeGreaterThan(0);
-  for (const bottom of lifted) expect(height - bottom).toBeLessThanOrEqual(top);
-  await fab.click();
-  await expect(page.getByTestId('capture-clock')).not.toHaveText('00:00');
-  await expect(page.locator('[data-capture-fab]')).toHaveCount(0);
-  await expect
-    .poll(async () => (await toastBottoms(page)).every((bottom) => height - bottom > top))
-    .toBe(true);
-  await page.getByRole('button', { name: en.captures.cancel }).click();
-  await expect(fab).toBeVisible();
-  await expect.poll(async () => toastBottoms(page)).toEqual(lifted);
-});
 test('CAPTURES-A10 on a desktop the hidden microphone does not lift the toast (en) @desktop', async ({
   page,
 }) => {
@@ -532,3 +555,158 @@ for (const [locale, m] of [
       await recording(page, true);
     }
   });
+// The text of the dialog that holds focus, if any: a recorder's sheet opened from a closing sheet or
+// menu must keep it.
+const focusedDialog = (page: Page) =>
+  page.evaluate(() => document.activeElement?.closest('[role="dialog"]')?.textContent ?? '');
+// CAPTURES-A13: on a phone the circle sits at the logical end or start, measured against the
+// screen's edges in both directions; it gives way to a record's sheet and to the keyboard; In More
+// it is the sheet's first action and the More tab carries a dot while drafts wait.
+const box = async (page: Page) => {
+  const rect = await page.locator('[data-capture-fab]').boundingBox();
+  const width = await page.evaluate(() => window.innerWidth);
+  expect(rect).not.toBeNull();
+  return { left: rect!.x, right: width - rect!.x - rect!.width };
+};
+for (const [locale, m] of [
+  ['en', en],
+  ['ar', ar],
+] as const)
+  test(`CAPTURES-A13 CAPTURES-B17 on a phone the circle sits at End, moves to Start, hides for a sheet and the keyboard, and In More is the sheet's first action with the More dot (${locale}) @mobile`, async ({
+    page,
+  }) => {
+    await refuseMicrophone(page);
+    await loginAs(page, locale);
+    const captureId = await recordByUpload(page, m);
+    seedDrafts(captureId);
+    try {
+      await placement(page, { mobile: 'floating', side: 'end' });
+      await reloadReady(page);
+      const end = await box(page);
+      // End is the inline end: right in English, left in Arabic.
+      if (locale === 'en') expect(end.right).toBeLessThan(end.left);
+      else expect(end.left).toBeLessThan(end.right);
+      expect(Math.min(end.left, end.right)).toBeLessThanOrEqual(24);
+      await placement(page, { side: 'start' });
+      await reloadReady(page);
+      const start = await box(page);
+      if (locale === 'en') expect(start.left).toBeLessThan(start.right);
+      else expect(start.right).toBeLessThan(start.left);
+      expect(Math.min(start.left, start.right)).toBeLessThanOrEqual(24);
+      // A record's sheet hides the bar, and the circle with it.
+      await gotoReady(page, '/tasks?new=1');
+      await expect(page.locator('.entity-page-open')).toHaveCount(1);
+      await expect(page.locator('[data-capture-fab]')).toBeHidden();
+      // A focused field means the on-screen keyboard is up.
+      await gotoReady(page, '/account');
+      const fab = page.locator('[data-capture-fab]');
+      await expect(fab).toBeVisible();
+      const field = page.locator('#content input[type="text"], #content input:not([type])').first();
+      await field.focus();
+      await expect(fab).toBeHidden();
+      await field.blur();
+      await expect(fab).toBeVisible();
+      // In More: no circle, Record first in the sheet with the reader's count, and the dot. The
+      // account menu holds Record on a computer, which must not take the phone's focus back.
+      await placement(page, { mobile: 'more', desktop: 'account-menu' });
+      await gotoReady(page, '/home');
+      await expect(page.locator('[data-capture-fab]')).toHaveCount(0);
+      const door = page.locator('nav.mobile-navigation button[data-capture-opener]');
+      await expect(door.locator('[data-capture-dot]')).toBeVisible();
+      await expect(
+        page.locator('nav.mobile-navigation a, nav.mobile-navigation button'),
+      ).toHaveCount(5);
+      await door.click();
+      const sheet = page.getByRole('dialog');
+      const first = sheet.getByRole('button').first();
+      await expect(first).toContainText(m.captures.recordNote);
+      await expect(first.locator('bdi').first()).toBeVisible();
+      await first.click();
+      // The sheet closed in the same click, and did not take focus from the recorder's own sheet
+      // (the intro was seen during the upload, so the refused microphone is what it says).
+      await expect(sheet.filter({ hasText: m.common.navMoreDescription })).toHaveCount(0);
+      await expect.poll(() => focusedDialog(page)).toContain(m.captures.refusedTitle);
+      await page.keyboard.press('Escape');
+      await expect(page.getByText(m.captures.refusedTitle)).toHaveCount(0);
+      await expect(door).toBeFocused();
+    } finally {
+      await placement(page, { mobile: 'workspace', side: 'end', desktop: 'workspace' });
+    }
+  });
+// CAPTURES-A14: on a computer Record moves from the header to the top of the account menu, then
+// leaves only Alt+V with the inbox naming it.
+test('CAPTURES-A14 CAPTURES-B18 on a computer Record lives in the header, then in the account menu as its top action, then only on Alt+V with the inbox hint (en) @desktop', async ({
+  page,
+}) => {
+  await refuseMicrophone(page);
+  await loginAs(page, 'en');
+  const header = page.locator('header').getByRole('button', { name: /Record a note/u });
+  try {
+    await placement(page, { desktop: 'header' });
+    await reloadReady(page);
+    await expect(header).toBeVisible();
+    await expect(header).toHaveAttribute('aria-keyshortcuts', 'Alt+V');
+    await placement(page, { desktop: 'account-menu' });
+    await reloadReady(page);
+    await expect(header).toHaveCount(0);
+    const avatar = page.getByRole('button', { name: en.common.account, exact: true });
+    await avatar.click();
+    const menu = page.locator('[data-slot="popover-content"]');
+    const first = menu.getByRole('button').first();
+    await expect(first).toContainText(en.captures.recordNote);
+    await expect(first.locator('kbd')).toHaveText(en.captures.shortcut);
+    await first.click();
+    // The menu closed in the same click and the recorder's sheet holds focus, not the avatar.
+    await expect(menu).toHaveCount(0);
+    await expect.poll(() => focusedDialog(page)).toContain(en.captures.permissionTitle);
+    await page.getByRole('button', { name: en.captures.notNow }).click();
+    await expect(avatar).toBeFocused();
+    await placement(page, { desktop: 'hidden' });
+    await reloadReady(page);
+    await expect(header).toHaveCount(0);
+    await avatar.click();
+    await expect(menu).toBeVisible();
+    await expect(menu.getByText(en.captures.recordNote)).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await gotoReady(page, '/captures');
+    const inbox = page.locator('[data-inbox] > header');
+    await expect(inbox.getByRole('button', { name: en.captures.record })).toBeVisible();
+    await expect(inbox.getByText('Press Alt+V to record')).toBeVisible();
+    await page.locator('body').press('Alt+KeyV');
+    await expect(page.getByText(en.captures.permissionTitle)).toBeVisible();
+    await page.getByRole('button', { name: en.captures.notNow }).click();
+    await expect(inbox.getByRole('button', { name: en.captures.record })).toBeFocused();
+  } finally {
+    await placement(page, { desktop: 'workspace' });
+  }
+});
+// CAPTURES-A15: a member on Workspace default follows the administrator's new default; one who
+// chose Floating, Start keeps it.
+test('CAPTURES-A15 CAPTURES-B16 a member on Workspace default follows the administrator’s new default; a member who chose Floating, Start does not move (en) @mobile', async ({
+  page,
+  browser,
+}) => {
+  await loginAs(page, 'en');
+  // The project's phone, for the two members' own contexts.
+  const phone = { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true };
+  const following = await member(page, browser, phone);
+  const chosen = await member(page, browser, phone);
+  try {
+    await placement(chosen.other, { mobile: 'floating', side: 'start' });
+    await workspacePlacement(page, 'more', 'account-menu');
+    await reloadReady(following.other);
+    await expect(following.other.locator('[data-capture-fab]')).toHaveCount(0);
+    await following.other.locator('nav.mobile-navigation button[data-capture-opener]').click();
+    await expect(following.other.getByRole('dialog').getByRole('button').first()).toContainText(
+      en.captures.recordNote,
+    );
+    await reloadReady(chosen.other);
+    await expect(chosen.other.locator('[data-capture-fab]')).toBeVisible();
+    const start = await box(chosen.other);
+    expect(start.left).toBeLessThan(start.right);
+  } finally {
+    await workspacePlacement(page, 'floating-end', 'header');
+    await following.close();
+    await chosen.close();
+  }
+});

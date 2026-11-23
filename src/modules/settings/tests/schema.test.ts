@@ -44,7 +44,10 @@ it('ADMIN-B07 every workspace key has a default its own schema accepts and is wr
 });
 it('ADMIN-B07 ACCT-B04 ACCT-B11 the user keys are the four preferences and voice capture, and every member may set their own', () => {
   expect(userKeys.sort()).toEqual([
+    'user.captures.desktop_placement',
     'user.captures.enabled',
+    'user.captures.floating_side',
+    'user.captures.mobile_placement',
     'user.captures.shortcut',
     'user.locale',
     'user.numerals',

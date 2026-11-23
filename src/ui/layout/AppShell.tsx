@@ -7,7 +7,7 @@ import { Logo } from './Logo';
 import { ShellHeader } from './ShellHeader';
 import { HydrationMark } from './HydrationMark';
 import { routes } from '@/core/routes';
-import { CaptureFab, CaptureHost } from '@/modules/captures/ui';
+import { CaptureHost, captureEntries } from '@/modules/captures/ui';
 import type { CaptureSetup } from '@/modules/captures/schema/validation';
 type ShellUser = { id: string; name: string; email: string; role: string };
 export function AppShell({
@@ -22,6 +22,9 @@ export function AppShell({
   // CAPTURES-B14 CAPTURES-B15: resolved on the server; a prop, never a context (ADR 0072).
   capture: CaptureSetup;
 }) {
+  // CAPTURES-B17 CAPTURES-B18: the record controls are slots the layout places without knowing
+  // what they are; which one appears where is the captures module's (`captureEntries`).
+  const entries = captureEntries(capture);
   return (
     // The shell owns the viewport: it is exactly one screen tall and the page scrolls inside its own
     // column, under a header and over a bottom bar that each hold their size. Nothing depends on
@@ -33,7 +36,7 @@ export function AppShell({
     <div className="flex h-dvh flex-col overflow-hidden bg-bg lg:grid lg:grid-cols-[240px_minmax(0,1fr)]">
       <Sidebar user={user} workspace={workspace} />
       <div className="app-canvas flex min-h-0 min-w-0 flex-1 flex-col bg-surface lg:m-2 lg:overflow-hidden lg:rounded-2xl lg:border">
-        <ShellHeader user={user} capture={capture} />
+        <ShellHeader user={user} capture={capture} record={entries.header} menu={entries.menu} />
         {/* Below 1024 px the bar floats over this column as a glass capsule, so the page reserves
             the ground it takes — the safe area, the gap under the capsule, the capsule and the gap
             over it (--mobile-nav-clear in tokens.css) — rather than running its last rows under it. */}
@@ -52,9 +55,9 @@ export function AppShell({
         {/* ADR 0072: this boundary hydrates on its own, so it has its own readiness mark. */}
         <HydrationMark part="shell" />
       </Suspense>
-      {capture.enabled ? <CaptureFab /> : null}
+      {entries.floating}
       <nav className="mobile-navigation fixed inset-x-3 bottom-[var(--mobile-nav-bottom)] z-30 flex gap-0.5 rounded-[28px] border p-1 lg:hidden">
-        <MobileNav role={user.role} />
+        <MobileNav role={user.role} action={entries.more} dot={entries.moreDot} />
       </nav>
     </div>
   );

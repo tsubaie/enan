@@ -17,6 +17,7 @@ import { CaptureProcessing, stageOf } from './CaptureProcessing';
 import { CaptureShortcut, type ShortcutKeys } from './CaptureShortcut';
 import { registerCapture, setCaptureActive } from './capture-store';
 import { focusWasLost } from './focus';
+import { isWideScreen } from './inbox-state';
 import { refusalOf, type Refusal } from './upload-refusal';
 import { useCapture, useCreateCapture } from './capture-queries';
 // S2 is shown once per browser; the browser's own prompt follows it.
@@ -131,7 +132,9 @@ function useLauncher(launch: () => void) {
 }
 // CAPTURES-B01: a recorder closed without sending (Cancel, Discard, a dismissed sheet) returns
 // focus to the control that opens it, after the next paint and only when focus was lost. A control
-// the layout hides takes no focus, so the next one is tried. The sheets' dismiss shares it: with no
+// the layout hides takes no focus, so the next one is tried. An opener marked `wide` (the avatar,
+// whose menu holds Record on a computer, CAPTURES-B18) is visible on a phone too, so it is passed
+// over there and the More tab is reached instead. The sheets' dismiss shares it: with no
 // recording running, the recorder's cancel does nothing.
 function useRefocus(close: () => void) {
   const frame = useRef(0);
@@ -143,7 +146,11 @@ function useRefocus(close: () => void) {
     frame.current = requestAnimationFrame(() => {
       if (!focusWasLost()) return;
       const openers = [
-        ...document.querySelectorAll<HTMLElement>('[data-capture-opener]:not([hidden])'),
+        ...document.querySelectorAll<HTMLElement>(
+          isWideScreen()
+            ? '[data-capture-opener]:not([hidden])'
+            : '[data-capture-opener]:not([hidden], [data-capture-opener="wide"])',
+        ),
         document.querySelector<HTMLElement>('#content h1'),
       ];
       for (const node of openers) {

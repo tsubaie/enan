@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { Priority } from '@/modules/tasks/schema/validation';
 import { Tags } from '@/modules/notes/schema/validation';
+import { DesktopPlacement, MobilePlacement } from '@/core/config/capture-placement';
 // CAPTURES-I01: the lifecycle a recording moves through before anything goes live (ADR 0071).
 // `needs_transcript` is a stored recording with no transcript yet (AI off, unconfigured, over
 // budget); `failed` keeps the audio and any transcript for a retry. Deletion is `deleted_at`.
@@ -223,5 +224,8 @@ export const CaptureSetup = z.object({
   enabled: z.boolean(),
   allowed: z.boolean(),
   shortcut: z.boolean(),
+  // CAPTURES-B16: where the record control lives on a phone and on a computer.
+  mobile: MobilePlacement,
+  desktop: DesktopPlacement,
 });
 export type CaptureSetup = z.infer<typeof CaptureSetup>;

@@ -5,6 +5,13 @@ import { ModelId } from './ai-model-schema';
 import { Locale, defaults } from './defaults';
 import { WallpaperChoice, defaultWallpaper } from './wallpapers';
 import { SignInMethods } from './sign-in-schema';
+import {
+  DesktopChoice,
+  DesktopPlacement,
+  FloatingSide,
+  MobileChoice,
+  MobilePlacement,
+} from './capture-placement';
 export const Theme = z.enum(['dark', 'light']);
 export const Timezone = z.string().refine((value) => {
   try {
@@ -94,6 +101,9 @@ export const settingsRegistry = {
   // CAPTURES-B14: recording for the whole workspace; off hides every way to record and refuses new
   // audio, while drafts already made stay reviewable. Not the inbox rollback hatch above.
   'captures.enabled': entry(z.boolean(), true),
+  // CAPTURES-B16: where members who have not chosen find the record control.
+  'captures.default_mobile_placement': entry(MobilePlacement, 'floating-end'),
+  'captures.default_desktop_placement': entry(DesktopPlacement, 'header'),
   'user.locale': entry(Locale, defaults.locale, user),
   'user.timezone': entry(Timezone, defaults.timezone, user),
   'user.theme': entry(Theme, 'dark', user),
@@ -101,6 +111,10 @@ export const settingsRegistry = {
   // CAPTURES-B15: the reader's own recording switch and Alt+V, both under `captures.enabled`.
   'user.captures.enabled': entry(z.boolean(), true, user),
   'user.captures.shortcut': entry(z.boolean(), true, user),
+  // CAPTURES-B16: the reader's own placement; `workspace` is the absent row, never a stored value.
+  'user.captures.mobile_placement': entry(MobileChoice, 'workspace', user),
+  'user.captures.floating_side': entry(FloatingSide, 'end', user),
+  'user.captures.desktop_placement': entry(DesktopChoice, 'workspace', user),
 } satisfies Record<string, SettingEntry>;
 export type SettingKey = keyof typeof settingsRegistry;
 export type SettingValue<K extends SettingKey> = z.output<(typeof settingsRegistry)[K]['schema']>;

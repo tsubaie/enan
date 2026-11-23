@@ -204,7 +204,7 @@ it('ACCT-B11 the voice capture switch and shortcut write only the reader’s own
       AccountPatch.parse({ revision: 1, captures: { enabled: false, shortcut: false } }),
     ),
   );
-  expect(account.captures).toEqual({ allowed: true, enabled: false, shortcut: false });
+  expect(account.captures).toMatchObject({ allowed: true, enabled: false, shortcut: false });
   const rows = await db().select().from(settings);
   expect(rows.map((row) => [row.key, row.userId, row.scope, row.updatedBy]).sort()).toEqual([
     ['user.captures.enabled', actor.id, 'user', actor.id],
@@ -218,7 +218,7 @@ it('ACCT-B11 the switch is kept while the workspace has recording off, and the a
   const account = await run((ctx) =>
     service.patchAccount(ctx, AccountPatch.parse({ revision: 1, captures: { shortcut: false } })),
   );
-  expect(account.captures).toEqual({ allowed: false, enabled: true, shortcut: false });
+  expect(account.captures).toMatchObject({ allowed: false, enabled: true, shortcut: false });
   expect(await getSetting(db(), 'user.captures.shortcut', actor.id)).toBe(false);
 });
 it('ACCT-B11 the captures patch is strict: no user id, no workspace switch, no unknown key', () => {
@@ -227,8 +227,54 @@ it('ACCT-B11 the captures patch is strict: no user id, no workspace switch, no u
     { allowed: true },
     { inbox: false },
     { enabled: 'yes' },
+    { mobile: 'floating-end' },
+    { mobile: 'hidden' },
+    { side: 'left' },
+    { desktop: 'more' },
   ])
     expect(AccountPatch.safeParse({ revision: 1, captures }).success).toBe(false);
   expect(AccountPatch.safeParse({ revision: 1, userId: id(), captures: {} }).success).toBe(false);
   expect(AccountPatch.parse({ revision: 1, captures: {} }).captures).toEqual({});
+});
+// ACCT-B11 CAPTURES-B16: a placement is stored only as a concrete choice; Workspace default clears
+// the reader's row (ACCT-I03), and the workspace's own defaults are read back for any member.
+it('ACCT-B11 CAPTURES-B16 workspace clears the placement row, a concrete choice writes it, and a member reads the workspace defaults', async () => {
+  const admin = actor;
+  actor = User.parse(
+    await insertUser(db(), {
+      id: id(),
+      name: 'Member',
+      email: 'member@example.test',
+      passwordHash: 'unused-test-hash',
+      role: 'member',
+    }),
+  );
+  const patch = (captures: object) =>
+    run((ctx) => service.patchAccount(ctx, AccountPatch.parse({ revision: 1, captures })));
+  const placementRows = async () =>
+    (await db().select().from(settings))
+      .filter((row) => row.key.startsWith('user.captures.') && row.userId === actor.id)
+      .map((row) => [row.key, row.value])
+      .sort();
+  let account = await patch({ mobile: 'floating', side: 'start', desktop: 'account-menu' });
+  expect(account.captures).toMatchObject({
+    mobile: 'floating',
+    side: 'start',
+    desktop: 'account-menu',
+  });
+  expect(await placementRows()).toEqual([
+    ['user.captures.desktop_placement', 'account-menu'],
+    ['user.captures.floating_side', 'start'],
+    ['user.captures.mobile_placement', 'floating'],
+  ]);
+  await writeSetting(db(), 'captures.default_mobile_placement', 'more', admin.id);
+  await writeSetting(db(), 'captures.default_desktop_placement', 'hidden', admin.id);
+  account = await patch({ mobile: 'workspace', desktop: 'workspace' });
+  expect(await placementRows()).toEqual([['user.captures.floating_side', 'start']]);
+  expect(account.captures).toMatchObject({
+    mobile: 'workspace',
+    desktop: 'workspace',
+    workspaceMobile: 'more',
+    workspaceDesktop: 'hidden',
+  });
 });

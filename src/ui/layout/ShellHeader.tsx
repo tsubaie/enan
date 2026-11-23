@@ -1,5 +1,5 @@
 'use client';
-import { Suspense, lazy, useEffect, useSyncExternalStore } from 'react';
+import { Suspense, lazy, useEffect, useSyncExternalStore, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { Search } from 'lucide-react';
 import Link from 'next/link';
@@ -23,8 +23,15 @@ import type { CaptureSetup } from '@/modules/captures/schema/validation';
 // used to carry the workspace name, which the sidebar foot already says in a heavier weight on the
 // same screen. A band that spans every page at every width has to earn it; the language does,
 // because a reader who landed in the wrong one cannot read the menu it used to hide in.
-type Props = { user: { name: string; email: string; role: string }; capture: CaptureSetup };
-export function ShellHeader({ user, capture }: Props) {
+// `record` is the computer's record button and `menu` the account menu's record action
+// (CAPTURES-B18); either may be empty.
+type Props = {
+  user: { name: string; email: string; role: string };
+  capture: CaptureSetup;
+  record: ReactNode;
+  menu: ReactNode;
+};
+export function ShellHeader({ user, capture, record, menu }: Props) {
   const t = useTranslations('common');
   const { open, query } = useSearchPalette();
   const apple = useApplePlatform();
@@ -62,13 +69,13 @@ export function ShellHeader({ user, capture }: Props) {
             {t(apple ? 'searchShortcutMac' : 'searchShortcut')}
           </kbd>
         </Button>
-        <CaptureHeaderControls capture={capture} />
+        <CaptureHeaderControls capture={capture} record={record} />
         {/* On a phone the language is chosen in the bar's More sheet (MobileNav), not up here. */}
         <div className="hidden lg:block">
           <LanguageToggle />
         </div>
         <NotificationBell />
-        <AccountMenu user={user} />
+        <AccountMenu user={user} record={menu} />
       </div>
       {open && (
         <Suspense fallback={null}>

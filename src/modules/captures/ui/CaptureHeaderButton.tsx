@@ -1,51 +1,28 @@
 'use client';
+import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { Inbox, Mic } from 'lucide-react';
+import { Inbox } from 'lucide-react';
 import { routes } from '@/core/routes';
-import { Button, buttonVariants } from '@/ui/primitives/button';
+import { buttonVariants } from '@/ui/primitives/button';
 import { CountCircle } from '@/ui/primitives/count-circle';
-import { cn } from '@/ui/cn';
-import { startCapture, useCaptureActive } from './capture-store';
 import { useCaptureCount } from './capture-queries';
 import { CaptureReviewPanel } from './CaptureReviewPanel';
 import { isWideScreen, setReviewPanel } from './inbox-state';
 import type { CaptureSetup } from '../schema/validation';
-import type { ShortcutKeys } from './CaptureShortcut';
-// S9: the desktop control, with its chord on the keycap and the Mac spelling in the tooltip; with
-// the shortcut off (CAPTURES-B19) it names no chord at all.
-function CaptureHeaderButton({ keys }: { keys: ShortcutKeys }) {
-  const t = useTranslations('captures');
-  const active = useCaptureActive();
-  return (
-    <Button
-      variant="outline"
-      data-capture-opener
-      className={cn('hidden lg:inline-flex', active && 'border-accent bg-accent-soft')}
-      title={keys ? t('shortcutMac') : undefined}
-      aria-keyshortcuts={keys ?? undefined}
-      onClick={startCapture}
-    >
-      {active ? (
-        <span aria-hidden className="size-2.5 rounded-full bg-danger" />
-      ) : (
-        <Mic aria-hidden />
-      )}
-      {t('recordNote')}
-      {keys ? (
-        <kbd translate="no" aria-hidden className="rounded border px-1.5 py-0.5 text-[11px]">
-          {t('shortcut')}
-        </kbd>
-      ) : null}
-    </Button>
-  );
-}
-// The header's two controls, recording and Review (S9, S13). With recording off (CAPTURES-B14)
-// only Review stays: the drafts already made are still the reader's to review.
-export function CaptureHeaderControls({ capture }: { capture: CaptureSetup }) {
+// The header's record control, which the shell chose (`captureEntries`, CAPTURES-B18) and may be
+// empty, then Review and its panel (S13). With recording off (CAPTURES-B14) only Review stays: the
+// drafts already made are still the reader's to review.
+export function CaptureHeaderControls({
+  capture,
+  record,
+}: {
+  capture: CaptureSetup;
+  record: ReactNode;
+}) {
   return (
     <>
-      {capture.enabled ? <CaptureHeaderButton keys={capture.shortcut ? 'Alt+V' : null} /> : null}
+      {record}
       <CaptureReviewLink />
       <CaptureReviewPanel capture={capture} />
     </>

@@ -792,11 +792,16 @@
     "voiceCaptureIntro": "Applies to every member of this workspace.",
     "voiceCaptureAllow": "Allow voice capture",
     "voiceCaptureNew": "New",
-    "voiceCaptureHelper": "Controls the floating record button, the header button, the shortcut and the inbox Record button together. Turning it off deletes nothing; members can still review, approve or discard the drafts they already have.",
+    "voiceCaptureHelper": "Controls the floating record button, the header button, the Record a note item in the account menu, the shortcut and the inbox Record button together. Turning it off deletes nothing; members can still review, approve or discard the drafts they already have.",
     "voiceCaptureAi": "An AI capability, set on the AI page. When it's off, recordings are kept but no drafts are prepared.",
     "voiceCaptureAiOn": "On",
     "voiceCaptureAiOff": "Off",
-    "voiceCaptureOpenAi": "Open AI settings"
+    "voiceCaptureOpenAi": "Open AI settings",
+    "voicePlacement": "Default record button placement",
+    "voicePlacementIntro": "Every member starts here. Members who already chose a placement keep it.",
+    "voicePlacementPhone": "On a phone",
+    "voicePlacementComputer": "On a computer",
+    "voicePlacementKept": "Members who already chose a placement keep it."
   },
   "errors": {
     "validation_failed": "Check the entered values.",
@@ -1341,7 +1346,17 @@
     "voiceShortcut": "Keyboard shortcut",
     "voiceShortcutMac": "<key>⌥V</key> on macOS",
     "voiceShortcutHint": "Won't start while you're typing in a field or editor, or composing text.",
-    "voiceSaved": "Saved to your account. Phone and computer settings are kept separately."
+    "voiceSaved": "Saved to your account. Phone and computer settings are kept separately.",
+    "voiceRecordButton": "Record button",
+    "voicePhone": "On a phone",
+    "voiceComputer": "On a computer",
+    "voiceWorkspaceDefault": "Workspace default ({value})",
+    "voiceFloating": "Floating",
+    "voiceSide": "Side",
+    "voiceStart": "Start",
+    "voiceStartCaption": "Left of the screen",
+    "voiceEnd": "End",
+    "voiceEndCaption": "Right of the screen"
   },
   "notifications": {
     "title": "Notifications",
@@ -1545,6 +1560,16 @@
     "noneApproved": "No drafts were approved. Check the drafts marked in Review, then try again.",
     "recordingOff": "Recording is turned off by your workspace admin.",
     "recordingOffTitle": "Recording is turned off by your workspace admin",
-    "recordingOffBody": "You can still review, approve or discard the drafts you already have."
+    "recordingOffBody": "You can still review, approve or discard the drafts you already have.",
+    "record": "Record",
+    "recordHint": "Press <key>Alt+V</key> to record",
+    "pendingYours": "{count, plural, one {<bdi>#</bdi> of your drafts is waiting for review} other {<bdi>#</bdi> of your drafts are waiting for review}}",
+    "pendingDot": "Drafts waiting for review",
+    "placement_floating-end": "Floating, End",
+    "placement_floating-start": "Floating, Start",
+    "placement_more": "In the More menu",
+    "placement_header": "Header button",
+    "placement_account-menu": "In the account menu",
+    "placement_hidden": "Hidden (shortcut only)"
   }
 }

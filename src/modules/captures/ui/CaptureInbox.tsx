@@ -11,6 +11,7 @@ import { blockers, type CaptureGroup as Group, type CaptureSetup } from '../sche
 import { startCapture } from './capture-store';
 import { useCaptures, useReviewMutations, type CaptureScope } from './capture-queries';
 import { CaptureGroup } from './CaptureGroup';
+import { inboxEntry } from './entries';
 import { InboxEducation } from './InboxEducation';
 import { RecordingOff } from './RecordingOff';
 import type { Layout } from './SuggestionCard';
@@ -68,6 +69,7 @@ function Root({
               {t('waiting', { count: pendingOf(groups).length })}
             </p>
           </div>
+          {inboxEntry(capture)}
           {groups.length > 0 && <ApproveReadyButton approval={approval} />}
           {actions}
         </header>
@@ -177,9 +179,6 @@ export function ApproveReadyButton({
     </Button>
   );
 }
-function Education() {
-  return <InboxEducation />;
-}
 function Groups() {
   const { groups, layout } = useInbox();
   if (!groups.length) return null;
@@ -242,7 +241,7 @@ function Scope() {
 export const CaptureInbox = {
   Root,
   Off: RecordingOff,
-  Education,
+  Education: InboxEducation,
   Group: CaptureGroup,
   Groups,
   Empty,
