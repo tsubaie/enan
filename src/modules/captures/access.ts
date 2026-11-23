@@ -11,7 +11,10 @@ export function canViewCapture(user: Reader, capture: Owned | undefined): captur
 }
 // The recorder or an administrator, whether or not the capture is deleted: who may repeat a delete
 // or undo it. Never a reason to show a deleted capture.
-export function ownsCapture(user: Reader, capture: Pick<Owned, 'createdBy'> | undefined) {
+export function ownsCapture<T extends Pick<Owned, 'createdBy'>>(
+  user: Reader,
+  capture: T | undefined,
+): capture is T {
   return Boolean(capture && (user.role === 'admin' || capture.createdBy === user.id));
 }
 // Whoever may see a draft may act on it; kept separate so a narrower rule has one place to go.

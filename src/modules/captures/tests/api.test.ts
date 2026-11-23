@@ -227,6 +227,15 @@ it("CAPTURES-B13 restore with the delete's op id brings back the capture and its
     .from(auditLog)
     .where(and(eq(auditLog.entityId, mine.id), eq(auditLog.action, 'restore')));
   expect(restores).toHaveLength(1);
-  // A live capture has nothing to restore.
-  expect((await restore(mine.id, opId)).status).toBe(404);
+  // A repeat of that restore answers the capture and writes nothing; another op id is not found.
+  const repeat = await restore(mine.id, opId);
+  expect(repeat.status).toBe(200);
+  expect(repeat.body.data).toMatchObject({ id: mine.id });
+  expect(
+    await db()
+      .select()
+      .from(auditLog)
+      .where(and(eq(auditLog.entityId, mine.id), eq(auditLog.action, 'restore'))),
+  ).toHaveLength(1);
+  expect((await restore(mine.id, id())).status).toBe(404);
 });

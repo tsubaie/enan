@@ -2,7 +2,7 @@ import 'server-only';
 import { and, desc, eq, inArray, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
 import type { Database } from '@/core/db/client';
 import { restoreEntity } from '@/core/db/entity';
-import { files, jobs } from '@/core/db/system-schema';
+import { auditLog, files, jobs } from '@/core/db/system-schema';
 import { captures, captureSuggestions } from './schema/db';
 export type CaptureRow = typeof captures.$inferSelect;
 type Reader = { id: string; role: string };
@@ -167,6 +167,40 @@ export async function restoreCapture(
       and(eq(captureSuggestions.captureId, captureId), eq(captureSuggestions.deletedOpId, opId)),
     );
   return restored;
+}
+// A restored capture still waiting on a step whose job is over (it finished while the capture was
+// deleted, so its result was fenced off) would wait forever: it fails as `interrupted`, which Retry
+// and Type the transcript take. A job still queued or running keeps it waiting; one that failed or
+// was cancelled already reads as failed with its own reason (`stalled`), so it is left alone.
+export async function interruptOrphanedCapture(database: Database, captureId: string) {
+  const rows = await database
+    .update(captures)
+    .set({ status: 'failed', errorCode: 'interrupted', updatedAt: new Date() })
+    .where(
+      and(
+        eq(captures.id, captureId),
+        inArray(captures.status, ['queued', 'transcribing', 'interpreting']),
+        sql`not exists (select 1 from ${jobs} where ${jobs.id} = ${waitingJob} and ${jobs.status} in ('queued', 'running', 'failed', 'cancelled'))`,
+      ),
+    )
+    .returning({ id: captures.id });
+  return rows.length > 0;
+}
+// A restore already made with this operation id, so a repeat can answer without writing again.
+export async function wasRestored(database: Database, captureId: string, opId: string) {
+  const [row] = await database
+    .select({ id: auditLog.id })
+    .from(auditLog)
+    .where(
+      and(
+        eq(auditLog.entityType, 'capture'),
+        eq(auditLog.entityId, captureId),
+        eq(auditLog.action, 'restore'),
+        eq(auditLog.opId, opId),
+      ),
+    )
+    .limit(1);
+  return Boolean(row);
 }
 // Interpretation replaces the drafts still waiting for review; reviewed ones stay as they are.
 export async function replacePendingSuggestions(

@@ -268,19 +268,32 @@ export const removeCapture = transactional(async function removeCapture(
 });
 // S17 Undo: the capture and the drafts its delete took come back together, for the recorder or an
 // administrator naming that delete's operation id. A wrong id, someone else, or a capture that is
-// not deleted all answer `not_found`, so a restore reveals nothing. No notification (CAPTURES-B03).
+// not deleted all answer `not_found`, so a restore reveals nothing. A repeat of a restore already
+// made answers with the capture and writes nothing. No notification (CAPTURES-B03).
+// `transactional` runs this in one BEGIN IMMEDIATE transaction (or a savepoint in the request's),
+// so the write lock is held from the first read: a job cannot publish between the check and the
+// restore, and the reconcile below sees the job as it finally stands.
 export const restoreCapture = transactional(async function restoreCapture(
   ctx: Context,
   captureId: string,
   opId: string,
 ) {
   const stored = await repo.selectStoredCapture(ctx.db, captureId);
-  if (
-    !ownsCapture(ctx.user, stored) ||
-    !(await repo.restoreCapture(ctx.db, captureId, opId, ctx.user.id))
-  )
+  if (!ownsCapture(ctx.user, stored)) throw new AppError('not_found', { entityType: 'capture' });
+  if (!stored.deletedAt && (await repo.wasRestored(ctx.db, captureId, opId)))
+    return getCapture(ctx, captureId);
+  if (!(await repo.restoreCapture(ctx.db, captureId, opId, ctx.user.id)))
     throw new AppError('not_found', { entityType: 'capture' });
-  await writeAudit(ctx.db, ctx.user.id, 'restore', 'capture', captureId, {}, opId);
+  const reconciled = await repo.interruptOrphanedCapture(ctx.db, captureId);
+  await writeAudit(
+    ctx.db,
+    ctx.user.id,
+    'restore',
+    'capture',
+    captureId,
+    reconciled ? { reconciled: true, previousStatus: stored.status } : {},
+    opId,
+  );
   return getCapture(ctx, captureId);
 });
 // CAPTURES-B02: a draft's audio, only for whoever may see the draft. Never a public URL.
