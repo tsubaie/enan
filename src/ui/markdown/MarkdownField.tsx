@@ -2,6 +2,7 @@
 import {
   Suspense,
   lazy,
+  startTransition,
   useEffect,
   useId,
   useRef,
@@ -108,10 +109,15 @@ function useDraft(value: string, onCommit: Commit) {
     setDraft(next);
     commits.commit(next, onCommit);
   };
-  const enter = (at: number | null) => {
-    setCaret(at);
-    setEditing(true);
-  };
+  // A transition keeps the preview, and its focused button, on screen until the editor can take
+  // its place in the same commit. Removed on its own, the focused button drops focus, and the
+  // expanded view's dialog puts it back on its popup a frame later, which can land after the
+  // textarea has focused and so leave the field at once (NOTES-A14).
+  const enter = (at: number | null) =>
+    startTransition(() => {
+      setCaret(at);
+      setEditing(true);
+    });
   return { editing, caret, draft, setDraft, leave, toggle, enter };
 }
 // Markdown editing (ADR 0015): the field shows the rendered preview and becomes a textarea when
@@ -141,12 +147,15 @@ export function MarkdownField({
       {notice}
       <div className="relative">
         {expand && !expand.open && <ExpandToggle expand={expand} />}
-        {editing ? (
-          <Suspense
-            fallback={
-              <div className={cn('rounded-lg border', draft.trim() ? 'min-h-40' : 'min-h-20')} />
-            }
-          >
+        {/* One boundary over both halves: a transition into an already shown boundary keeps the
+            preview until the editor has loaded, where a boundary of its own would show the
+            fallback. */}
+        <Suspense
+          fallback={
+            <div className={cn('rounded-lg border', draft.trim() ? 'min-h-40' : 'min-h-20')} />
+          }
+        >
+          {editing ? (
             <Editor
               id={id}
               name={name}
@@ -158,10 +167,10 @@ export function MarkdownField({
               onChange={setDraft}
               onLeave={leave}
             />
-          </Suspense>
-        ) : (
-          <Preview id={id} label={label} draft={draft} name={name} toggle={toggle} edit={enter} />
-        )}
+          ) : (
+            <Preview id={id} label={label} draft={draft} name={name} toggle={toggle} edit={enter} />
+          )}
+        </Suspense>
       </div>
     </div>
   );
