@@ -47,18 +47,23 @@ export function WaitingReason({ id }: { id: string }) {
 // S17, S29: Retry, Type the transcript, then Delete recording last, wrapping in reading order.
 // `blockedBy` is the id of the reason both first actions wait on (CAPTURES-B22: transcription is
 // switched off): they stay focusable, say why, and do nothing when pressed. Delete still works.
-export function RecoverActions({ group, blockedBy }: { group: Group; blockedBy: string | null }) {
+// `saved` hears the revision a typed transcript was saved onto, once the save settles either way,
+// so the group can move focus when it is listed anew (CAPTURES-B25).
+type Saved = (typedOn: number) => void;
+const blockedProps = (reason: string | null) => ({
+  'aria-disabled': reason ? true : undefined,
+  'aria-describedby': reason ?? undefined,
+  className:
+    'aria-disabled:cursor-not-allowed aria-disabled:bg-muted aria-disabled:text-text-muted',
+});
+type RecoverProps = { group: Group; blockedBy: string | null; saved: Saved };
+export function RecoverActions({ group, blockedBy, saved }: RecoverProps) {
   const t = useTranslations('captures');
   const retry = useRetryCapture();
   const [typing, setTyping] = useState(false);
   const toggle = useRef<HTMLButtonElement>(null);
   const field = useRef<HTMLTextAreaElement>(null);
-  const blocked = {
-    'aria-disabled': blockedBy ? true : undefined,
-    'aria-describedby': blockedBy ?? undefined,
-    className:
-      'aria-disabled:cursor-not-allowed aria-disabled:bg-muted aria-disabled:text-text-muted',
-  };
+  const blocked = blockedProps(blockedBy);
   return (
     <>
       <div className="flex flex-wrap items-center gap-2">
@@ -66,6 +71,7 @@ export function RecoverActions({ group, blockedBy }: { group: Group; blockedBy: 
           variant="outline"
           size="sm"
           {...blocked}
+          data-recover="retry"
           disabled={retry.isPending}
           onClick={() => {
             if (!blockedBy) retry.mutate(group);
@@ -96,6 +102,7 @@ export function RecoverActions({ group, blockedBy }: { group: Group; blockedBy: 
         <TypeTranscript
           group={group}
           field={field}
+          saved={saved}
           done={() => setTyping(false)}
           cancel={() => {
             setTyping(false);
@@ -108,23 +115,15 @@ export function RecoverActions({ group, blockedBy }: { group: Group; blockedBy: 
   );
 }
 // S17 «كتابة النص»: a typed transcript replaces what the recording held and is interpreted anew.
-// Cancel closes it and puts focus back on Type the transcript.
-function TypeTranscript({
-  group,
-  field,
-  done,
-  cancel,
-}: {
-  group: Group;
-  field: RefObject<HTMLTextAreaElement | null>;
-  done: () => void;
-  cancel: () => void;
-}) {
+// Cancel closes it and puts focus back on Type the transcript. While the save is sent its controls
+// are disabled, so it cannot go twice, and a polite status says so (CAPTURES-B25).
+type Field = RefObject<HTMLTextAreaElement | null>;
+type TypeProps = { group: Group; field: Field; saved: Saved; done: () => void; cancel: () => void };
+function TypeTranscript({ group, field, saved, done, cancel }: TypeProps) {
   const t = useTranslations('captures');
   const mutations = useReviewMutations();
   const [error, setError] = useState<Error | null>(null);
   const [saving, setSaving] = useState(false);
-  const hint = `capture-${group.id}-hint`;
   return (
     <form
       className="grid gap-2 border-t pt-3"
@@ -133,39 +132,60 @@ function TypeTranscript({
         const transcript = String(new FormData(event.currentTarget).get('transcript') ?? '').trim();
         if (!transcript) return;
         setSaving(true);
-        mutations.typeTranscript(group.id, transcript).then(done, (failure: unknown) => {
-          setSaving(false);
-          setError(failure instanceof Error ? failure : null);
-        });
+        const typedOn = group.revision;
+        mutations.typeTranscript(group.id, transcript).then(
+          () => {
+            done();
+            saved(typedOn);
+          },
+          (failure: unknown) => {
+            setSaving(false);
+            setError(failure instanceof Error ? failure : null);
+            // A refusal can still have kept the words (CAPTURES-B23), and failed the capture.
+            saved(typedOn);
+          },
+        );
       }}
     >
-      <div className="grid gap-1 text-sm">
-        <label htmlFor={`capture-${group.id}-transcript`} className="font-medium">
-          {t('transcriptLabel')}
-        </label>
-        <p id={hint} className="text-text-muted">
-          {t('transcriptHint')}
-        </p>
-        <Textarea
-          ref={field}
-          id={`capture-${group.id}-transcript`}
-          name="transcript"
-          dir="auto"
-          rows={4}
-          required
-          aria-describedby={hint}
-          defaultValue={group.transcript ?? ''}
-        />
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <Button type="submit" size="sm" disabled={saving}>
-          {t('saveTranscript')}
-        </Button>
-        <Button type="button" variant="outline" size="sm" onClick={cancel}>
-          {t('cancel')}
-        </Button>
-      </div>
+      <fieldset disabled={saving} className="grid min-w-0 gap-2">
+        <TranscriptField group={group} field={field} />
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="submit" size="sm">
+            {t('saveTranscript')}
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={cancel}>
+            {t('cancel')}
+          </Button>
+          <p role="status" className="text-sm text-text-muted">
+            {saving ? t('savingTranscript') : null}
+          </p>
+        </div>
+      </fieldset>
       {error && <ErrorPanel error={error} />}
     </form>
+  );
+}
+function TranscriptField({ group, field }: { group: Group; field: Field }) {
+  const t = useTranslations('captures');
+  const hint = `capture-${group.id}-hint`;
+  return (
+    <div className="grid gap-1 text-sm">
+      <label htmlFor={`capture-${group.id}-transcript`} className="font-medium">
+        {t('transcriptLabel')}
+      </label>
+      <p id={hint} className="text-text-muted">
+        {t('transcriptHint')}
+      </p>
+      <Textarea
+        ref={field}
+        id={`capture-${group.id}-transcript`}
+        name="transcript"
+        dir="auto"
+        rows={4}
+        required
+        aria-describedby={hint}
+        defaultValue={group.transcript ?? ''}
+      />
+    </div>
   );
 }

@@ -1,5 +1,5 @@
 'use client';
-import { useLayoutEffect, useRef, type ReactNode } from 'react';
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { CircleAlert, LoaderCircle } from 'lucide-react';
 import { useRelativeTime } from '@/ui/format';
@@ -35,6 +35,20 @@ export function CaptureGroup({ group, layout }: { group: Group; layout: Layout }
     if (focusPending && takePendingFocus(group.id) && focusWasLost())
       section.current?.querySelector<HTMLElement>('button')?.focus();
   }, [focusPending, group.id]);
+  // CAPTURES-B25: the revision a typed transcript was saved onto. The save answers before the list
+  // re-renders the group (the form may then go with its card), so the focus waits for the group to
+  // carry a newer revision: its heading, or Retry if it failed. Only if focus was lost meanwhile.
+  const [typedOn, setTypedOn] = useState<number | null>(null);
+  const moved = useRef<number | null>(null);
+  // sync: external system — DOM focus, once the list shows the saved transcript.
+  useLayoutEffect(() => {
+    if (typedOn === null || moved.current === typedOn || group.revision <= typedOn) return;
+    moved.current = typedOn;
+    if (!focusWasLost()) return;
+    const target =
+      group.status === 'failed' ? '[data-recover="retry"]' : `[id="capture-${group.id}"]`;
+    section.current?.querySelector<HTMLElement>(target)?.focus();
+  }, [typedOn, group.revision, group.status, group.id]);
   // CAPTURES-B22: a recording waiting for transcription is one warning-edged card, chip first.
   const waiting = group.status === 'needs_transcript';
   return (
@@ -59,7 +73,7 @@ export function CaptureGroup({ group, layout }: { group: Group; layout: Layout }
           </div>
         )}
         <CaptureListen.FullTranscript text={group.transcript} />
-        <State group={group} />
+        <State group={group} saved={setTypedOn} />
         {pending.map((draft) => (
           <SuggestionCardView key={draft.id} draft={draft} group={group} layout={layout} />
         ))}
@@ -118,7 +132,7 @@ function Header({
 }
 // S15 processing lines, S17 failure and S29 waiting for transcription, each with Retry / Type the
 // transcript / Delete recording.
-function State({ group }: { group: Group }) {
+function State({ group, saved }: { group: Group; saved: (typedOn: number) => void }) {
   const t = useTranslations('captures');
   const { transcription } = useInbox();
   if (working.includes(group.status))
@@ -135,7 +149,7 @@ function State({ group }: { group: Group }) {
           <CircleAlert aria-hidden className="size-4" />
           {t(failure(group.errorCode))}
         </p>
-        <RecoverActions group={group} blockedBy={null} />
+        <RecoverActions group={group} blockedBy={null} saved={saved} />
       </div>
     );
   if (group.status === 'needs_transcript') {
@@ -143,7 +157,11 @@ function State({ group }: { group: Group }) {
     return (
       <>
         <WaitingReason id={reason} />
-        <RecoverActions group={group} blockedBy={transcription === 'off' ? reason : null} />
+        <RecoverActions
+          group={group}
+          blockedBy={transcription === 'off' ? reason : null}
+          saved={saved}
+        />
       </>
     );
   }

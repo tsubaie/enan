@@ -1545,6 +1545,7 @@
     "transcriptionOffAdmin": "التفريغ متوقف في إعدادات الذكاء الاصطناعي لمساحة العمل.",
     "openAiSettings": "فتح الإعدادات",
     "saveTranscript": "حفظ وإعداد المسودات",
+    "savingTranscript": "جاري حفظ التفريغ…",
     "showEveryone": "عرض مسودات الجميع",
     "showMine": "عرض مسوداتي",
     "openPage": "فتح كصفحة",

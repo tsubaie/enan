@@ -27,6 +27,7 @@ const spies = vi.hoisted(() => ({
   removeCapture: vi.fn(),
   restoreCapture: vi.fn(),
   retry: vi.fn(),
+  typeTranscript: vi.fn(),
   list: {
     data: [] as object[],
     meta: { nextCursor: null, transcription: 'available' as 'off' | 'available' },
@@ -58,7 +59,7 @@ vi.mock('../../ui/capture-queries', async () => {
       discard: spies.discard,
       undo: spies.undo,
       merge: spies.merge,
-      typeTranscript: vi.fn(),
+      typeTranscript: spies.typeTranscript,
       removeCapture: spies.removeCapture,
       restoreCapture: spies.restoreCapture,
     }),
@@ -164,6 +165,7 @@ beforeEach(() => {
     spies.close,
     spies.removeCapture,
     spies.restoreCapture,
+    spies.typeTranscript,
   ])
     spy.mockReset().mockResolvedValue({ data: {} });
   spies.list = { data: [group], meta: { nextCursor: null, transcription: 'available' } };
@@ -1334,4 +1336,78 @@ it('CAPTURES-B22 Type the transcript opens with focus in the labelled, hinted fi
   expect(within(waitingCard()).queryByRole('textbox')).toBeNull();
   expect(toggle.getAttribute('aria-expanded')).toBe('false');
   expect(document.activeElement).toBe(toggle);
+});
+// CAPTURES-B25: saving a typed transcript. The save answers, then the list re-renders the group as
+// the server now holds it (the waiting card gives way to the working or failed one).
+const words = 'Send the risk report before Sunday.';
+async function typeAndSave() {
+  const toggle = actionOf(en.captures.typeTranscript);
+  await act(async () => {
+    toggle.focus();
+    fireEvent.click(toggle);
+  });
+  const field = within(waitingCard()).getByRole('textbox', { name: en.captures.transcriptLabel });
+  fireEvent.change(field, { target: { value: words } });
+  const save = actionOf(en.captures.saveTranscript);
+  save.focus();
+  const answer = deferred();
+  spies.typeTranscript.mockReturnValue(answer.promise);
+  await act(async () => {
+    fireEvent.submit(save.closest('form') as HTMLFormElement);
+  });
+  return { answer, field, save };
+}
+const saved = (status: string, errorCode: string | null = null) =>
+  CaptureGroup.parse({
+    ...unavailable,
+    status,
+    errorCode,
+    transcript: words,
+    revision: unavailable.revision + 1,
+  });
+it('CAPTURES-B25 while the typed transcript is saved its controls are disabled and a polite status says so', async () => {
+  waitingFor('available');
+  page();
+  const { answer, field, save } = await typeAndSave();
+  expect(spies.typeTranscript).toHaveBeenCalledWith(unavailableId, words);
+  for (const control of [field, save, actionOf(en.captures.cancel)])
+    expect(control.matches(':disabled')).toBe(true);
+  const status = within(waitingCard()).getByRole('status');
+  expect(status.textContent).toBe(en.captures.savingTranscript);
+  // A second press while it is sent sends nothing more.
+  await act(async () => {
+    fireEvent.click(save);
+  });
+  expect(spies.typeTranscript).toHaveBeenCalledTimes(1);
+  await act(async () => {
+    answer.reject(new Error('refused'));
+  });
+  expect(field.matches(':disabled')).toBe(false);
+  expect(status.textContent).toBe('');
+});
+it('CAPTURES-B25 once the saved transcript is being prepared, focus moves to the group heading', async () => {
+  waitingFor('available');
+  page();
+  const { answer } = await typeAndSave();
+  // The save answers before the list shows it: focus waits for the group's newer revision.
+  await act(async () => {
+    answer.resolve({ data: saved('interpreting') });
+  });
+  await act(async () => {
+    listOf(saved('interpreting'));
+  });
+  expect(document.activeElement).toBe(document.getElementById(`capture-${unavailableId}`));
+});
+it('CAPTURES-B25 when the capture fails once the transcript is saved, focus moves to its Retry', async () => {
+  waitingFor('available');
+  page();
+  const { answer } = await typeAndSave();
+  await act(async () => {
+    listOf(saved('failed', 'ai_unavailable'));
+  });
+  await act(async () => {
+    answer.resolve({ data: saved('failed', 'ai_unavailable') });
+  });
+  expect(within(waitingCard()).getByText(en.captures.failedOther)).toBeTruthy();
+  expect(document.activeElement).toBe(actionOf(en.captures.retry));
 });
