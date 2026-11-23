@@ -844,6 +844,42 @@ it('CAPTURES-B13 a failed delete keeps the group and says so as an alert', async
   expect(groupOf(unavailableId)).toBeTruthy();
   expect(remove.hasAttribute('disabled')).toBe(false);
 });
+it('CAPTURES-B13 a group still processing offers Delete recording behind More actions, with the same Undo', async () => {
+  const ids = [
+    '01a08a9f-1991-760a-b73a-568f6f866620',
+    '01a08a9f-1991-760a-b73a-568f6f866621',
+    '01a08a9f-1991-760a-b73a-568f6f866622',
+  ];
+  const working = ['queued', 'transcribing', 'interpreting'].map((status, at) =>
+    recording(ids[at] ?? '', status, `2026-09-10T0${3 - at}:40:00.000Z`),
+  );
+  listOf(...working);
+  deletesFrom(...working);
+  page();
+  for (const item of working) {
+    const card = groupOf(item.id) as HTMLElement;
+    expect(within(card).queryByRole('button', { name: en.captures.deleteRecording })).toBeNull();
+    expect(within(card).getByRole('button', { name: en.captures.moreActions })).toBeTruthy();
+  }
+  const [first, second] = working;
+  if (!first || !second) throw new Error('no groups');
+  await act(async () => {
+    fireEvent.click(
+      within(groupOf(first.id) as HTMLElement).getByRole('button', {
+        name: en.captures.moreActions,
+      }),
+    );
+  });
+  const items = within(screen.getByTestId('capture-menu')).getAllByRole('button');
+  expect(items.at(-1)?.textContent).toBe(en.captures.deleteRecording);
+  await act(async () => {
+    fireEvent.click(items.at(-1) as HTMLElement);
+  });
+  expect(spies.removeCapture).toHaveBeenCalledWith(first.id);
+  expect(lastToast()).toMatchObject({ title: en.captures.recordingDeleted, timeout: 10000 });
+  expect(groupOf(first.id)).toBeNull();
+  expect(document.activeElement).toBe(document.getElementById(`capture-${second.id}`));
+});
 it('CAPTURES-B13 in Arabic the recover card and the ready group menu use the approved copy', async () => {
   listOf(group, unavailable);
   page('ar');

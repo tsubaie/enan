@@ -13,7 +13,7 @@ import { CaptureListen } from './CaptureListen';
 import { MergeSheet } from './MergeSheet';
 import { SuggestionCardView, type Layout } from './SuggestionCard';
 import { useRetryCapture, useReviewMutations } from './capture-queries';
-import { ReadyGroupMenu, RecoverDeleteButton } from './DeleteRecording';
+import { ProcessingGroupMenu, ReadyGroupMenu, RecoverDeleteButton } from './DeleteRecording';
 const working = ['queued', 'transcribing', 'interpreting'];
 // S15, S17: one recording: when it was made, how long it is, the whole clip, its processing state
 // and its drafts still waiting. Header parts are split by a 1px rule, never a dot.
@@ -29,6 +29,7 @@ export function CaptureGroup({ group, layout }: { group: Group; layout: Layout }
       >
         <Header group={group} drafts={pending.length}>
           {group.status === 'ready' && <ReadyGroupMenu group={group} />}
+          {working.includes(group.status) && <ProcessingGroupMenu group={group} />}
         </Header>
         {pending.length > 1 && (
           <div className="flex items-center justify-end gap-2">

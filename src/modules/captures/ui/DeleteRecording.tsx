@@ -1,5 +1,5 @@
 'use client';
-import { useRef, useState, type ComponentProps } from 'react';
+import { createContext, use, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { Ellipsis, Trash2 } from 'lucide-react';
 import { cn } from '@/ui/cn';
@@ -54,42 +54,72 @@ export function RecoverDeleteButton({ group }: { group: Group }) {
   const deletion = useDeleteRecording(group);
   return <DeleteRecordingButton disabled={deletion.busy} onClick={() => void deletion.remove()} />;
 }
-// A ready group's capture-level actions sit behind «⋯» in its header, never beside Approve.
-// Escape closes the menu and returns focus to the trigger (the popover's own behaviour).
-export function ReadyGroupMenu({ group }: { group: Group }) {
+// A group's capture-level actions sit behind «⋯» in its header, never beside Approve. Escape
+// closes the menu and returns focus to the trigger (the popover's own behaviour). The delete's
+// state lives here, not in the item, so it outlives the menu closing on the press.
+type GroupMenuState = { close: () => void; deletion: ReturnType<typeof useDeleteRecording> };
+const GroupMenuContext = createContext<GroupMenuState | null>(null);
+function GroupMenuRoot({ group, children }: { group: Group; children: ReactNode }) {
   const t = useTranslations('captures');
   const [open, setOpen] = useState(false);
   const deletion = useDeleteRecording(group);
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="ms-auto shrink-0 pointer-coarse:size-11"
-            aria-label={t('moreActions')}
-          />
-        }
-      >
-        <Ellipsis aria-hidden />
-      </PopoverTrigger>
-      {/* Opaque like the other capture surfaces: the glass let the page's text read through. */}
-      <PopoverContent
-        align="end"
-        surface="elevated"
-        className="w-auto p-1.5"
-        data-testid="capture-menu"
-      >
-        <DeleteRecordingButton
-          className="w-full justify-start"
-          disabled={deletion.busy}
-          onClick={() => {
-            setOpen(false);
-            void deletion.remove();
-          }}
-        />
-      </PopoverContent>
-    </Popover>
+    <GroupMenuContext value={{ close: () => setOpen(false), deletion }}>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="ms-auto shrink-0 pointer-coarse:size-11"
+              aria-label={t('moreActions')}
+            />
+          }
+        >
+          <Ellipsis aria-hidden />
+        </PopoverTrigger>
+        {/* Opaque like the other capture surfaces: the glass let the page's text read through. */}
+        <PopoverContent
+          align="end"
+          surface="elevated"
+          className="w-auto p-1.5"
+          data-testid="capture-menu"
+        >
+          {children}
+        </PopoverContent>
+      </Popover>
+    </GroupMenuContext>
+  );
+}
+function GroupMenuDelete() {
+  const menu = use(GroupMenuContext);
+  if (!menu) throw new Error('GroupMenu.Delete is outside GroupMenu.Root');
+  return (
+    <DeleteRecordingButton
+      className="w-full justify-start"
+      disabled={menu.deletion.busy}
+      onClick={() => {
+        menu.close();
+        void menu.deletion.remove();
+      }}
+    />
+  );
+}
+const GroupMenu = { Root: GroupMenuRoot, Delete: GroupMenuDelete };
+// S15: a ready group, one whose drafts were all discarded included.
+export function ReadyGroupMenu({ group }: { group: Group }) {
+  return (
+    <GroupMenu.Root group={group}>
+      <GroupMenu.Delete />
+    </GroupMenu.Root>
+  );
+}
+// S15: a group still transcribing or preparing drafts. Its job's result is fenced off once it is
+// deleted, and Undo after that job has ended brings it back as failed (interrupted), with Retry.
+export function ProcessingGroupMenu({ group }: { group: Group }) {
+  return (
+    <GroupMenu.Root group={group}>
+      <GroupMenu.Delete />
+    </GroupMenu.Root>
   );
 }
