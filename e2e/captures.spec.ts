@@ -6,7 +6,7 @@ import { laneBaseURL } from './lanes';
 import { seedDrafts } from './fixtures/captures';
 import en from '../src/core/i18n/messages/en.json' with { type: 'json' };
 import ar from '../src/core/i18n/messages/ar.json' with { type: 'json' };
-// CAPTURES-A01–A04, A06–A10 (A05 is NOTES-A15). AI is off in the browser suite, so a recording is
+// CAPTURES-A01–A04, A06–A11 (A05 is NOTES-A15). AI is off in the browser suite, so a recording is
 // stored without a transcript; `scripts/db/e2e-capture-drafts.ts` stands in for the interpreter
 // where a scenario needs drafts. The microphone is refused in the page, so the recorder offers
 // its upload fallback (S3) and the scenarios send a real WAV through it.
@@ -261,6 +261,35 @@ test('CAPTURES-A08 from Review the recorder deletes a recording AI could not tak
   } finally {
     await close();
   }
+});
+// CAPTURES-A11: a recording still transcribing is deleted from its More actions menu; its job then
+// ends while it is deleted (the stand-in publishes an empty result, as the fence leaves it), and
+// Undo brings it back failed, with Retry, rather than transcribing forever.
+test('CAPTURES-A11 a recording deleted while it transcribes comes back from Undo failed, with Retry (en)', async ({
+  page,
+}) => {
+  await refuseMicrophone(page);
+  await loginAs(page, 'en');
+  const captureId = await recordByUpload(page, en);
+  seedDrafts(captureId, 'processing');
+  await page.goto('/captures');
+  const group = page.locator(`[data-capture="${captureId}"]`);
+  await expect(group).toHaveCount(1);
+  await expect(group.getByText(en.captures.transcribing)).toBeVisible();
+  await group.getByRole('button', { name: en.captures.moreActions }).click();
+  await page
+    .locator("[data-slot='popover-content']")
+    .getByRole('button', { name: en.captures.deleteRecording })
+    .click();
+  await expect(group).toHaveCount(0);
+  await expect(page.getByText(en.captures.recordingDeleted, { exact: true })).toBeVisible();
+  seedDrafts(captureId, 'finished');
+  await page.getByRole('button', { name: en.common.undo }).click();
+  await expect(page.getByText(en.captures.recordingRestored)).toBeVisible();
+  await expect(group).toHaveCount(1);
+  await expect(group.getByText(en.captures.failedOther)).toBeVisible();
+  await expect(group.getByRole('button', { name: en.captures.retry })).toBeVisible();
+  await expect(group.getByText(en.captures.transcribing)).toHaveCount(0);
 });
 // CAPTURES-A09: the Review menu sits over dense text, so it takes the popover's opaque surface:
 // the elevated ground with no glass image or blur, in night and under reduced transparency, while
