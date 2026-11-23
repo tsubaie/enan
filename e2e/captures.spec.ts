@@ -258,6 +258,8 @@ test('CAPTURES-A08 from Review the recorder deletes a recording AI could not tak
     await expect(page.getByText(en.captures.recordingRestored)).toBeVisible();
     await expect(page.locator(`[data-capture="${captureId}"]`)).toHaveCount(1);
     await expect(group.getByText(en.captures.unavailable)).toBeVisible();
+    // Focus lands on the restored group's first action, its play button, never on the page.
+    await expect(group.getByRole('button', { name: en.captures.playRecording })).toBeFocused();
   } finally {
     await close();
   }
@@ -287,7 +289,8 @@ test('CAPTURES-A11 a recording deleted while it transcribes comes back from Undo
   await page.getByRole('button', { name: en.common.undo }).click();
   await expect(page.getByText(en.captures.recordingRestored)).toBeVisible();
   await expect(group).toHaveCount(1);
-  await expect(group.getByText(en.captures.failedOther)).toBeVisible();
+  await expect(group.getByText(en.captures.failedInterrupted)).toBeVisible();
+  await expect(group.getByRole('button', { name: en.captures.playRecording })).toBeFocused();
   await expect(group.getByRole('button', { name: en.captures.retry })).toBeVisible();
   await expect(group.getByText(en.captures.transcribing)).toHaveCount(0);
 });

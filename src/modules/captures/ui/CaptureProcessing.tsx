@@ -54,8 +54,13 @@ function Line({ step, children }: { step: Step; children: React.ReactNode }) {
     </li>
   );
 }
-export const failure = (code: string | null) =>
-  code === 'no_speech' ? 'failedNoSpeech' : code === 'timeout' ? 'failedTimeout' : 'failedOther';
+const failures: Record<string, 'failedNoSpeech' | 'failedTimeout' | 'failedInterrupted'> = {
+  no_speech: 'failedNoSpeech',
+  timeout: 'failedTimeout',
+  // CAPTURES-B13: restored after the job it waited on ended while it was deleted.
+  interrupted: 'failedInterrupted',
+};
+export const failure = (code: string | null) => (code && failures[code]) || 'failedOther';
 type Props = {
   placement: Placement;
   stage: Stage;

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { act, fireEvent, screen, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { createTranslator } from 'next-intl';
 import en from '@/core/i18n/messages/en.json';
 import ar from '@/core/i18n/messages/ar.json';
@@ -804,8 +804,9 @@ it('CAPTURES-B13 Undo restores with the delete op id, says so for four seconds a
   listOf(unavailable, failed);
   deletesFrom(unavailable, failed);
   spies.toast.mockReturnValue('deleted');
+  // The restore answers first and the list renders it a tick later, as react-query does.
   spies.restoreCapture.mockImplementation(async () => {
-    listOf(unavailable, failed);
+    setTimeout(() => listOf(unavailable, failed), 0);
     return { data: unavailable };
   });
   page();
@@ -825,12 +826,52 @@ it('CAPTURES-B13 Undo restores with the delete op id, says so for four seconds a
     timeout: 4000,
     actionProps: { children: undefined },
   });
+  await waitFor(() => expect(groupOf(unavailableId)).toBeTruthy());
   const restored = groupOf(unavailableId) as HTMLElement;
   // Back in its own place, before the older recording.
   expect(document.querySelectorAll('[data-capture]')[0]).toBe(restored);
-  expect(document.activeElement).toBe(restored.querySelector('button'));
+  await waitFor(() => expect(document.activeElement).toBe(restored.querySelector('button')));
 });
-it('CAPTURES-B13 a failed delete keeps the group and says so as an alert', async () => {
+it('CAPTURES-B13 when Undo fails, or the list moves on without the recording, focus goes to the inbox heading', async () => {
+  listOf(unavailable, failed);
+  deletesFrom(unavailable, failed);
+  spies.toast.mockReturnValue('deleted');
+  spies.restoreCapture.mockRejectedValueOnce(new Error('offline'));
+  page();
+  const remove = (id: string) =>
+    act(async () => {
+      fireEvent.click(
+        within(groupOf(id) as HTMLElement).getByRole('button', {
+          name: en.captures.deleteRecording,
+        }),
+      );
+    });
+  await remove(unavailableId);
+  (document.activeElement as HTMLElement | null)?.blur();
+  await act(async () => {
+    lastToast().actionProps.onClick();
+  });
+  expect(spies.update).toHaveBeenLastCalledWith('deleted', {
+    title: en.captures.restoreFailed,
+    priority: 'high',
+    timeout: 0,
+    actionProps: { children: undefined },
+  });
+  const heading = screen.getByRole('heading', { level: 1 });
+  expect(document.activeElement).toBe(heading);
+  // A restore that answers but whose recording the next list does not hold (another filter).
+  spies.restoreCapture.mockImplementation(async () => {
+    setTimeout(() => listOf(failed), 0);
+    return { data: unavailable };
+  });
+  (document.activeElement as HTMLElement | null)?.blur();
+  await act(async () => {
+    lastToast().actionProps.onClick();
+  });
+  await waitFor(() => expect(document.activeElement).toBe(heading));
+  expect(document.activeElement).not.toBe(document.body);
+});
+it('CAPTURES-B13 a failed delete keeps the group and says so as an alert that stays until dismissed', async () => {
   listOf(unavailable);
   spies.removeCapture.mockRejectedValue(new Error('offline'));
   page();
@@ -840,7 +881,7 @@ it('CAPTURES-B13 a failed delete keeps the group and says so as an alert', async
   await act(async () => {
     fireEvent.click(remove);
   });
-  expect(lastToast()).toEqual({ title: en.captures.deleteFailed, priority: 'high' });
+  expect(lastToast()).toEqual({ title: en.captures.deleteFailed, priority: 'high', timeout: 0 });
   expect(groupOf(unavailableId)).toBeTruthy();
   expect(remove.hasAttribute('disabled')).toBe(false);
 });
@@ -893,4 +934,17 @@ it('CAPTURES-B13 in Arabic the recover card and the ready group menu use the app
   expect(ar.captures.recordingDeleted).toBe('حُذف التسجيل');
   expect(ar.captures.recordingRestored).toBe('استُعيد التسجيل');
   expect(ar.common.undo).toBe('تراجع');
+});
+it('CAPTURES-B13 a recording restored after its job ended says processing stopped when it was deleted, in en and ar', () => {
+  const interrupted = CaptureGroup.parse({ ...failed, errorCode: 'interrupted' });
+  listOf(interrupted);
+  page();
+  expect(
+    within(groupOf(failedId) as HTMLElement).getByText(en.captures.failedInterrupted),
+  ).toBeTruthy();
+  page('ar');
+  expect(screen.getByText(ar.captures.failedInterrupted)).toBeTruthy();
+  expect(ar.captures.failedInterrupted).toBe(
+    'توقفت المعالجة عند حذف هذا التسجيل. أعد المحاولة لإعداد مسوداته.',
+  );
 });
