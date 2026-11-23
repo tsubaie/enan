@@ -21,6 +21,7 @@ import {
   pendingFocusId,
   takePendingFocus,
   useInbox,
+  useInboxToken,
   usePendingFocus,
 } from './inbox-state';
 import { focusWasLost } from './focus';
@@ -50,9 +51,10 @@ function Root({
   const approval = useReviewAction<'ready'>();
   const [saves] = useState(() => new Map<string, Promise<boolean>>());
   const reread = async () => (await query.refetch()).data?.data ?? [];
+  const inbox = useInboxToken();
   useUndoFocusFallback(query.data?.data);
   return (
-    <InboxContext value={{ groups, layout, scope, saves, reread }}>
+    <InboxContext value={{ inbox, groups, layout, scope, saves, reread }}>
       <div className="grid gap-4" data-inbox>
         <header className="flex flex-wrap items-start gap-3">
           <div className="grid flex-1 gap-0.5">
@@ -98,15 +100,6 @@ function useUndoFocusFallback(listed: Group[] | undefined) {
       if (focusWasLost()) focusInboxHeading();
     }
   }, [pending, listed]);
-  // An inbox that goes (the panel closed, another page) takes a waiting focus with it, so a later
-  // inbox listing that recording does not jump to it.
-  useLayoutEffect(
-    () => () => {
-      const id = pendingFocusId();
-      if (id) takePendingFocus(id);
-    },
-    [],
-  );
 }
 // The drafts whose latest save failed, once every save in flight has answered.
 async function failedSaves(saves: Map<string, Promise<boolean>>) {

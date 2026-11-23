@@ -1025,3 +1025,40 @@ it('CAPTURES-B13 a waiting focus goes with the inbox: a later inbox that lists t
   expect(restored).toBeTruthy();
   expect(document.activeElement).not.toBe(restored.querySelector('button'));
 });
+// A restore still in flight when the inbox that started it goes (a link, Back) moves no focus when
+// it answers, in the inbox the reader comes back to.
+const undoHeld = async () => {
+  const restore = deferred();
+  spies.restoreCapture.mockReturnValue(restore.promise);
+  listOf(unavailable, failed);
+  deletesFrom(unavailable, failed);
+  spies.toast.mockReturnValue('deleted');
+  page();
+  await deleteThenUndo();
+  cleanup();
+  return restore;
+};
+it('CAPTURES-B13 a restore that answers after its inbox has gone does not focus the recording in a later inbox', async () => {
+  const restore = await undoHeld();
+  await act(async () => {
+    listOf(unavailable, failed);
+    restore.resolve({ data: unavailable });
+  });
+  page();
+  const play = within(groupOf(unavailableId) as HTMLElement).getByRole('button', {
+    name: en.captures.playRecording,
+  });
+  expect(document.activeElement).not.toBe(play);
+});
+it('CAPTURES-B13 a restore that fails after its inbox has gone does not focus a later inbox heading', async () => {
+  const restore = await undoHeld();
+  page();
+  await act(async () => {
+    restore.reject(new Error('offline'));
+  });
+  expect(spies.update).toHaveBeenLastCalledWith(
+    'deleted',
+    expect.objectContaining({ title: en.captures.restoreFailed }),
+  );
+  expect(document.activeElement).not.toBe(screen.getByRole('heading', { level: 1 }));
+});

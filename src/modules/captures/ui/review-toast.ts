@@ -6,7 +6,7 @@ import { useToastManager } from '@/ui/primitives/toast';
 import type { Approval, CaptureGroup } from '../schema/validation';
 import { useReviewMutations } from './capture-queries';
 import { focusWasLost } from './focus';
-import { focusWhenListed } from './inbox-state';
+import { focusWhenListed, inboxMounted, type InboxToken } from './inbox-state';
 import { focusInboxHeading } from './review-action';
 // S26–S28: five seconds, Undo, and View for a record just made. Undo is the server's call
 // (CAPTURES-B11): a record edited since, or a minute gone, answers with the S27 sentence instead.
@@ -81,7 +81,8 @@ export function useDeletedToast() {
   const c = useTranslations('common');
   const manager = useToastManager();
   const mutations = useReviewMutations();
-  function restore(toastId: string, group: CaptureGroup, opId: string) {
+  // `inbox` is the inbox the delete was made in: the focus moves only while it is still mounted.
+  function restore(toastId: string, group: CaptureGroup, opId: string, inbox: InboxToken) {
     manager.update(toastId, { timeout: 0, actionProps: { children: c('undo'), disabled: true } });
     mutations.restoreCapture(group.id, opId).then(
       () => {
@@ -90,7 +91,7 @@ export function useDeletedToast() {
           timeout: restoredShown,
           actionProps: { children: undefined },
         });
-        focusWhenListed(group.id);
+        if (inboxMounted(inbox)) focusWhenListed(group.id, inbox);
       },
       () => {
         manager.update(toastId, {
@@ -99,12 +100,12 @@ export function useDeletedToast() {
           timeout: 0,
           actionProps: { children: undefined },
         });
-        if (focusWasLost()) focusInboxHeading();
+        if (inboxMounted(inbox) && focusWasLost()) focusInboxHeading();
       },
     );
   }
   return {
-    deleted: (group: CaptureGroup, opId: string) => {
+    deleted: (group: CaptureGroup, opId: string, inbox: InboxToken) => {
       if (lastDeleted) manager.close(lastDeleted);
       const approved = group.suggestions.some((draft) => draft.status === 'approved');
       const toastId: string = manager.add({
@@ -114,7 +115,7 @@ export function useDeletedToast() {
         data: {},
         actionProps: {
           children: c('undo'),
-          onClick: () => restore(toastId, group, opId),
+          onClick: () => restore(toastId, group, opId, inbox),
         },
       });
       lastDeleted = toastId;
