@@ -2,7 +2,9 @@ import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { closeDatabase, db } from '@/core/db/client';
 import { and, eq } from 'drizzle-orm';
 import { id } from '@/core/db/ids';
-import { auditLog } from '@/core/db/system-schema';
+import { auditLog, files } from '@/core/db/system-schema';
+import { writeSetting } from '@/core/db/settings-repo';
+import { storageUsage } from '@/core/files/storage';
 import { migrateDatabase } from '@/core/db/migrate';
 import { clearDatabase } from '@/core/db/reset';
 import { voiceAudioLimits } from '@/core/files/voice-audio';
@@ -238,4 +240,82 @@ it("CAPTURES-B13 restore with the delete's op id brings back the capture and its
       .where(and(eq(auditLog.entityId, mine.id), eq(auditLog.action, 'restore'))),
   ).toHaveLength(1);
   expect((await restore(mine.id, id())).status).toBe(404);
+});
+// CAPTURES-B14: with recording off, for the workspace or for the reader, new audio is refused
+// before its body is read; everything done to a recording that already exists still works.
+it.each([
+  ['workspace', 'captures.enabled'],
+  ['account', 'user.captures.enabled'],
+] as const)(
+  'CAPTURES-B14 with recording off (%s) POST /captures answers 403 recording_off before the body is parsed and stores nothing',
+  async (scope, key) => {
+    const before = await storageUsage();
+    if (key === 'captures.enabled') await writeSetting(db(), key, false, admin.id);
+    else await writeSetting(db(), key, false, recorder.id, recorder.id);
+    // An invalid duration would be a 400 and a disguised file a 422: neither is reached.
+    for (const answer of [
+      await record(api.create, webm(41), { durationSeconds: 'many' }),
+      await record(api.create, new TextEncoder().encode('<!doctype html>')),
+      await record(api.create, webm(42), { durationSeconds: '12' }),
+    ]) {
+      expect(answer.status).toBe(403);
+      expect(answer.body.error).toMatchObject({
+        code: 'forbidden',
+        details: { reason: 'recording_off', scope },
+      });
+    }
+    expect(await db().select().from(captures)).toEqual([]);
+    expect(await db().select().from(files)).toEqual([]);
+    expect(await storageUsage()).toBe(before);
+    // The other member is untouched by one reader's own switch.
+    session.user = other;
+    const elsewhere = await record(api.create, webm(43), { durationSeconds: '12' });
+    expect(elsewhere.status).toBe(scope === 'account' ? 201 : 403);
+  },
+);
+it.each([
+  ['workspace', 'captures.enabled'],
+  ['account', 'user.captures.enabled'],
+] as const)(
+  'CAPTURES-B14 recording turned off (%s) while the body is arriving refuses POST /captures with 403 recording_off and stores no row',
+  async (scope, key) => {
+    const off = async () => {
+      if (key === 'captures.enabled') await writeSetting(db(), key, false, admin.id);
+      else await writeSetting(db(), key, false, recorder.id, recorder.id);
+    };
+    const answer = await record(api.create, webm(45), { durationSeconds: '12' }, off);
+    expect(answer.status).toBe(403);
+    expect(answer.body.error).toMatchObject({
+      code: 'forbidden',
+      details: { reason: 'recording_off', scope },
+    });
+    expect(await db().select().from(captures)).toEqual([]);
+    expect(await db().select().from(files)).toEqual([]);
+  },
+);
+it('CAPTURES-B14 with recording off an existing recording can still be listed, opened, played, typed, retried, deleted and restored', async () => {
+  const mine = await recorded(44);
+  await writeSetting(db(), 'captures.enabled', false, admin.id);
+  const params = { id: mine.id };
+  expect((await call(api.list, 'GET', '/captures')).status).toBe(200);
+  expect((await call(api.count, 'GET', '/captures/count')).status).toBe(200);
+  expect((await call(api.detail, 'GET', `/captures/${mine.id}`, params)).status).toBe(200);
+  expect((await audio(mine.id)).status).toBe(200);
+  const typed = await call(api.transcript, 'POST', `/captures/${mine.id}/transcript`, params, {
+    transcript: 'Typed while recording is off.',
+  });
+  expect(typed.status).toBe(200);
+  // AI is off in this suite, so Retry answers as it does with recording on (503), never 403.
+  for (const retried of [
+    await call(api.interpret, 'POST', `/captures/${mine.id}/interpret`, params, {}),
+    await call(api.transcribe, 'POST', `/captures/${mine.id}/transcribe`, params, {}),
+  ])
+    expect(retried.status).toBe(503);
+  const removed = await call(api.remove, 'DELETE', `/captures/${mine.id}`, params);
+  expect(removed.status).toBe(204);
+  const opId = removed.response.headers.get('X-Op-Id') ?? '';
+  const restored = await call(api.restore, 'POST', `/captures/${mine.id}/restore`, params, {
+    opId,
+  });
+  expect(restored.status).toBe(200);
 });

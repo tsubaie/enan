@@ -144,6 +144,7 @@ describe('ACCT-I01 ACCT-I02 the patch has no way to name another account or an a
       sessions: [],
       signInMethods: ['password'],
       passkeys: [],
+      captures: { allowed: true, enabled: true, shortcut: true },
     });
     expect(account.user).not.toHaveProperty('passwordHash');
     expect(account.user).not.toHaveProperty('isActive');

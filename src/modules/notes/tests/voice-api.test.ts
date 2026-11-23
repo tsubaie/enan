@@ -19,6 +19,7 @@ import { voiceNoteTitle } from '../voice/service';
 import { insertVoiceMemo } from '../voice/repo';
 import { upsertAudioFile } from '@/core/db/files-repo';
 import { storeVoiceAudio } from '@/core/files/voice-audio';
+import { streamed } from '@/modules/captures/tests/fixtures';
 // NOTES-B29–B32: the voice memo handlers as their routes export them, with real multipart and
 // JSON requests against the real database and the test files directory. The session is the one
 // seam replaced. AI is off unless a test turns it on, so every upload proves it needs none.
@@ -82,9 +83,17 @@ async function existingMemo(
   });
   return { id: memoId, fileId };
 }
-const createFromVoice = async (bytes: Uint8Array, fields: Record<string, string> = {}) =>
-  respond(api.voiceCreate, await multipart('/notes/voice', bytes, fields), {});
-async function multipart(path: string, bytes: Uint8Array, fields: Record<string, string>) {
+const createFromVoice = async (
+  bytes: Uint8Array,
+  fields: Record<string, string> = {},
+  onRead?: () => Promise<void>,
+) => respond(api.voiceCreate, await multipart('/notes/voice', bytes, fields, onRead), {});
+async function multipart(
+  path: string,
+  bytes: Uint8Array,
+  fields: Record<string, string>,
+  onRead?: () => Promise<void>,
+) {
   const body = new FormData();
   body.set('file', new File([new Uint8Array(bytes)], 'Board debrief.webm', { type: 'text/html' }));
   for (const [key, value] of Object.entries(fields)) body.set(key, value);
@@ -96,7 +105,7 @@ async function multipart(path: string, bytes: Uint8Array, fields: Record<string,
       'Content-Type': encoded.headers.get('content-type') ?? '',
       'Content-Length': String(raw.byteLength),
     }),
-    body: raw,
+    ...(onRead ? streamed(raw, onRead) : { body: raw }),
   });
 }
 function json(
@@ -234,6 +243,33 @@ it('CAPTURES-B07 with the inbox rolled back, a recording becomes a note again, b
   const attach = await upload(note.id, webm(22));
   expect(attach.status).toBe(410);
 });
+it('CAPTURES-B07 CAPTURES-B14 the rolled-back route still refuses audio while recording is off, for the workspace or the reader, before the body is read', async () => {
+  const actor = session.user?.id ?? '';
+  await writeSetting(db(), 'captures.inbox', false, actor);
+  const before = await storageUsage();
+  await writeSetting(db(), 'captures.enabled', false, actor);
+  // An invalid body would be a 400; the refusal comes first.
+  for (const answer of [
+    await createFromVoice(webm(31), { durationSeconds: 'many' }),
+    await createFromVoice(webm(32), { durationSeconds: '12' }),
+  ]) {
+    expect(answer.status).toBe(403);
+    expect(answer.body.error).toMatchObject({
+      code: 'forbidden',
+      details: { reason: 'recording_off', scope: 'workspace' },
+    });
+  }
+  await writeSetting(db(), 'captures.enabled', true, actor);
+  await writeSetting(db(), 'user.captures.enabled', false, actor, actor);
+  const own = await createFromVoice(webm(33), { durationSeconds: '12' });
+  expect(own.status).toBe(403);
+  expect(own.body.error.details).toMatchObject({ reason: 'recording_off', scope: 'account' });
+  expect(await db().select().from(notes)).toEqual([]);
+  expect(await db().select().from(files)).toEqual([]);
+  expect(await storageUsage()).toBe(before);
+  await writeSetting(db(), 'user.captures.enabled', true, actor, actor);
+  expect((await createFromVoice(webm(34), { durationSeconds: '12' })).status).toBe(201);
+});
 it('CAPTURES-B06 NOTES-B32 the audio answers in full, by range for seeking, 416 outside it, 401 signed out and 404 once gone', async () => {
   const note = await createNote();
   const bytes = webm(5);
@@ -336,3 +372,26 @@ it('NOTES-B36 a title is the first sentence without heading marks, cut at a word
   expect(long.length).toBeLessThanOrEqual(120);
   expect(long.endsWith('word…')).toBe(true);
 });
+it.each([
+  ['workspace', 'captures.enabled'],
+  ['account', 'user.captures.enabled'],
+] as const)(
+  'CAPTURES-B07 CAPTURES-B14 recording turned off (%s) while the body is arriving refuses the rolled-back route with 403 recording_off and stores no row',
+  async (scope, key) => {
+    const actor = session.user?.id ?? '';
+    await writeSetting(db(), 'captures.inbox', false, actor);
+    const off = async () => {
+      if (key === 'captures.enabled') await writeSetting(db(), key, false, actor);
+      else await writeSetting(db(), key, false, actor, actor);
+    };
+    const answer = await createFromVoice(webm(35), { durationSeconds: '12' }, off);
+    expect(answer.status).toBe(403);
+    expect(answer.body.error).toMatchObject({
+      code: 'forbidden',
+      details: { reason: 'recording_off', scope },
+    });
+    expect(await db().select().from(notes)).toEqual([]);
+    expect(await db().select().from(noteVoiceMemos)).toEqual([]);
+    expect(await db().select().from(files)).toEqual([]);
+  },
+);

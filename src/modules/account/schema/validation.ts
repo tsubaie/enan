@@ -17,6 +17,10 @@ export const AccountPatch = z.strictObject({
   timezone: inherited(Timezone).optional(),
   theme: inherited(Theme).optional(),
   numerals: inherited(Numerals).optional(),
+  // ACCT-B11: the reader's own voice capture switch and Alt+V (CAPTURES-B15).
+  captures: z
+    .strictObject({ enabled: z.boolean().optional(), shortcut: z.boolean().optional() })
+    .optional(),
 });
 export const EmailChange = z.strictObject({
   revision: z.number().int().positive(),
@@ -78,6 +82,8 @@ export const Account = z.object({
   // The workspace's enabled sign-in methods, so the page offers only what works (ADMIN-B64).
   signInMethods: z.array(SignInMethod),
   passkeys: z.array(AccountPasskey),
+  // ACCT-B11: `allowed` is the workspace switch (CAPTURES-B14); the other two are the reader's own.
+  captures: z.object({ allowed: z.boolean(), enabled: z.boolean(), shortcut: z.boolean() }),
 });
 export type Account = z.infer<typeof Account>;
 export type AccountSession = z.infer<typeof AccountSession>;

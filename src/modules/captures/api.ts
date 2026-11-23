@@ -21,6 +21,7 @@ import {
 } from './schema/validation';
 import * as service from './service';
 import * as review from './review/service';
+import { requireRecording } from './setup';
 // CAPTURES-B02: session guard, then the module's own visibility check inside every service call;
 // the admin guard would hide a draft from its recorder.
 const captureId = (params: Record<string, string>) => z.uuid().parse(params.id);
@@ -48,8 +49,10 @@ export const detail = defineHandler({
 });
 // CAPTURES-B01 CAPTURES-B12: the audio is checked and stored before the capture's own short
 // transaction (ADR 0054); the declared body may exceed the audio by the multipart framing.
+// CAPTURES-B14: with recording off it is refused before the body is read. Nothing else here is.
 export const create = defineHandler({
   guard: 'session',
+  before: requireRecording,
   input: CaptureCreate,
   source: 'form',
   maxBytes: () => voiceAudioLimits.maxBytes + 128 * 1024,

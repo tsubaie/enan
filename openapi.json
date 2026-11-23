@@ -5397,6 +5397,18 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "properties": {
+          "captures": {
+            "additionalProperties": false,
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "shortcut": {
+                "type": "boolean"
+              }
+            },
+            "type": "object"
+          },
           "locale": {
             "anyOf": [
               {
@@ -7208,6 +7220,26 @@
           "data": {
             "additionalProperties": false,
             "properties": {
+              "captures": {
+                "additionalProperties": false,
+                "properties": {
+                  "allowed": {
+                    "type": "boolean"
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "shortcut": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "allowed",
+                  "enabled",
+                  "shortcut"
+                ],
+                "type": "object"
+              },
               "passkeys": {
                 "items": {
                   "additionalProperties": false,
@@ -7436,7 +7468,8 @@
               "preferences",
               "sessions",
               "signInMethods",
-              "passkeys"
+              "passkeys",
+              "captures"
             ],
             "type": "object"
           }

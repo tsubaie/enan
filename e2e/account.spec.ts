@@ -410,3 +410,43 @@ test('ACCT-B10 ADMIN-B76 a member adds a passkey with their password, signs in w
     await deactivate(page, reader.id);
   }
 });
+// ACCT-A06: a member's own voice capture switches, saved to their account and drawn again by the
+// server without a reload, then still off after one. The member is deactivated at the end.
+test('ACCT-A06 ACCT-B11 a member turns their own voice capture off and the shortcut off; both hold on reload (en) @desktop', async ({
+  page,
+  browser,
+}) => {
+  await loginAs(page, 'en');
+  const reader = await member(page);
+  const other = await secondBrowser(browser);
+  try {
+    expect(await tryLogin(other.page, 'en', reader.email, reader.password)).toBe(true);
+    await gotoReady(other.page, '/account');
+    const record = other.page.getByRole('button', { name: en.captures.recordNote });
+    await expect(record).toHaveAttribute('aria-keyshortcuts', 'Alt+V');
+    const shortcut = other.page.getByRole('switch', { name: en.account.voiceShortcut });
+    await shortcut.click();
+    await expect(shortcut).toHaveAttribute('aria-checked', 'false');
+    await expect(record).not.toHaveAttribute('aria-keyshortcuts', /.+/u);
+    const voice = other.page.getByRole('switch', { name: en.account.voice });
+    await voice.click();
+    await expect(voice).toHaveAttribute('aria-checked', 'false');
+    await expect(record).toHaveCount(0);
+    await reloadReady(other.page);
+    await expect(other.page.getByRole('switch', { name: en.account.voice })).toHaveAttribute(
+      'aria-checked',
+      'false',
+    );
+    await expect(other.page.getByRole('button', { name: en.captures.recordNote })).toHaveCount(0);
+    expect((await account(other.page)).body.data?.captures).toEqual({
+      allowed: true,
+      enabled: false,
+      shortcut: false,
+    });
+    // The administrator's own setting is untouched by the member's.
+    expect((await account(page)).body.data?.captures).toMatchObject({ enabled: true });
+  } finally {
+    await other.context.close();
+    await deactivate(page, reader.id);
+  }
+});

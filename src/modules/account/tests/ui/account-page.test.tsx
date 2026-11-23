@@ -18,6 +18,8 @@ const state = vi.hoisted(() => ({
   add: { mutate: vi.fn(), reset: vi.fn(), isPending: false, error: null as Error | null },
   remove: { mutate: vi.fn(), isPending: false, error: null as Error | null },
 }));
+const router = vi.hoisted(() => ({ refresh: vi.fn() }));
+vi.mock('next/navigation', () => ({ useRouter: () => router }));
 vi.mock('../../ui/queries', () => ({
   useAccount: () => state.query,
   usePatchAccount: () => state.patch,
@@ -42,7 +44,13 @@ describe.each(['en', 'ar'] as const)('%s', (locale) => {
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Leila Haddad');
     expect(
       screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent),
-    ).toEqual([m.account.identity, m.account.signIn, m.account.sessions, m.account.preferences]);
+    ).toEqual([
+      m.account.identity,
+      m.account.signIn,
+      m.account.sessions,
+      m.account.preferences,
+      m.account.voice,
+    ]);
     // Nothing here deletes or deactivates the account; the one way out is the link to the place
     // that owns everyone's settings.
     expect(screen.getByText(m.account.workspaceElsewhere, { exact: false })).toBeTruthy();
@@ -290,4 +298,50 @@ it('ACCT-B10 ADMIN-B76 adding a passkey asks for the current password only while
   const alone = within(screen.getByRole('dialog'));
   expect(alone.getByLabelText(en.account.passkeyName)).toBeTruthy();
   expect(alone.queryByLabelText(en.account.currentPassword)).toBeNull();
+});
+// ACCT-B11: the reader's own voice capture switch and shortcut, saved to their account and drawn
+// again by the server (router.refresh); greyed with the reason while the workspace has it off.
+describe.each(['en', 'ar'] as const)('%s', (locale) => {
+  const m = messages[locale];
+  it(`ACCT-B11 the voice capture switch and the shortcut save the reader's own setting and refresh the shell ${locale}`, () => {
+    router.refresh.mockReset();
+    state.patch.mutate.mockImplementation((_input, options: { onSuccess: () => void }) =>
+      options.onSuccess(),
+    );
+    mount(<AccountPage />, locale);
+    const voice = screen.getByRole('switch', { name: m.account.voice });
+    expect(voice.getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(voice);
+    expect(state.patch.mutate).toHaveBeenCalledWith(
+      { revision: 3, captures: { enabled: false } },
+      expect.anything(),
+    );
+    fireEvent.click(screen.getByRole('switch', { name: m.account.voiceShortcut }));
+    expect(state.patch.mutate).toHaveBeenLastCalledWith(
+      { revision: 3, captures: { shortcut: false } },
+      expect.anything(),
+    );
+    expect(router.refresh).toHaveBeenCalledTimes(2);
+    expect(screen.getByText(m.account.voiceSaved)).toBeTruthy();
+  });
+  it(`ACCT-B11 with the workspace switch off the section is greyed with the reason and offers no control ${locale}`, () => {
+    state.query.data = {
+      data: account({ captures: { allowed: false, enabled: true, shortcut: true } }),
+    };
+    mount(<AccountPage />, locale);
+    expect(screen.getByText(m.account.voiceOffByAdmin)).toBeTruthy();
+    expect(screen.queryAllByRole('switch')).toHaveLength(0);
+    expect(screen.getByText(m.account.voiceOffByAdminHint)).toBeTruthy();
+    expect(screen.queryByText(m.account.voiceHelper)).toBeNull();
+  });
+});
+it('ACCT-B11 with voice capture off the shortcut row is not offered', () => {
+  state.query.data = {
+    data: account({ captures: { allowed: true, enabled: false, shortcut: true } }),
+  };
+  mount(<AccountPage />);
+  expect(screen.getByRole('switch', { name: en.account.voice }).getAttribute('aria-checked')).toBe(
+    'false',
+  );
+  expect(screen.queryByRole('switch', { name: en.account.voiceShortcut })).toBeNull();
 });

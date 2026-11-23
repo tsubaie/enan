@@ -10,6 +10,7 @@ import { storeVoiceAudio, voiceAudioLimits } from '@/core/files/voice-audio';
 import { AppError } from '@/core/http/errors';
 import { getSetting } from '@/core/db/settings-repo';
 import { dayAt } from '@/core/time/notes';
+import { requireRecording } from '@/modules/captures';
 import { NoteCreate, VoiceCreate, VoiceTranscribe } from '../schema/validation';
 import { createNote, getNote, patchNote } from '../service';
 import { admitAi } from '@/core/ai/admission';
@@ -109,6 +110,8 @@ export async function createNoteFromVoice(ctx: Context, input: z.output<typeof V
   const transcript = input.transcript || undefined;
   return withTransaction(ctx.db, async (database) => {
     const scoped = { ...ctx, db: database };
+    // CAPTURES-B14: re-checked inside the write, as `createCapture` does; the blob is left to the sweep.
+    await requireRecording(scoped);
     const today = dayAt(await getSetting(database, 'workspace.timezone'));
     const note = await createNote(
       scoped,

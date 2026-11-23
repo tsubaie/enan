@@ -173,8 +173,12 @@ beforeEach(() => {
   }));
 });
 afterEach(() => vi.unstubAllGlobals());
-const page = (locale: 'en' | 'ar' = 'en') =>
-  mount(<CapturesPage initial={spies.list as never} scope="mine" admin={false} />, locale);
+const on = { allowed: true, enabled: true, shortcut: true };
+const page = (locale: 'en' | 'ar' = 'en', capture = on) =>
+  mount(
+    <CapturesPage initial={spies.list as never} scope="mine" admin={false} capture={capture} />,
+    locale,
+  );
 it('CAPTURES-B02 the education line is shown until dismissed, then stays dismissed on this device', () => {
   page();
   const note = screen.getByRole('note');
@@ -1096,7 +1100,7 @@ it('CAPTURES-B10 a recording made now, hydrated a moment after the server render
     const app = () => (
       <NextIntlClientProvider {...config}>
         <QueryClientProvider client={client}>
-          <CapturesPage initial={spies.list as never} scope="mine" admin={false} />
+          <CapturesPage initial={spies.list as never} scope="mine" admin={false} capture={on} />
         </QueryClientProvider>
       </NextIntlClientProvider>
     );
@@ -1120,4 +1124,33 @@ it('CAPTURES-B10 a recording made now, hydrated a moment after the server render
   } finally {
     vi.useRealTimers();
   }
+});
+// CAPTURES-B14: with recording off the inbox stays reviewable, says why there is no Record, and
+// offers none; with only the reader's own switch off there is no banner either.
+it.each(['en', 'ar'] as const)(
+  'CAPTURES-B14 the workspace switch off shows the recording-off note and keeps the drafts reviewable (%s)',
+  (locale) => {
+    const m = locale === 'ar' ? ar : en;
+    page(locale, { allowed: false, enabled: false, shortcut: false });
+    const banner = screen
+      .getAllByRole('note')
+      .find((note) => note.textContent?.includes(m.captures.recordingOffTitle));
+    expect(banner?.textContent).toContain(m.captures.recordingOffBody);
+    expect(screen.getAllByRole('button', { name: m.captures.approve }).length).toBeGreaterThan(0);
+  },
+);
+it('CAPTURES-B14 an empty inbox offers Record only while recording is on, and names the chord only with the shortcut', () => {
+  spies.list = { data: [], meta: { nextCursor: null } };
+  const record = () =>
+    screen.queryByRole('button', { name: new RegExp(en.captures.recordNote, 'u') });
+  page('en', { allowed: false, enabled: false, shortcut: false });
+  expect(record()).toBeNull();
+  page('en', { allowed: true, enabled: false, shortcut: false });
+  expect(record()).toBeNull();
+  expect(screen.queryByText(en.captures.recordingOffTitle)).toBeNull();
+  page('en', { allowed: true, enabled: true, shortcut: false });
+  expect(record()?.getAttribute('aria-keyshortcuts')).toBeNull();
+  expect(record()?.querySelector('kbd')).toBeNull();
+  page('en', on);
+  expect(record()?.getAttribute('aria-keyshortcuts')).toBe('Alt+V');
 });

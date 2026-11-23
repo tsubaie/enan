@@ -18,11 +18,13 @@ import { LanguageToggle } from './LanguageToggle';
 import { HEADER_TITLE_SLOT } from './shell-slot';
 import { NotificationBell } from '@/modules/notifications/ui';
 import { CaptureHeaderControls } from '@/modules/captures/ui';
+import type { CaptureSetup } from '@/modules/captures/schema/validation';
 // 05 § Layout shell: the header carries search, the language, notifications and the account. It
 // used to carry the workspace name, which the sidebar foot already says in a heavier weight on the
 // same screen. A band that spans every page at every width has to earn it; the language does,
 // because a reader who landed in the wrong one cannot read the menu it used to hide in.
-export function ShellHeader({ user }: { user: { name: string; email: string; role: string } }) {
+type Props = { user: { name: string; email: string; role: string }; capture: CaptureSetup };
+export function ShellHeader({ user, capture }: Props) {
   const t = useTranslations('common');
   const { open, query } = useSearchPalette();
   const apple = useApplePlatform();
@@ -60,7 +62,7 @@ export function ShellHeader({ user }: { user: { name: string; email: string; rol
             {t(apple ? 'searchShortcutMac' : 'searchShortcut')}
           </kbd>
         </Button>
-        <CaptureHeaderControls />
+        <CaptureHeaderControls capture={capture} />
         {/* On a phone the language is chosen in the bar's More sheet (MobileNav), not up here. */}
         <div className="hidden lg:block">
           <LanguageToggle />

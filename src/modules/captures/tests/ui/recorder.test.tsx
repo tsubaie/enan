@@ -81,13 +81,14 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
+const on = { allowed: true, enabled: true, shortcut: true };
 // Only the desktop form is a named region; on a phone the dialog around it carries the name.
 const recorder = () => document.querySelector<HTMLFormElement>('form[data-placement]');
 async function startRecording(locale: 'en' | 'ar' = 'en') {
   localStorage.setItem('enan.captures.microphone-intro', '1');
   mount(
     <>
-      <CaptureHost />
+      <CaptureHost keys="Alt+V" />
       <CaptureFab />
     </>,
     locale,
@@ -101,7 +102,7 @@ const elapse = (seconds: number) => act(() => vi.advanceTimersByTimeAsync(second
 it('CAPTURES-B01 S2 the first start asks first, says the audio leaves when transcription is on, then records', async () => {
   mount(
     <>
-      <CaptureHost />
+      <CaptureHost keys="Alt+V" />
       <CaptureFab />
     </>,
   );
@@ -189,7 +190,7 @@ it('CAPTURES-B01 S9 Alt+V starts a recording, but not while a field has focus or
   mount(
     <>
       <input aria-label={en.common.search} />
-      <CaptureHost />
+      <CaptureHost keys="Alt+V" />
     </>,
   );
   const field = screen.getByRole('textbox', { name: en.common.search });
@@ -205,12 +206,131 @@ it('CAPTURES-B01 S9 Alt+V starts a recording, but not while a field has focus or
   });
   expect(recorder()).not.toBeNull();
 });
+// CAPTURES-B19: the chord once per press, never while typing or composing, and only when mounted.
+const press = (target: Element, init: KeyboardEventInit & { keyCode?: number }) =>
+  fireEvent.keyDown(target, { code: 'KeyV', key: '√', altKey: true, ...init });
+it.each([
+  ['an input', <input key="field" aria-label={en.common.search} />],
+  ['a textarea', <textarea key="field" aria-label={en.common.search} />],
+  [
+    'a select',
+    <select key="field" aria-label={en.common.search}>
+      <option>{en.common.search}</option>
+    </select>,
+  ],
+])('CAPTURES-B19 Alt+V does nothing inside %s', async (_name, field) => {
+  localStorage.setItem('enan.captures.microphone-intro', '1');
+  mount(
+    <>
+      {field}
+      <CaptureHost keys="Alt+V" />
+    </>,
+  );
+  const target = screen.getByLabelText(en.common.search);
+  await act(async () => {
+    press(target, {});
+  });
+  expect(recorder()).toBeNull();
+});
+it('CAPTURES-B19 Alt+V does nothing inside a contenteditable descendant', async () => {
+  localStorage.setItem('enan.captures.microphone-intro', '1');
+  mount(
+    <>
+      <div contentEditable suppressContentEditableWarning>
+        <p data-testid="inner">{en.captures.recordNote}</p>
+      </div>
+      <CaptureHost keys="Alt+V" />
+    </>,
+  );
+  const inner = screen.getByTestId('inner');
+  // jsdom does not compute isContentEditable; the browser does, for every descendant.
+  Object.defineProperty(inner, 'isContentEditable', { value: true });
+  await act(async () => {
+    press(inner, {});
+  });
+  expect(recorder()).toBeNull();
+});
+it.each([
+  ['while composing', { isComposing: true }],
+  ['with keyCode 229', { keyCode: 229 }],
+  ['on a held repeat', { repeat: true }],
+  ['with Ctrl', { ctrlKey: true }],
+  ['with Meta', { metaKey: true }],
+  ['with Shift', { shiftKey: true }],
+  ['without Alt', { altKey: false }],
+])('CAPTURES-B19 Alt+V is ignored %s', async (_name, init) => {
+  localStorage.setItem('enan.captures.microphone-intro', '1');
+  mount(<CaptureHost keys="Alt+V" />);
+  await act(async () => {
+    press(document.body, init);
+  });
+  expect(recorder()).toBeNull();
+});
+it('CAPTURES-B19 Alt+V starts a recording on an Arabic layout and suppresses the browser menu', async () => {
+  localStorage.setItem('enan.captures.microphone-intro', '1');
+  mount(<CaptureHost keys="Alt+V" />, 'ar');
+  const event = new KeyboardEvent('keydown', {
+    code: 'KeyV',
+    key: 'ر',
+    altKey: true,
+    bubbles: true,
+    cancelable: true,
+  });
+  await act(async () => {
+    document.body.dispatchEvent(event);
+  });
+  expect(event.defaultPrevented).toBe(true);
+  expect(recorder()).not.toBeNull();
+});
+it('CAPTURES-B19 with the shortcut off nothing listens and no control names the chord', async () => {
+  localStorage.setItem('enan.captures.microphone-intro', '1');
+  media.desktop = true;
+  const listen = vi.spyOn(document, 'addEventListener');
+  mount(
+    <>
+      <CaptureHeaderControls capture={{ ...on, shortcut: false }} />
+      <CaptureHost keys={null} />
+    </>,
+  );
+  expect(listen.mock.calls.filter(([type]) => type === 'keydown')).toHaveLength(0);
+  await act(async () => {
+    press(document.body, {});
+  });
+  expect(recorder()).toBeNull();
+  const header = screen.getByRole('button', { name: en.captures.recordNote });
+  expect(header.getAttribute('aria-keyshortcuts')).toBeNull();
+  expect(header.querySelector('kbd')).toBeNull();
+  listen.mockRestore();
+});
+it('CAPTURES-B19 with the shortcut on the header names it and one listener is registered', () => {
+  media.desktop = true;
+  const listen = vi.spyOn(document, 'addEventListener');
+  mount(
+    <>
+      <CaptureHeaderControls capture={on} />
+      <CaptureHost keys="Alt+V" />
+    </>,
+  );
+  expect(listen.mock.calls.filter(([type]) => type === 'keydown')).toHaveLength(1);
+  const header = screen.getByRole('button', { name: new RegExp(en.captures.recordNote, 'u') });
+  expect(header.getAttribute('aria-keyshortcuts')).toBe('Alt+V');
+  expect(header.querySelector('kbd')?.textContent).toBe(en.captures.shortcut);
+  listen.mockRestore();
+});
+it('CAPTURES-B14 with recording off the header keeps Review and draws no Record a note', () => {
+  mount(<CaptureHeaderControls capture={{ allowed: false, enabled: false, shortcut: false }} />);
+  expect(
+    screen.queryByRole('button', { name: new RegExp(en.captures.recordNote, 'u') }),
+  ).toBeNull();
+  expect(screen.getByRole('link', { name: en.captures.review })).toBeTruthy();
+});
 const refuse = (details: Record<string, string>, code = 'rule_violation') =>
   spies.send.mockImplementation((_form: FormData, handlers: { onError: (e: Error) => void }) =>
     handlers.onError(new ApiError(code, 'Request refused', details, 'request')),
   );
-const keys = ['tooLong', 'tooLarge', 'unsupportedType'] as const;
+const keys = ['tooLong', 'tooLarge', 'unsupportedType', 'recordingOff'] as const;
 it.each([
+  [{ reason: 'recording_off', scope: 'workspace' }, 'forbidden', keys[3]],
   [{ reason: 'too_long' }, 'rule_violation', keys[0]],
   [{ reason: 'too_large' }, 'rule_violation', keys[1]],
   [{ reason: 'unsupported_type' }, 'rule_violation', keys[2]],
@@ -280,7 +400,7 @@ it('CAPTURES-B01 on a phone the recorder is a modal: the page and the bar behind
     });
   const view = mount(
     <>
-      <CaptureHost />
+      <CaptureHost keys="Alt+V" />
       <CaptureFab />
     </>,
   );
@@ -302,7 +422,7 @@ it('CAPTURES-B01 on a phone the recorder is a modal: the page and the bar behind
   view.unmount();
   const again = mount(
     <>
-      <CaptureHost />
+      <CaptureHost keys="Alt+V" />
       <CaptureFab />
     </>,
   );
@@ -356,8 +476,8 @@ it('CAPTURES-B01 on a desktop a cancel returns focus to the header Record a note
   localStorage.setItem('enan.captures.microphone-intro', '1');
   mount(
     <>
-      <CaptureHeaderControls />
-      <CaptureHost />
+      <CaptureHeaderControls capture={on} />
+      <CaptureHost keys="Alt+V" />
     </>,
   );
   const header = screen.getByRole('button', { name: new RegExp(en.captures.recordNote, 'u') });
@@ -395,7 +515,7 @@ it('CAPTURES-B01 under StrictMode the phone dialog makes the page inert while op
     });
   const view = mount(
     <StrictMode>
-      <CaptureHost />
+      <CaptureHost keys="Alt+V" />
       <CaptureFab />
     </StrictMode>,
   );

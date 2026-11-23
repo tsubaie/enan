@@ -58,6 +58,11 @@ export async function getAccount(ctx: Context): Promise<Account> {
       name: row.name || getAuthenticatorName(row.aaguid) || null,
       createdAt: row.createdAt.toISOString(),
     })),
+    captures: {
+      allowed: await getSetting(ctx.db, 'captures.enabled'),
+      enabled: await getSetting(ctx.db, 'user.captures.enabled', ctx.user.id),
+      shortcut: await getSetting(ctx.db, 'user.captures.shortcut', ctx.user.id),
+    },
   };
 }
 async function preferences(ctx: Context) {
@@ -86,7 +91,7 @@ async function sessions(ctx: Context) {
     userAgent: row.userAgent,
   }));
 }
-// ACCT-B01/B04: the name and the four preferences. A preference set to the empty string clears the
+// ACCT-B01/B04/B11: the name, the four preferences and voice capture. A preference set to the empty string clears the
 // reader's row so the workspace default reaches them again (ACCT-I03); it is never copied.
 export const patchAccount = transactional(async function patchAccount(
   ctx: Context,
@@ -101,6 +106,18 @@ export const patchAccount = transactional(async function patchAccount(
     if (value === '') await clearSetting(ctx.db, settingKey(name), ctx.user.id);
     else await writeSetting(ctx.db, settingKey(name), value, ctx.user.id, ctx.user.id);
   }
+  // ACCT-B11: accepted while the workspace has recording off; they apply once it is back on.
+  const captures = patch.captures ?? {};
+  if (captures.enabled !== undefined)
+    await writeSetting(ctx.db, 'user.captures.enabled', captures.enabled, ctx.user.id, ctx.user.id);
+  if (captures.shortcut !== undefined)
+    await writeSetting(
+      ctx.db,
+      'user.captures.shortcut',
+      captures.shortcut,
+      ctx.user.id,
+      ctx.user.id,
+    );
   if (patch.name !== undefined && patch.name !== user.name) {
     const updated = await updateUserAccount(ctx.db, ctx.user.id, {
       name: patch.name,

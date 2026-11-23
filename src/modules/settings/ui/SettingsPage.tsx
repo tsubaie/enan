@@ -9,6 +9,7 @@ import { useSettingsEditor } from './use-settings-editor';
 import { WallpaperPicker } from './WallpaperPicker';
 import { RetentionSection, TasksSection, WorkspaceSection } from './SettingSections';
 import { ThresholdsSection } from './ThresholdsSection';
+import { VoiceCaptureSection } from './VoiceCaptureSection';
 // ADMIN-B07: the workspace settings, in plain words and grouped by what they govern, each with the
 // control its value calls for. Settings that belong to one part of the product live on that part's
 // page (KPI status on Objectives, the opening view on Tasks, the AI and the note vocabularies on
@@ -30,6 +31,7 @@ export function SettingsPage() {
         </div>
       )}
       <RetentionSection row={row} save={save} />
+      <VoiceCaptureSection row={row} save={save} />
       <p className="mt-8 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm font-light text-text-muted">
         {t('settingsElsewhere')}
         <MoreLink href={routes.admin('tasks')}>{t('tasks')}</MoreLink>

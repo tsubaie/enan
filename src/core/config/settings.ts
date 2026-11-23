@@ -91,10 +91,16 @@ export const settingsRegistry = {
   // CAPTURES-B07: the review inbox is how new audio arrives. Off is a post-release safety hatch
   // that restores record-first note creation only, never attach-to-note or a self-applying rewrite.
   'captures.inbox': entry(z.boolean(), true),
+  // CAPTURES-B14: recording for the whole workspace; off hides every way to record and refuses new
+  // audio, while drafts already made stay reviewable. Not the inbox rollback hatch above.
+  'captures.enabled': entry(z.boolean(), true),
   'user.locale': entry(Locale, defaults.locale, user),
   'user.timezone': entry(Timezone, defaults.timezone, user),
   'user.theme': entry(Theme, 'dark', user),
   'user.numerals': entry(z.enum(['western', 'arabic']), 'western', user),
+  // CAPTURES-B15: the reader's own recording switch and Alt+V, both under `captures.enabled`.
+  'user.captures.enabled': entry(z.boolean(), true, user),
+  'user.captures.shortcut': entry(z.boolean(), true, user),
 } satisfies Record<string, SettingEntry>;
 export type SettingKey = keyof typeof settingsRegistry;
 export type SettingValue<K extends SettingKey> = z.output<(typeof settingsRegistry)[K]['schema']>;

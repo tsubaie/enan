@@ -7,11 +7,12 @@ import { routes } from '@/core/routes';
 import { Button } from '@/ui/primitives/button';
 import { ErrorPanel } from '@/ui/layout/ErrorPanel';
 import Loading from '@/ui/layout/Loading';
-import { blockers, type CaptureGroup as Group } from '../schema/validation';
+import { blockers, type CaptureGroup as Group, type CaptureSetup } from '../schema/validation';
 import { startCapture } from './capture-store';
 import { useCaptures, useReviewMutations, type CaptureScope } from './capture-queries';
 import { CaptureGroup } from './CaptureGroup';
 import { InboxEducation } from './InboxEducation';
+import { RecordingOff } from './RecordingOff';
 import type { Layout } from './SuggestionCard';
 import { useApprovedMessage } from './suggestion-text';
 import { useReviewToast } from './review-toast';
@@ -31,15 +32,17 @@ const pendingOf = (groups: Group[]) =>
 const readyOf = (groups: Group[]) => pendingOf(groups).filter((draft) => !blockers(draft).length);
 // S14: the reader's recordings, newest first, each with its drafts. The page hands in what the
 // server already read; the panel reads it here. `actions` sits beside Approve N ready (the
-// panel's expand and close).
+// panel's expand and close). `capture` says whether recording is on (CAPTURES-B14).
 function Root({
   layout,
+  capture,
   scope = 'mine',
   initial,
   actions,
   children,
 }: {
   layout: Layout;
+  capture: CaptureSetup;
   scope?: CaptureScope;
   initial?: { data: Group[]; meta: { nextCursor: string | null } };
   actions?: ReactNode;
@@ -54,7 +57,7 @@ function Root({
   const inbox = useInboxToken();
   useUndoFocusFallback(query.data?.data);
   return (
-    <InboxContext value={{ inbox, groups, layout, scope, saves, reread }}>
+    <InboxContext value={{ inbox, groups, layout, scope, saves, reread, capture }}>
       <div className="grid gap-4" data-inbox>
         <header className="flex flex-wrap items-start gap-3">
           <div className="grid flex-1 gap-0.5">
@@ -188,10 +191,11 @@ function Groups() {
     </div>
   );
 }
-// S16: nothing waiting, and the way to record.
+// S16: nothing waiting, and the way to record while recording is on (CAPTURES-B14), naming the
+// chord only while the shortcut is (CAPTURES-B19).
 function Empty() {
   const t = useTranslations('captures');
-  const { groups } = useInbox();
+  const { groups, capture } = useInbox();
   if (groups.length) return null;
   return (
     <div className="grid justify-items-center gap-3 py-16 text-center">
@@ -200,17 +204,25 @@ function Empty() {
       </span>
       <p className="font-medium">{t('emptyTitle')}</p>
       <p className="text-sm text-text-muted">{t('emptyHint')}</p>
-      <Button variant="outline" onClick={startCapture} aria-keyshortcuts={t('shortcut')}>
-        <Mic aria-hidden />
-        {t('recordNote')}
-        <kbd
-          translate="no"
-          aria-hidden
-          className="hidden rounded border px-1.5 py-0.5 text-[11px] lg:inline"
+      {capture.enabled ? (
+        <Button
+          variant="outline"
+          onClick={startCapture}
+          aria-keyshortcuts={capture.shortcut ? t('shortcut') : undefined}
         >
-          {t('shortcut')}
-        </kbd>
-      </Button>
+          <Mic aria-hidden />
+          {t('recordNote')}
+          {capture.shortcut ? (
+            <kbd
+              translate="no"
+              aria-hidden
+              className="hidden rounded border px-1.5 py-0.5 text-[11px] lg:inline"
+            >
+              {t('shortcut')}
+            </kbd>
+          ) : null}
+        </Button>
+      ) : null}
     </div>
   );
 }
@@ -227,4 +239,12 @@ function Scope() {
     </Link>
   );
 }
-export const CaptureInbox = { Root, Education, Group: CaptureGroup, Groups, Empty, Scope };
+export const CaptureInbox = {
+  Root,
+  Off: RecordingOff,
+  Education,
+  Group: CaptureGroup,
+  Groups,
+  Empty,
+  Scope,
+};

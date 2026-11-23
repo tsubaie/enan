@@ -171,7 +171,7 @@ it('SEARCH-B08 Ctrl+K and the header control open the palette without changing t
   http.request.mockResolvedValue(answer([]));
   const href = window.location.href;
   const user = { name: 'Reader', email: 'reader@example.test', role: 'member' };
-  mount(<ShellHeader user={user} />);
+  mount(<ShellHeader user={user} capture={{ allowed: true, enabled: true, shortcut: true }} />);
   expect(screen.queryByRole('dialog')).toBeNull();
   fireEvent.keyDown(document, { key: 'k', ctrlKey: true });
   const dialog = await screen.findByRole('dialog');

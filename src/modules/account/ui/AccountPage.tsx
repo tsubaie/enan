@@ -10,6 +10,7 @@ import { AccountSignIn } from './AccountSignIn';
 import { AccountSessions } from './AccountSessions';
 import { AccountPasskeys } from './AccountPasskeys';
 import { AccountPreferences } from './AccountPreferences';
+import { AccountVoiceCapture } from './AccountVoiceCapture';
 // ACCT-B08: one record and no list, so this is a plain settings page rather than an entity page.
 // It takes Administration's section shape so that the reader's own settings and the workspace's
 // read the same way.
@@ -42,6 +43,9 @@ export function AccountPage() {
       </Section>
       <Section title={t('preferences')} description={t('preferencesDescription')}>
         <AccountPreferences account={data} />
+      </Section>
+      <Section id="voice-capture" title={t('voice')} description={t('voiceDescription')}>
+        <AccountVoiceCapture account={data} />
       </Section>
       {/* ACCT-B07: the workspace's own settings are Administration's, and saying so here is what
           stops a reader hunting for them on the page that holds everything else. */}

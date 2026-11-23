@@ -3,7 +3,7 @@ import { currentUser } from '@/core/auth/session';
 import { readOnlyDb } from '@/core/db/client';
 import { id } from '@/core/db/ids';
 import { routes } from '@/core/routes';
-import { listCaptures } from '@/modules/captures';
+import { listCaptures, readerCapture } from '@/modules/captures';
 import { CaptureListQuery } from '@/modules/captures/schema/validation';
 import { CapturesPage } from '@/modules/captures/ui/CapturesPage';
 import { PageBody } from '@/ui/layout/PageTransition';
@@ -19,10 +19,18 @@ export default async function Page({
   const query = CaptureListQuery.parse({
     scope: (await searchParams).scope === 'all' ? 'all' : 'mine',
   });
-  const initial = await listCaptures({ db: readOnlyDb(), user, requestId: id() }, query);
+  const [initial, capture] = await Promise.all([
+    listCaptures({ db: readOnlyDb(), user, requestId: id() }, query),
+    readerCapture(user.id),
+  ]);
   return (
     <PageBody>
-      <CapturesPage initial={initial} scope={query.scope} admin={user.role === 'admin'} />
+      <CapturesPage
+        initial={initial}
+        scope={query.scope}
+        admin={user.role === 'admin'}
+        capture={capture}
+      />
     </PageBody>
   );
 }
