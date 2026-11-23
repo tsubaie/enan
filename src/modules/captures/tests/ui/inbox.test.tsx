@@ -718,6 +718,13 @@ it('CAPTURES-B13 a ready group offers Delete recording only behind More actions,
   });
   const remove = await screen.findByRole('button', { name: en.captures.deleteRecording });
   expect(ready.contains(remove)).toBe(false);
+  const menu = screen.getByTestId('capture-menu');
+  // Opaque in every theme: the important elevated fill and no glass image outrank the night
+  // popover glass, whatever popover fill the primitive also names.
+  expect(menu.className).toMatch(/(^|\s)bg-elevated!(\s|$)/u);
+  expect(menu.className).toMatch(/(^|\s)bg-none!(\s|$)/u);
+  expect(menu.className).not.toMatch(/(^|\s)bg-popover!/u);
+  expect(menu.className).toMatch(/\bring-1\b/u);
   await act(async () => {
     remove.focus();
     fireEvent.keyDown(remove, { key: 'Escape' });

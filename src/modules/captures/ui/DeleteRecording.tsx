@@ -74,7 +74,12 @@ export function ReadyGroupMenu({ group }: { group: Group }) {
       >
         <Ellipsis aria-hidden />
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-auto p-1.5">
+      {/* Opaque like the other capture surfaces; `!` beats the night glass rule on popover-content. */}
+      <PopoverContent
+        align="end"
+        className="w-auto bg-elevated! bg-none! p-1.5"
+        data-testid="capture-menu"
+      >
         <DeleteRecordingButton
           className="w-full justify-start"
           disabled={deletion.busy}
